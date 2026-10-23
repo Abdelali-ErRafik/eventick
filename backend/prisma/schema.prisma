@@ -1,0 +1,255 @@
+// Eventick — PostgreSQL schema (Prisma)
+// Money is stored as INTEGER CENTS (Int) everywhere — never floating point.
+// All public content is bilingual: every FR field has an AR sibling.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  CUSTOMER
+  ORGANISER
+  ADMIN
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  HIDDEN
+  CANCELLED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum TicketStatus {
+  VALID
+  USED
+  CANCELLED
+  TRANSFERRED
+}
+
+enum PromoKind {
+  PERCENT
+  AMOUNT
+}
+
+// ---------------------------------------------------------------------------
+// Users
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  role         Role     @default(CUSTOMER)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  events Event[]
+  orders Order[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Catalog
+// ---------------------------------------------------------------------------
+
+model Event {
+  id          String      @id @default(cuid())
+  slug        String      @unique
+  organiserId String?     @map("organiser_id") // null for seeded/platform events
+  status      EventStatus @default(PUBLISHED)
+
+  titleFr String @map("title_fr")
+  titleAr String @map("title_ar")
+  category String
+  city     String
+
+  venueFr String  @map("venue_fr")
+  venueAr String  @map("venue_ar")
+  address String
+
+  startAt DateTime @map("start_at")
+  endAt   DateTime @map("end_at")
+  doorsAt DateTime @map("doors_at")
+
+  image      String
+  badge      String?
+  blurbFr    String @map("blurb_fr")
+  blurbAr    String @map("blurb_ar")
+  aboutFr    String @map("about_fr")
+  aboutAr    String @map("about_ar")
+  ageFr      String @map("age_fr")
+  ageAr      String @map("age_ar")
+  popularity Int    @default(0)
+  instant    Boolean @default(true) // sold instantly vs waitlist-only when sold out
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  organiser User?        @relation(fields: [organiserId], references: [id], onDelete: SetNull)
+  tiers     TicketTier[]
+  lineup    LineupItem[]
+  orders    Order[]
+  promoCodes PromoCode[]
+
+  @@index([organiserId])
+  @@index([status])
+  @@map("events")
+}
+
+model LineupItem {
+  id      String @id @default(cuid())
+  eventId String @map("event_id")
+  day     DateTime
+  time    String
+  name    String
+  genreFr String @map("genre_fr")
+  genreAr String @map("genre_ar")
+  image   String
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("lineup_items")
+}
+
+model TicketTier {
+  id      String @id @default(cuid())
+  eventId String @map("event_id")
+
+  nameFr  String @map("name_fr")
+  nameAr  String @map("name_ar")
+  blurbFr String @map("blurb_fr")
+  blurbAr String @map("blurb_ar")
+
+  priceCents Int     @map("price_cents")
+  capacity   Int
+  numbered   Boolean @default(false) // true -> tickets get a row/seat on purchase
+  recommended Boolean @default(false)
+  saveCents  Int?    @map("save_cents") // displayed "you save X" vs buying tiers separately
+
+  zoneFr String @map("zone_fr")
+  zoneAr String @map("zone_ar")
+  gateFr String @map("gate_fr")
+  gateAr String @map("gate_ar")
+
+  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orderLines   OrderLine[]
+  tickets      Ticket[]
+
+  @@index([eventId])
+  @@map("ticket_tiers")
+}
+
+// ---------------------------------------------------------------------------
+// Orders & tickets
+// ---------------------------------------------------------------------------
+
+/// An order holds inventory for `holdUntil` before payment is confirmed. The
+/// checkout transaction re-checks `holdUntil` and remaining stock atomically —
+/// see domain/inventory.ts — so two concurrent buyers can't both win the last
+/// seat the way the old client-only Zustand store allowed.
+model Order {
+  id         String      @id @default(cuid())
+  customerId String?     @map("customer_id") // null = guest checkout
+  eventId    String      @map("event_id")
+  status     OrderStatus @default(PENDING)
+
+  holderName String  @map("holder_name")
+  email      String
+  phone      String
+
+  subtotalCents Int @map("subtotal_cents")
+  discountCents Int @default(0) @map("discount_cents")
+  totalCents    Int @map("total_cents")
+
+  promoCodeId String? @map("promo_code_id")
+
+  holdUntil DateTime? @map("hold_until")
+
+  // Simulated payment metadata (no real gateway — see lib/payment-sim.ts)
+  paymentRef String? @map("payment_ref")
+  cardBrand  String? @map("card_brand")
+  cardLast4  String? @map("card_last4")
+  cardBank   String? @map("card_bank")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  customer  User?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  event     Event       @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  promoCode PromoCode?  @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
+  lines     OrderLine[]
+  tickets   Ticket[]
+
+  @@index([customerId])
+  @@index([eventId])
+  @@index([status, holdUntil]) // the expiry sweep scans PENDING orders by holdUntil
+  @@map("orders")
+}
+
+model OrderLine {
+  id      String @id @default(cuid())
+  orderId String @map("order_id")
+  tierId  String @map("tier_id")
+  qty     Int
+
+  order Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tier  TicketTier @relation(fields: [tierId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@map("order_lines")
+}
+
+model Ticket {
+  id      String       @id @default(cuid())
+  ref     String       @unique // e.g. ET-2026-004815, shown on the e-billet and scanned at the gate
+  orderId String       @map("order_id")
+  tierId  String       @map("tier_id")
+  status  TicketStatus @default(VALID)
+
+  holderName String  @map("holder_name")
+  seatRow    Int?    @map("seat_row")
+  seatNumber Int?    @map("seat_number")
+  usedAt     DateTime? @map("used_at")
+
+  order Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tier  TicketTier @relation(fields: [tierId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@map("tickets")
+}
+
+// ---------------------------------------------------------------------------
+// Promotions
+// ---------------------------------------------------------------------------
+
+model PromoCode {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  kind      PromoKind
+  value     Int // percent (0-100) or amount in cents, per `kind`
+  eventId   String?   @map("event_id") // null = valid on any event
+  maxUses   Int       @map("max_uses")
+  uses      Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  event  Event?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([eventId])
+  @@map("promo_codes")
+}

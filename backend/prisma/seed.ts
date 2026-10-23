@@ -1,0 +1,95 @@
+// Seeds the real database from the original frontend's hardcoded catalog,
+// frozen to JSON (see prisma/catalog-frozen.json) from the old TanStack app's
+// src/lib/catalog.ts before that directory was removed — so the ported
+// backend serves the exact same 16 demo events instead of hand-retyped data.
+import { PrismaClient, type PromoKind } from "@prisma/client";
+import catalogFrozen from "./catalog-frozen.json" with { type: "json" };
+
+const EVENTS = catalogFrozen;
+
+const prisma = new PrismaClient();
+
+const madToCents = (mad: number) => Math.round(mad * 100);
+
+async function main() {
+  for (const event of EVENTS as any[]) {
+    await prisma.event.upsert({
+      where: { slug: event.slug },
+      update: {},
+      create: {
+        slug: event.slug,
+        status: "PUBLISHED",
+        titleFr: event.titleFr,
+        titleAr: event.titleAr,
+        category: event.category,
+        city: event.city,
+        venueFr: event.venueFr,
+        venueAr: event.venueAr,
+        address: event.address,
+        startAt: new Date(`${event.start}T${event.time ?? "00:00"}:00`),
+        endAt: new Date(`${event.end}T23:59:59`),
+        doorsAt: new Date(`${event.start}T${event.doors ?? event.time ?? "00:00"}:00`),
+        image: event.image,
+        badge: event.badge ?? null,
+        blurbFr: event.blurbFr,
+        blurbAr: event.blurbAr,
+        aboutFr: event.aboutFr,
+        aboutAr: event.aboutAr,
+        ageFr: event.ageFr,
+        ageAr: event.ageAr,
+        popularity: event.popularity,
+        instant: event.instant,
+        tiers: {
+          create: (event.tiers ?? []).map((tier: any) => ({
+            nameFr: tier.nameFr,
+            nameAr: tier.nameAr,
+            blurbFr: tier.blurbFr,
+            blurbAr: tier.blurbAr,
+            priceCents: madToCents(tier.price),
+            capacity: tier.capacity,
+            numbered: Boolean(tier.numbered),
+            recommended: Boolean(tier.recommended),
+            saveCents: tier.save ? madToCents(tier.save) : null,
+            zoneFr: tier.zoneFr,
+            zoneAr: tier.zoneAr,
+            gateFr: tier.gateFr,
+            gateAr: tier.gateAr,
+          })),
+        },
+        lineup: {
+          create: (event.lineup ?? []).map((item: any) => ({
+            day: new Date(`${item.day}T${item.time}:00`),
+            time: item.time,
+            name: item.name,
+            genreFr: item.genreFr,
+            genreAr: item.genreAr,
+            image: item.image,
+          })),
+        },
+      },
+    });
+  }
+
+  const promos: { code: string; kind: PromoKind; value: number; eventSlug: string | null; maxUses: number }[] = [
+    { code: "SAFRAN15", kind: "PERCENT", value: 15, eventSlug: null, maxUses: 200 },
+    { code: "CASA50", kind: "AMOUNT", value: madToCents(50), eventSlug: "oasis-2026", maxUses: 40 },
+  ];
+
+  for (const promo of promos) {
+    const event = promo.eventSlug ? await prisma.event.findUnique({ where: { slug: promo.eventSlug } }) : null;
+    await prisma.promoCode.upsert({
+      where: { code: promo.code },
+      update: {},
+      create: { code: promo.code, kind: promo.kind, value: promo.value, eventId: event?.id ?? null, maxUses: promo.maxUses },
+    });
+  }
+
+  console.log(`Seeded ${(EVENTS as any[]).length} events and ${promos.length} promo codes.`);
+}
+
+main()
+  .catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  })
+  .finally(() => prisma.$disconnect());
