@@ -1,6 +1,20 @@
 import jwt from "jsonwebtoken";
 
-const SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me";
+const DEV_FALLBACK_SECRET = "dev-secret-change-me";
+
+function resolveSecret(): string {
+  const configured = process.env.JWT_SECRET;
+  if (configured) return configured;
+
+  if (process.env.NODE_ENV === "production") {
+    // Never sign tokens with a public fallback in production — that would
+    // let anyone forge a valid session for any user/role.
+    throw new Error("JWT_SECRET must be set in production");
+  }
+  return DEV_FALLBACK_SECRET;
+}
+
+const SECRET = resolveSecret();
 
 export type JwtPayload = { sub: string; role: string };
 

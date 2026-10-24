@@ -11,3 +11,5 @@ dist
 *.log
 .node_modules.lock
 .DS_Store
+.next
+AGENTS.md

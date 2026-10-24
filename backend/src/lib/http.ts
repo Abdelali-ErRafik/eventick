@@ -19,7 +19,7 @@ export function asyncHandler<Req extends Request = Request>(
 
 export function param(req: Request, name: string): string {
   const value = req.params[name];
-  if (!value) throw new HttpError(400, `Missing route parameter: ${name}`);
+  if (!value || Array.isArray(value)) throw new HttpError(400, `Missing route parameter: ${name}`);
   return value;
 }
 

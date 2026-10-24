@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { asyncHandler, HttpError } from "../lib/http.js";
+import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 
 export const promoRouter = Router();
@@ -49,7 +49,8 @@ promoRouter.post(
 promoRouter.delete(
   "/:id",
   asyncHandler(async (req, res) => {
-    const promo = await prisma.promoCode.findUnique({ where: { id: req.params.id } });
+    const id = param(req, "id");
+    const promo = await prisma.promoCode.findUnique({ where: { id } });
     if (!promo) throw new HttpError(404, "Promo not found");
     await prisma.promoCode.delete({ where: { id: promo.id } });
     res.status(204).end();

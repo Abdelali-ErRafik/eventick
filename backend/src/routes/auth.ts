@@ -3,10 +3,10 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { signToken } from "../lib/jwt.js";
-import { asyncHandler, HttpError } from "../lib/http.js";
+import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { authRateLimit } from "../middleware/rateLimit.js";
-import { authenticate } from "../middleware/auth.js";
-import { PUBLIC_SIGNUP_ROLE } from "../domain/auth.js";
+import { authenticate, requireRole } from "../middleware/auth.js";
+import { isRole, PUBLIC_SIGNUP_ROLE } from "../domain/auth.js";
 
 export const authRouter = Router();
 
@@ -63,5 +63,27 @@ authRouter.get(
   authenticate,
   asyncHandler(async (req, res) => {
     res.json({ user: publicUser(req.user!) });
+  }),
+);
+
+const promoteSchema = z.object({ role: z.enum(["CUSTOMER", "ORGANISER", "ADMIN"]) });
+
+/**
+ * The only way a user ever becomes an ORGANISER or ADMIN: an existing admin
+ * promotes them. Public registration always creates CUSTOMER (see
+ * PUBLIC_SIGNUP_ROLE above) so self-service signup can't grant organiser
+ * access to /pro. The very first admin has to come from the seed script.
+ */
+authRouter.patch(
+  "/users/:id/role",
+  authenticate,
+  requireRole("ADMIN"),
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const body = promoteSchema.parse(req.body);
+    if (!isRole(body.role)) throw new HttpError(400, "Invalid role");
+
+    const user = await prisma.user.update({ where: { id }, data: { role: body.role } });
+    res.json({ user: publicUser(user) });
   }),
 );

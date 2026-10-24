@@ -3,12 +3,8 @@
   "config": {
     "env": {},
     "webpack": null,
-    "eslint": {
-      "ignoreDuringBuilds": true
-    },
     "typescript": {
-      "ignoreBuildErrors": false,
-      "tsconfigPath": "tsconfig.json"
+      "ignoreBuildErrors": false
     },
     "typedRoutes": false,
     "distDir": ".next",
@@ -22,6 +18,7 @@
       "tsx",
       "ts"
     ],
+    "instrumentationClientInject": [],
     "poweredByHeader": true,
     "compress": true,
     "images": {
@@ -36,7 +33,6 @@
         3840
       ],
       "imageSizes": [
-        16,
         32,
         48,
         64,
@@ -50,16 +46,28 @@
       "loaderFile": "",
       "domains": [],
       "disableStaticImages": false,
-      "minimumCacheTTL": 60,
+      "minimumCacheTTL": 14400,
       "formats": [
         "image/webp"
       ],
+      "maximumRedirects": 3,
       "maximumResponseBody": 50000000,
+      "dangerouslyAllowLocalIP": false,
       "dangerouslyAllowSVG": false,
       "contentSecurityPolicy": "script-src 'none'; frame-src 'none'; sandbox;",
       "contentDispositionType": "attachment",
+      "localPatterns": [
+        {
+          "pathname": "**",
+          "search": ""
+        }
+      ],
       "remotePatterns": [],
-      "unoptimized": false
+      "qualities": [
+        75
+      ],
+      "unoptimized": false,
+      "customCacheHandler": false
     },
     "devIndicators": {
       "position": "bottom-left"
@@ -68,24 +76,22 @@
       "maxInactiveAge": 60000,
       "pagesBufferLength": 5
     },
-    "amp": {
-      "canonicalBase": ""
-    },
     "basePath": "",
     "sassOptions": {},
     "trailingSlash": false,
     "i18n": null,
     "productionBrowserSourceMaps": false,
     "excludeDefaultMomentLocales": true,
-    "serverRuntimeConfig": {},
-    "publicRuntimeConfig": {},
     "reactProductionProfiling": false,
     "reactStrictMode": null,
     "reactMaxHeadersLength": 6000,
     "httpAgentOptions": {
       "keepAlive": true
     },
-    "logging": {},
+    "logging": {
+      "serverFunctions": true,
+      "browserToTerminal": "warn"
+    },
     "compiler": {},
     "expireTime": 31536000,
     "staticPageGenerationTimeout": 60,
@@ -98,76 +104,96 @@
       }
     },
     "outputFileTracingRoot": "C:\\Users\\abdel\\OneDrive\\Desktop\\Storeino\\Eventick\\frontend",
-    "experimental": {
-      "useSkewCookie": false,
-      "cacheLife": {
-        "default": {
-          "stale": 300,
-          "revalidate": 900,
-          "expire": 4294967294
-        },
-        "seconds": {
-          "stale": 30,
-          "revalidate": 1,
-          "expire": 60
-        },
-        "minutes": {
-          "stale": 300,
-          "revalidate": 60,
-          "expire": 3600
-        },
-        "hours": {
-          "stale": 300,
-          "revalidate": 3600,
-          "expire": 86400
-        },
-        "days": {
-          "stale": 300,
-          "revalidate": 86400,
-          "expire": 604800
-        },
-        "weeks": {
-          "stale": 300,
-          "revalidate": 604800,
-          "expire": 2592000
-        },
-        "max": {
-          "stale": 300,
-          "revalidate": 2592000,
-          "expire": 4294967294
-        }
+    "enablePrerenderSourceMaps": true,
+    "cacheComponents": false,
+    "cacheLife": {
+      "default": {
+        "stale": 300,
+        "revalidate": 900,
+        "expire": 4294967294
       },
-      "cacheHandlers": {},
+      "seconds": {
+        "stale": 30,
+        "revalidate": 1,
+        "expire": 60
+      },
+      "minutes": {
+        "stale": 300,
+        "revalidate": 60,
+        "expire": 3600
+      },
+      "hours": {
+        "stale": 300,
+        "revalidate": 3600,
+        "expire": 86400
+      },
+      "days": {
+        "stale": 300,
+        "revalidate": 86400,
+        "expire": 604800
+      },
+      "weeks": {
+        "stale": 300,
+        "revalidate": 604800,
+        "expire": 2592000
+      },
+      "max": {
+        "stale": 300,
+        "revalidate": 2592000,
+        "expire": 31536000
+      }
+    },
+    "cacheHandlers": {},
+    "deprecated": {},
+    "experimental": {
+      "agentUpgrade": "security",
+      "agentFeedback": false,
+      "coldCacheBadge": false,
+      "collapseAdapterRoutes": true,
+      "devValidationWorker": true,
+      "useSkewCookie": false,
       "cssChunking": true,
       "multiZoneDraftMode": false,
       "appNavFailHandling": false,
+      "parallelRouteMetadata": false,
       "prerenderEarlyExit": true,
       "serverMinification": true,
-      "serverSourceMaps": false,
       "linkNoTouchStart": false,
       "caseSensitiveRoutes": false,
-      "clientSegmentCache": false,
-      "clientParamParsing": false,
+      "cachedNavigations": false,
       "dynamicOnHover": false,
+      "reactBrowserBailout": true,
+      "useOffline": false,
+      "varyParams": true,
+      "optimisticRouting": true,
+      "concurrentRouterQueue": false,
+      "instrumentationClientRouterTransitionEvents": false,
+      "prefetchInlining": {
+        "maxSize": 2048,
+        "maxBundleSize": 10240
+      },
       "preloadEntriesOnStart": true,
       "clientRouterFilter": true,
       "clientRouterFilterRedirects": false,
       "fetchCacheKeyPrefix": "",
-      "middlewarePrefetch": "flexible",
+      "proxyPrefetch": "flexible",
       "optimisticClientCache": true,
       "manualClientBasePath": false,
       "cpus": 7,
       "memoryBasedWorkersCount": false,
       "imgOptConcurrency": null,
+      "imgOptOperationCache": null,
       "imgOptTimeoutInSeconds": 7,
       "imgOptMaxInputPixels": 268402689,
       "imgOptSequentialRead": null,
+      "imgOptMozjpeg": true,
       "isrFlushToDisk": true,
       "workerThreads": false,
       "optimizeCss": false,
       "nextScriptWorkers": false,
       "scrollRestoration": false,
       "externalDir": false,
+      "devMemoryThresholdRestart": true,
       "disableOptimizedLoading": false,
       "gzipSize": true,
       "craCompat": false,
@@ -175,6 +201,7 @@
       "fullySpecified": false,
       "swcTraceProfiling": false,
       "forceSwcTransforms": false,
+      "requestInsights": false,
       "largePageDataBytes": 128000,
       "typedEnv": false,
       "parallelServerCompiles": false,
@@ -183,25 +210,41 @@
       "authInterrupts": false,
       "webpackMemoryOptimizations": false,
       "optimizeServerReact": true,
-      "viewTransition": false,
-      "routerBFCache": false,
+      "strictRouteTypes": false,
+      "useTypeScriptCli": true,
       "removeUncaughtErrorAndRejectionListeners": false,
-      "validateRSCRequestHeaders": false,
+      "validateRSCRequestHeaders": true,
       "staleTimes": {
         "dynamic": 0,
         "static": 300
       },
+      "reactDebugChannel": true,
       "serverComponentsHmrCache": true,
+      "serverComponentsHmrCancellation": false,
       "staticGenerationMaxConcurrency": 8,
       "staticGenerationMinPagesPerWorker": 25,
-      "cacheComponents": false,
+      "transitionIndicator": false,
+      "gestureTransition": false,
       "inlineCss": false,
       "useCache": false,
+      "useCacheStaticRootParamTracking": false,
       "globalNotFound": false,
-      "devtoolSegmentExplorer": true,
-      "browserDebugInfoInTerminal": false,
-      "optimizeRouterScrolling": false,
-      "middlewareClientMaxBodySize": 10485760,
+      "explicitParallelRouteChildren": true,
+      "strictRouteMatching": true,
+      "browserDebugInfoInTerminal": "warn",
+      "lockDistDir": true,
+      "disableResumeDataCacheCompression": false,
+      "proxyClientMaxBodySize": 10485760,
+      "hideLogsAfterAbort": false,
+      "mcpServer": true,
+      "exposeRuntimeErrorsToHMR": false,
+      "turbopackFileSystemCacheForDev": true,
+      "turbopackFileSystemCacheForBuild": true,
+      "turbopackStaleOutputMaxAge": 604800000,
+      "turbopackInferModuleSideEffects": true,
+      "turbopackPluginRuntimeStrategy": "childProcesses",
+      "turbopackSharedRuntime": true,
+      "turbopackMemoryEvictionMode": "auto",
       "optimizePackageImports": [
         "lucide-react",
         "date-fns",
@@ -279,15 +322,21 @@
         "react-icons/vsc",
         "react-icons/wi"
       ],
+      "useCacheTimeout": 54,
+      "instantInsights": {
+        "validationLevel": "warning"
+      },
       "trustHostHeader": false,
       "isExperimentalCompile": false
     },
     "htmlLimitedBots": "[\\w-]+-Google|Google-[\\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti|googleweblight",
     "bundlePagesRouterDependencies": false,
     "configFileName": "next.config.ts",
+    "repoRoot": "C:\\Users\\abdel\\OneDrive\\Desktop\\Storeino\\Eventick\\frontend",
     "turbopack": {
       "root": "C:\\Users\\abdel\\OneDrive\\Desktop\\Storeino\\Eventick\\frontend"
     },
+    "distDirRoot": ".next",
     "_originalRewrites": {
       "beforeFiles": [],
       "afterFiles": [
@@ -302,26 +351,24 @@
   "appDir": "C:\\Users\\abdel\\OneDrive\\Desktop\\Storeino\\Eventick\\frontend",
   "relativeAppDir": "",
   "files": [
+    ".next\\package.json",
     ".next\\routes-manifest.json",
     ".next\\server\\pages-manifest.json",
     ".next\\build-manifest.json",
     ".next\\prerender-manifest.json",
+    ".next\\server\\preview-props.json",
     ".next\\server\\functions-config-manifest.json",
     ".next\\server\\middleware-manifest.json",
     ".next\\server\\middleware-build-manifest.js",
-    ".next\\server\\middleware-react-loadable-manifest.js",
-    ".next\\react-loadable-manifest.json",
     ".next\\server\\app-paths-manifest.json",
     ".next\\app-path-routes-manifest.json",
-    ".next\\app-build-manifest.json",
     ".next\\server\\server-reference-manifest.js",
     ".next\\server\\server-reference-manifest.json",
+    ".next\\server\\prefetch-hints.json",
     ".next\\BUILD_ID",
     ".next\\server\\next-font-manifest.js",
     ".next\\server\\next-font-manifest.json",
     ".next\\required-server-files.json"
   ],
-  "ignore": [
-    "node_modules\\next\\dist\\compiled\\@ampproject\\toolbox-optimizer\\**\\*"
-  ]
+  "ignore": []
 }
