@@ -70,6 +70,7 @@ async function main() {
             numbered: Boolean(tier.numbered),
             recommended: Boolean(tier.recommended),
             saveCents: tier.save ? madToCents(tier.save) : null,
+            perks: tier.perks ?? [],
             zoneFr: tier.zoneFr,
             zoneAr: tier.zoneAr,
             gateFr: tier.gateFr,

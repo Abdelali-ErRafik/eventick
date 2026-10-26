@@ -24,6 +24,7 @@ ticketsRouter.get(
         titleAr: ticket.order.event.titleAr,
         venueFr: ticket.order.event.venueFr,
         venueAr: ticket.order.event.venueAr,
+        image: ticket.order.event.image,
         start: ticket.order.event.startAt.toISOString(),
       },
       tier: {
@@ -33,6 +34,13 @@ ticketsRouter.get(
         zoneAr: ticket.tier.zoneAr,
         gateFr: ticket.tier.gateFr,
         gateAr: ticket.tier.gateAr,
+      },
+      order: {
+        subtotalCents: ticket.order.subtotalCents,
+        totalCents: ticket.order.totalCents,
+        paymentRef: ticket.order.paymentRef,
+        cardBank: ticket.order.cardBank,
+        cardLast4: ticket.order.cardLast4,
       },
     });
   }),

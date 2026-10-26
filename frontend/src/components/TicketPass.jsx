@@ -13,6 +13,19 @@ export function ticketPayload(ticket, eventSlug) {
   return `EVENTICK|${ticket.ref}|${eventSlug}|${ticket.holderName}`;
 }
 
+// Reshapes GET /orders' and GET /orders/:id's enriched ticket shape
+// (publicTicketWithContext on the backend) into the {ticket, event, tier,
+// eventSlug, priceCents} props TicketPass expects.
+export function toTicketPassProps(item) {
+  return {
+    ticket: { id: item.id, ref: item.ref, holderName: item.holderName, seatRow: item.seatRow, seatNumber: item.seatNumber },
+    event: { titleFr: item.event.titleFr, titleAr: item.event.titleAr, venueFr: item.event.venueFr, venueAr: item.event.venueAr, start: item.event.start },
+    tier: { nameFr: item.tierNameFr, nameAr: item.tierNameAr, zoneFr: item.zoneFr, zoneAr: item.zoneAr, gateFr: item.gateFr, gateAr: item.gateAr },
+    eventSlug: item.event.slug,
+    priceCents: item.priceCents,
+  };
+}
+
 // `ticket`, `event`, `tier` match GET /api/tickets/:id's response shape.
 export function TicketPass({ ticket, event, tier, eventSlug, priceCents }) {
   const { locale, t } = useI18n();

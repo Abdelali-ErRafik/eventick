@@ -46,6 +46,22 @@ promoRouter.post(
   }),
 );
 
+const updatePromoSchema = z.object({
+  maxUses: z.number().int().min(1),
+});
+
+promoRouter.patch(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const body = updatePromoSchema.parse(req.body);
+    const promo = await prisma.promoCode.findUnique({ where: { id } });
+    if (!promo) throw new HttpError(404, "Promo not found");
+    const updated = await prisma.promoCode.update({ where: { id: promo.id }, data: { maxUses: body.maxUses } });
+    res.json({ promo: updated });
+  }),
+);
+
 promoRouter.delete(
   "/:id",
   asyncHandler(async (req, res) => {

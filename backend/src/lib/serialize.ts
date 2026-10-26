@@ -40,6 +40,7 @@ export function publicEvent(event: EventWithTiers, remainingByTier: Record<strin
       numbered: tier.numbered,
       recommended: tier.recommended,
       saveCents: tier.saveCents,
+      perks: tier.perks,
       zoneFr: tier.zoneFr,
       zoneAr: tier.zoneAr,
       gateFr: tier.gateFr,
@@ -62,10 +63,14 @@ export function publicOrder(order: Order & { tickets: Ticket[] }) {
     status: order.status,
     holderName: order.holderName,
     email: order.email,
+    phone: order.phone,
     subtotalCents: order.subtotalCents,
     discountCents: order.discountCents,
     totalCents: order.totalCents,
     paymentRef: order.paymentRef,
+    cardBrand: order.cardBrand,
+    cardLast4: order.cardLast4,
+    cardBank: order.cardBank,
     createdAt: order.createdAt.toISOString(),
     tickets: order.tickets.map(publicTicket),
   };
@@ -79,5 +84,43 @@ export function publicTicket(ticket: Ticket) {
     holderName: ticket.holderName,
     seatRow: ticket.seatRow,
     seatNumber: ticket.seatNumber,
+  };
+}
+
+type TicketWithContext = Ticket & { tier: TicketTier & { event: Event } };
+
+/** Same ticket shape as publicTicket, plus the event/tier context Billets
+ * needs to group active vs past and render without a second round-trip per
+ * ticket. The gate and transfer routes don't need this — they stay on the
+ * lighter publicTicket. */
+export function publicTicketWithContext(ticket: TicketWithContext) {
+  return {
+    ...publicTicket(ticket),
+    tierId: ticket.tierId,
+    tierNameFr: ticket.tier.nameFr,
+    tierNameAr: ticket.tier.nameAr,
+    priceCents: ticket.tier.priceCents,
+    zoneFr: ticket.tier.zoneFr,
+    zoneAr: ticket.tier.zoneAr,
+    gateFr: ticket.tier.gateFr,
+    gateAr: ticket.tier.gateAr,
+    event: {
+      slug: ticket.tier.event.slug,
+      titleFr: ticket.tier.event.titleFr,
+      titleAr: ticket.tier.event.titleAr,
+      city: ticket.tier.event.city,
+      venueFr: ticket.tier.event.venueFr,
+      venueAr: ticket.tier.event.venueAr,
+      image: ticket.tier.event.image,
+      start: ticket.tier.event.startAt.toISOString(),
+      end: ticket.tier.event.endAt.toISOString(),
+    },
+  };
+}
+
+export function publicOrderWithContext(order: Order & { tickets: TicketWithContext[] }) {
+  return {
+    ...publicOrder(order),
+    tickets: order.tickets.map(publicTicketWithContext),
   };
 }

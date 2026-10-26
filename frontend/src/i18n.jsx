@@ -255,6 +255,7 @@ const fr = {
   colStatus: "Statut",
   used: "Composté",
   transferred: "Transféré",
+  cancelled: "Annulé",
   receipt: "Reçu",
   alertsOn: "Alertes d'ouverture activées pour vos favoris.",
   methods: "Moyens de paiement enregistrés",
@@ -410,6 +411,23 @@ const fr = {
   loginTrust: "Connexion sécurisée · Vos billets suivent votre compte",
   showPwd: "Afficher le mot de passe",
   hidePwd: "Masquer le mot de passe",
+  cgu: "Conditions générales",
+  support: "Centre de support",
+  whatsapp: "Assistance WhatsApp 7j/7",
+  helpTitle: "Centre de support",
+  helpLead: "On répond en darija, français et anglais.",
+  faq1q: "Le paiement est-il réel ?",
+  faq1a:
+    "Non. La passerelle de paiement est simulée pour que vous puissiez parcourir toute la réservation. Aucune carte n'est débitée et rien n'est envoyé à une banque.",
+  faq2q: "Où sont mes billets ?",
+  faq2a: "Dans votre espace Mes billets, lié à votre compte — accessible depuis n'importe quel appareil où vous vous connectez.",
+  faq3q: "Puis-je transférer un billet ?",
+  faq3a: "Oui. Le transfert change le nom du porteur et retire le billet de vos actifs. Le nouveau nom devra correspondre à la CIN à l'entrée.",
+  faq4q: "Comment un organisateur encaisse ?",
+  faq4a: "Eventick Pro publie l'événement tout de suite. Le branchement d'un vrai contrat de paiement (identifiants marchand) se fait hors de cette démo.",
+  legalTitle: "Conditions & confidentialité",
+  legalBody:
+    "Eventick est une démonstration de billetterie. Les événements, prix et places sont fictifs ou indicatifs. Aucune donnée bancaire n'est transmise : le numéro de carte est vérifié dans votre navigateur puis oublié, aucune carte n'est enregistrée. Vos commandes, billets et favoris sont liés à votre compte sur nos serveurs.",
 };
 
 const ar = {
@@ -662,6 +680,7 @@ const ar = {
   colStatus: "الحالة",
   used: "مُكمبَس",
   transferred: "مُحوَّل",
+  cancelled: "مُلغاة",
   receipt: "إيصال",
   alertsOn: "تنبيهات الفتح مفعّلة لمفضلتك.",
   methods: "وسائل الأداء المحفوظة",
@@ -816,6 +835,22 @@ const ar = {
   loginTrust: "دخول آمن · تذاكرك تتبع حسابك",
   showPwd: "إظهار كلمة المرور",
   hidePwd: "إخفاء كلمة المرور",
+  cgu: "الشروط العامة",
+  support: "مركز الدعم",
+  whatsapp: "مساعدة واتساب 7/7",
+  helpTitle: "مركز الدعم",
+  helpLead: "نجيب بالدارجة والفرنسية والإنجليزية.",
+  faq1q: "هل الأداء حقيقي؟",
+  faq1a: "لا. بوابة الدفع محاكاة لتختبر الحجز كاملاً. لا تُخصم أي بطاقة ولا يُرسل شيء إلى بنك.",
+  faq2q: "أين تذاكري؟",
+  faq2a: "في مساحة تذاكري المرتبطة بحسابك — متوفرة من أي جهاز تسجّل الدخول منه.",
+  faq3q: "هل أستطيع تحويل تذكرة؟",
+  faq3a: "نعم. التحويل يغيّر اسم الحامل ويسحب التذكرة من تذاكرك. الاسم الجديد يطابق البطاقة عند الدخول.",
+  faq4q: "كيف يحصّل المنظم؟",
+  faq4a: "Eventick Pro ينشر الحدث فوراً. ربط عقد دفع حقيقي يتم خارج هذه التجربة.",
+  legalTitle: "الشروط والخصوصية",
+  legalBody:
+    "Eventick تجربة لمنصة تذاكر. الأحداث والأثمنة والمقاعد توضيحية. لا تُرسل أي معطيات بنكية: يُفحص الرقم في متصفحك ثم يُنسى، ولا يتم حفظ أي بطاقة. طلباتك وتذاكرك ومفضلتك مرتبطة بحسابك على خوادمنا.",
 };
 
 export function fill(template, vars) {

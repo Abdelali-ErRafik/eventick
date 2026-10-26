@@ -1,0 +1,331 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { TicketPass, toTicketPassProps } from "../components/TicketPass";
+import { EventCard } from "../components/EventCard";
+import { Shell } from "../components/Shell";
+import { Protected } from "../components/Protected";
+import { api, money } from "../api";
+import { useAuth } from "../AuthContext";
+import { useFavorites } from "../FavoritesContext";
+import { useCatalog } from "../useCatalog";
+import { useI18n } from "../i18n";
+import { daysUntil, longDate, todayKey } from "../utils";
+
+function BilletsInner() {
+  const { locale, t, tf } = useI18n();
+  const { user, refresh } = useAuth();
+  const { favorites } = useFavorites();
+  const { events } = useCatalog();
+  const [orders, setOrders] = useState(null);
+  const [tab, setTab] = useState("active");
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(user?.name ?? "");
+  const [transferId, setTransferId] = useState(null);
+  const [friend, setFriend] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const loadOrders = () => api.get("/orders").then((data) => setOrders(data.orders));
+
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  const today = todayKey();
+  const flat = useMemo(() => orders?.flatMap((order) => order.tickets.map((ticket) => ({ ticket, order }))) ?? [], [orders]);
+  const active = flat
+    .filter((item) => item.ticket.status === "VALID" && item.ticket.event.end >= today)
+    .sort((a, b) => a.ticket.event.start.localeCompare(b.ticket.event.start));
+  const past = flat.filter((item) => item.ticket.status !== "VALID" || item.ticket.event.end < today);
+  const next = active[0]?.ticket;
+  const days = next ? daysUntil(next.event.start, today) : null;
+  const latest = orders ? [...orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] : null;
+  const savedEvents = favorites.map((slug) => events.find((event) => event.slug === slug)).filter(Boolean);
+  const initials = (user?.name ?? "?")
+    .split(" ")
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  const nextLabel = days == null ? "" : days <= 0 ? t("nextToday") : days === 1 ? t("nextTomorrow") : tf("nextIn", { n: days });
+
+  const saveName = async (e) => {
+    e.preventDefault();
+    if (busy || nameDraft.trim().length < 2) return;
+    setBusy(true);
+    try {
+      await api.patch("/auth/me", { name: nameDraft.trim() });
+      await refresh?.();
+      setEditingName(false);
+      toast.success(t("profileSaved"));
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitTransfer = async (e) => {
+    e.preventDefault();
+    if (busy || friend.trim().length < 3 || !transferId) return;
+    setBusy(true);
+    try {
+      await api.post(`/tickets/${transferId}/transfer`, { holderName: friend.trim() });
+      await loadOrders();
+      setTransferId(null);
+      setFriend("");
+      toast.success(t("transferOk"));
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const exportCsv = () => {
+    const header = ["title", "date", "ref", "price", "status"];
+    const rows = past.map(({ ticket }) => [
+      locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr,
+      ticket.event.start,
+      ticket.ref,
+      String(ticket.priceCents / 100),
+      ticket.status,
+    ]);
+    const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "eventick-releve.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (!orders) {
+    return (
+      <Shell>
+        <div className="mx-auto h-80 max-w-3xl animate-pulse px-4 py-10" />
+      </Shell>
+    );
+  }
+
+  return (
+    <Shell>
+      <section className="bg-encre text-foam">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-8 md:px-8">
+          <span className="inline-flex size-16 items-center justify-center rounded-full bg-lagon font-display text-xl font-extrabold">{initials}</span>
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-3xl font-extrabold">{user?.name}</h1>
+            <p className="text-sm text-mist">{user?.email}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Mini value={String(active.length)} label={t("ready")} />
+            <Mini value={orders.length ? `${money(orders.reduce((s, o) => s + o.totalCents, 0))} MAD` : "0 MAD"} label={t("spend")} />
+          </div>
+        </div>
+      </section>
+      <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">
+        <div className="flex gap-2 overflow-x-auto">
+          {[
+            ["active", t("tabActive")],
+            ["past", t("tabPast")],
+            ["saved", t("tabSaved")],
+          ].map(([id, label]) => (
+            <button key={id} type="button" className={`h-11 shrink-0 rounded-full px-4 text-sm font-semibold ${tab === id ? "bg-lagon text-foam" : "bg-card text-ink"}`} onClick={() => setTab(id)}>
+              {label}
+              {id === "active" ? ` (${active.length})` : ""}
+              {id === "saved" ? ` (${savedEvents.length})` : ""}
+            </button>
+          ))}
+        </div>
+
+        {tab === "active" ? (
+          <div className="mt-6 space-y-4">
+            {next ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-brume px-4 py-3">
+                <p className="font-semibold text-lagon-deep">{nextLabel}</p>
+                <Link to={`/billet/${next.id}`} className="inline-flex h-11 items-center rounded-full bg-encre px-4 text-sm font-semibold text-foam">
+                  {t("showPass")}
+                </Link>
+              </div>
+            ) : (
+              <p className="text-muted">{t("noActive")}</p>
+            )}
+            {active[0] ? <TicketPass {...toTicketPassProps(active[0].ticket)} /> : null}
+            {active.length > 1 ? (
+              <>
+                <h2 className="font-display text-xl font-bold">{t("other")}</h2>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {active.slice(1).map(({ ticket }) => (
+                    <SmallTicket key={ticket.id} ticket={ticket} locale={locale} t={t} onTransfer={() => setTransferId(ticket.id)} />
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
+        {tab === "past" ? (
+          <div className="mt-6 overflow-x-auto rounded-xl border border-line/10 bg-card">
+            <div className="flex items-center justify-between p-4">
+              <h2 className="font-display text-xl font-bold">{t("historyTitle")}</h2>
+              <button type="button" className="h-11 rounded-full bg-paper px-4 text-sm font-semibold" onClick={exportCsv}>
+                {t("exportCsv")}
+              </button>
+            </div>
+            {past.length === 0 ? <p className="px-4 pb-4 text-muted">{t("noPast")}</p> : null}
+            <table className="w-full min-w-[40rem] text-start text-sm">
+              <thead className="text-xs text-muted">
+                <tr>
+                  <th className="px-4 py-2 text-start">{t("colEvent")}</th>
+                  <th className="px-4 py-2 text-start">{t("colDate")}</th>
+                  <th className="px-4 py-2 text-start">{t("colRef")}</th>
+                  <th className="px-4 py-2 text-start">{t("colPrice")}</th>
+                  <th className="px-4 py-2 text-start">{t("colStatus")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {past.map(({ ticket }) => (
+                  <tr key={ticket.id} className="border-t border-line/10">
+                    <td className="px-4 py-3">
+                      <p className="font-semibold">{locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr}</p>
+                      <p className="text-muted">{ticket.event.city}</p>
+                    </td>
+                    <td className="px-4 py-3">{longDate(ticket.event.start, locale)}</td>
+                    <td className="px-4 py-3 font-mono text-xs">{ticket.ref}</td>
+                    <td className="px-4 py-3">{money(ticket.priceCents)} MAD</td>
+                    <td className="px-4 py-3">
+                      {ticket.status === "TRANSFERRED" ? t("transferred") : ticket.status === "CANCELLED" ? t("cancelled") : t("used")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+
+        {tab === "saved" ? (
+          <div className="mt-6">
+            <p className="text-sm text-muted">{t("alertsOn")}</p>
+            {savedEvents.length === 0 ? <p className="mt-4 text-muted">{t("noSaved")}</p> : null}
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
+              {savedEvents.map((event) => (
+                <EventCard key={event.slug} event={event} />
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <section className="mt-8 grid gap-4 lg:grid-cols-2">
+          <article className="rounded-xl border border-line/10 bg-card p-4 shadow-card">
+            <h2 className="font-display text-xl font-bold">{t("lastTx")}</h2>
+            {latest ? (
+              <>
+                <p className="mt-2 text-sm text-muted">{latest.paymentRef}</p>
+                <p className="mt-3 flex justify-between">
+                  <span>{latest.tickets[0] ? (locale === "ar" ? latest.tickets[0].event.titleAr : latest.tickets[0].event.titleFr) : t("tickets")}</span>
+                  <span>{money(latest.subtotalCents)} MAD</span>
+                </p>
+                <p className="flex justify-between text-sm">
+                  <span>{t("serviceFee")}</span>
+                  <span>{t("feesFree")}</span>
+                </p>
+                <p className="mt-2 flex justify-between font-display text-2xl font-extrabold">
+                  <span>{t("totalDebited")}</span>
+                  <span>{money(latest.totalCents)} MAD</span>
+                </p>
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-muted">{t("noPast")}</p>
+            )}
+          </article>
+          <article className="rounded-xl border border-line/10 bg-card p-4 shadow-card">
+            <h2 className="font-display text-xl font-bold">{t("edit")}</h2>
+            {editingName ? (
+              <form className="mt-3 grid gap-2" onSubmit={saveName}>
+                <input className="field" value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} />
+                <div className="flex gap-2">
+                  <button type="submit" disabled={busy} className="h-11 flex-1 rounded-full bg-lagon text-sm font-semibold text-foam disabled:opacity-50">
+                    {t("saveProfile")}
+                  </button>
+                  <button type="button" className="h-11 rounded-full border border-line/15 px-4 text-sm" onClick={() => setEditingName(false)}>
+                    {t("cancel")}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button
+                type="button"
+                className="mt-3 text-sm font-semibold text-lagon"
+                onClick={() => {
+                  setNameDraft(user?.name ?? "");
+                  setEditingName(true);
+                }}
+              >
+                {t("edit")} — {user?.name}
+              </button>
+            )}
+          </article>
+        </section>
+      </div>
+
+      {transferId ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-encre/60 p-4 sm:items-center">
+          <form className="w-full max-w-md rounded-2xl bg-card p-5" onSubmit={submitTransfer}>
+            <h2 className="font-display text-2xl font-extrabold">{t("transferTitle")}</h2>
+            <label className="mt-3 block text-sm">
+              {t("friendName")}
+              <input className="field mt-1" value={friend} onChange={(e) => setFriend(e.target.value)} />
+            </label>
+            <div className="mt-4 flex gap-2">
+              <button type="button" className="h-12 flex-1 rounded-full border border-line/15" onClick={() => setTransferId(null)}>
+                {t("cancel")}
+              </button>
+              <button type="submit" disabled={busy} className="h-12 flex-1 rounded-full bg-lagon font-semibold text-foam disabled:opacity-50">
+                {t("sendTicket")}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+    </Shell>
+  );
+}
+
+function Mini({ value, label }) {
+  return (
+    <div className="rounded-xl bg-foam/10 px-3 py-2 text-center">
+      <p className="font-display text-lg font-extrabold tabular-nums">{value}</p>
+      <p className="text-xs text-mist">{label}</p>
+    </div>
+  );
+}
+
+function SmallTicket({ ticket, locale, t, onTransfer }) {
+  return (
+    <article className="flex gap-3 rounded-xl border border-line/10 bg-card p-3 shadow-card">
+      <img src={ticket.event.image} alt="" className="size-20 rounded-lg object-cover" />
+      <div className="min-w-0 flex-1">
+        <h3 className="font-display font-bold">{locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr}</h3>
+        <p className="text-sm text-muted">{ticket.event.city}</p>
+        <div className="mt-2 flex gap-2">
+          <Link to={`/billet/${ticket.id}`} className="inline-flex h-10 items-center rounded-full bg-lagon px-3 text-sm font-semibold text-foam">
+            {t("seeQr")}
+          </Link>
+          <button type="button" className="h-10 rounded-full border border-line/15 px-3 text-sm" onClick={onTransfer}>
+            {t("transfer")}
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+export default function Billets() {
+  return (
+    <Protected>
+      <BilletsInner />
+    </Protected>
+  );
+}

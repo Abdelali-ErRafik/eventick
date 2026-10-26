@@ -66,6 +66,18 @@ authRouter.get(
   }),
 );
 
+const updateMeSchema = z.object({ name: z.string().min(2) });
+
+authRouter.patch(
+  "/me",
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const body = updateMeSchema.parse(req.body);
+    const user = await prisma.user.update({ where: { id: req.user!.id }, data: { name: body.name } });
+    res.json({ user: publicUser(user) });
+  }),
+);
+
 const promoteSchema = z.object({ role: z.enum(["CUSTOMER", "ORGANISER", "ADMIN"]) });
 
 /**

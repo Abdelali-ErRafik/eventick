@@ -4,7 +4,7 @@ import Explorer from "./screens/Explorer";
 import EventDetail from "./screens/EventDetail";
 import Checkout from "./screens/Checkout";
 import Confirmation from "./screens/Confirmation";
-import MyTickets from "./screens/MyTickets";
+import Billets from "./screens/Billets";
 import TicketDetail from "./screens/TicketDetail";
 import Login from "./screens/Login";
 import Organiser from "./screens/Organiser";
@@ -20,7 +20,7 @@ export default function App() {
       <Route path="/evenements/:slug" element={<EventDetail />} />
       <Route path="/paiement" element={<Checkout />} />
       <Route path="/confirmation/:orderId" element={<Confirmation />} />
-      <Route path="/billets" element={<MyTickets />} />
+      <Route path="/billets" element={<Billets />} />
       <Route path="/billet/:ticketId" element={<TicketDetail />} />
       <Route path="/login" element={<Login />} />
       <Route path="/organiser" element={<Organiser />} />

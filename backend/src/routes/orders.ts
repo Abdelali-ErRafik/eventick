@@ -16,7 +16,7 @@ import {
   makePaymentRef,
   phoneOk,
 } from "../lib/payment-sim.js";
-import { publicOrder } from "../lib/serialize.js";
+import { publicOrder, publicOrderWithContext } from "../lib/serialize.js";
 import { remainingByTier } from "../lib/availability.js";
 
 export const ordersRouter = Router();
@@ -162,9 +162,12 @@ ordersRouter.get(
   optionalAuth,
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
-    const order = await prisma.order.findUnique({ where: { id }, include: { tickets: true } });
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: { tickets: { include: { tier: { include: { event: true } } } } },
+    });
     if (!order) throw new HttpError(404, "Order not found");
-    res.json({ order: publicOrder(order) });
+    res.json({ order: publicOrderWithContext(order) });
   }),
 );
 
@@ -174,10 +177,10 @@ ordersRouter.get(
   asyncHandler(async (req, res) => {
     const orders = await prisma.order.findMany({
       where: { customerId: req.user!.id },
-      include: { tickets: true },
+      include: { tickets: { include: { tier: { include: { event: true } } } } },
       orderBy: { createdAt: "desc" },
     });
-    res.json({ orders: orders.map(publicOrder) });
+    res.json({ orders: orders.map(publicOrderWithContext) });
   }),
 );
 
