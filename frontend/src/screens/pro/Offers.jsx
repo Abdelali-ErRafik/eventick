@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
+import { Plus, Tags, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
+import { useConfirm } from "./ConfirmContext";
+import { Badge, Btn, DataTable, EmptyState, IconBtn, Modal, PageHead, PersonCell, SectionTitle, Td, Th } from "./ui";
 import { text } from "./copy";
 
 export default function Offers() {
   const { locale } = useI18n();
   const t = text[locale];
+  const confirm = useConfirm();
   const [events, setEvents] = useState(null);
   const [promos, setPromos] = useState(null);
   const [waitlist, setWaitlist] = useState([]);
+  const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
   const [kind, setKind] = useState("PERCENT");
   const [value, setValue] = useState(10);
@@ -29,28 +34,25 @@ export default function Offers() {
     if (!events) return;
     Promise.all(
       events.map((event) =>
-        api.get(`/organiser/events/${event.slug}/waitlist`).then((data) => data.entries.map((entry) => ({ ...entry, slug: event.slug }))),
+        api
+          .get(`/organiser/events/${event.slug}/waitlist`)
+          .then((data) => data.entries.map((entry) => ({ ...entry, slug: event.slug, title: locale === "ar" ? event.titleAr : event.titleFr }))),
       ),
     ).then((lists) => setWaitlist(lists.flat()));
-  }, [events]);
+  }, [events, locale]);
 
-  const eventTitle = useMemo(() => {
+  const eventById = useMemo(() => {
     const map = new Map();
     for (const event of events ?? []) map.set(event.id, locale === "ar" ? event.titleAr : event.titleFr);
     return map;
   }, [events, locale]);
-
-  const eventSlugById = useMemo(() => {
-    const map = new Map();
-    for (const event of events ?? []) map.set(event.id, event.slug);
-    return map;
-  }, [events]);
 
   const submit = async (e) => {
     e.preventDefault();
     if (code.trim().length < 3 || value <= 0 || maxUses < 1) return;
     await api.post("/promo", { code: code.trim(), kind, value, eventSlug: eventSlug || undefined, maxUses });
     setCode("");
+    setOpen(false);
     load();
     toast.success(t.saved);
   };
@@ -62,6 +64,14 @@ export default function Offers() {
   };
 
   const remove = async (promo) => {
+    const ok = await confirm({
+      title: t.confirmTitle,
+      message: t.confirmDeletePromo,
+      tone: "danger",
+      confirmLabel: t.remove,
+      cancelLabel: t.cancelBtn,
+    });
+    if (!ok) return;
     await api.del(`/promo/${promo.id}`);
     load();
     toast.success(t.removed);
@@ -69,61 +79,147 @@ export default function Offers() {
 
   return (
     <div>
-      <h1 className="font-display text-4xl font-extrabold">{t.offers}</h1>
-      <form className="mt-6 grid gap-2 rounded-xl bg-card p-4 shadow-card md:grid-cols-3" onSubmit={submit}>
-        <input className="field h-11 font-mono" value={code} onChange={(e) => setCode(e.target.value)} placeholder={t.code} required />
-        <select className="field h-11" value={kind} onChange={(e) => setKind(e.target.value)}>
-          <option value="PERCENT">{t.percent}</option>
-          <option value="AMOUNT">{t.amount}</option>
-        </select>
-        <input className="field h-11" type="number" min={1} value={value} onChange={(e) => setValue(Number(e.target.value))} />
-        <select className="field h-11" value={eventSlug} onChange={(e) => setEventSlug(e.target.value)}>
-          <option value="">{t.allDates}</option>
-          {(events ?? []).map((event) => (
-            <option key={event.slug} value={event.slug}>
-              {locale === "ar" ? event.titleAr : event.titleFr}
-            </option>
+      <PageHead
+        title={t.offers}
+        sub={t.offersSub}
+        actions={
+          <Btn onClick={() => setOpen(true)}>
+            <Plus className="size-4" />
+            {t.addPromo}
+          </Btn>
+        }
+      />
+
+      <DataTable minWidth={760}>
+        <thead>
+          <tr>
+            <Th className="text-start">{t.code}</Th>
+            <Th>{t.kind}</Th>
+            <Th>{t.uses}</Th>
+            <Th className="text-start">{t.allEvents}</Th>
+            <Th>
+              <span className="sr-only">{t.actions}</span>
+            </Th>
+          </tr>
+        </thead>
+        <tbody>
+          {promos && promos.length === 0 ? (
+            <tr>
+              <td colSpan={5}>
+                <EmptyState icon="🏷️" title={t.noPromosYet} />
+              </td>
+            </tr>
+          ) : null}
+          {(promos ?? []).map((promo) => {
+            const exhausted = promo.uses >= promo.maxUses;
+            return (
+              <tr key={promo.id} className="transition hover:bg-brume/40">
+                <Td>
+                  <span className="font-mono text-sm font-extrabold">{promo.code}</span>
+                </Td>
+                <Td className="text-center">
+                  <Badge tone="blue">{promo.kind === "PERCENT" ? `${promo.value}%` : `${money(promo.value)} MAD`}</Badge>
+                </Td>
+                <Td className="text-center">
+                  <Badge tone={exhausted ? "red" : "gray"}>
+                    {promo.uses}/{promo.maxUses}
+                  </Badge>
+                </Td>
+                <Td className="text-sm">{promo.eventId ? (eventById.get(promo.eventId) ?? promo.eventId) : t.allDates}</Td>
+                <Td className="w-px whitespace-nowrap pe-4">
+                  <div className="flex justify-end gap-1.5">
+                    <Btn variant="secondary" size="sm" onClick={() => bump(promo)}>
+                      +50
+                    </Btn>
+                    <IconBtn tone="danger" label={t.remove} onClick={() => remove(promo)}>
+                      <Trash2 className="size-4" />
+                    </IconBtn>
+                  </div>
+                </Td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </DataTable>
+
+      <SectionTitle>{t.waitlist}</SectionTitle>
+      <DataTable minWidth={620}>
+        <thead>
+          <tr>
+            <Th className="text-start">{t.email}</Th>
+            <Th className="text-start">{t.events}</Th>
+            <Th>{t.colDate}</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {waitlist.length === 0 ? (
+            <tr>
+              <td colSpan={3}>
+                <EmptyState icon="📬" title={t.noWaitlist} />
+              </td>
+            </tr>
+          ) : null}
+          {waitlist.map((item, i) => (
+            <tr key={`${item.slug}-${item.email}-${i}`} className="transition hover:bg-brume/40">
+              <Td>
+                <PersonCell name={item.email} />
+              </Td>
+              <Td className="text-sm">{item.title}</Td>
+              <Td className="text-center text-sm text-muted">{item.createdAt.slice(0, 10)}</Td>
+            </tr>
           ))}
-        </select>
-        <input className="field h-11" type="number" min={1} value={maxUses} onChange={(e) => setMaxUses(Number(e.target.value))} placeholder={t.maxUses} />
-        <button className="h-11 rounded-full bg-lagon px-4 text-sm font-semibold text-foam" type="submit">
-          {t.addPromo}
-        </button>
-      </form>
-      <ul className="mt-4 grid gap-2">
-        {(promos ?? []).map((promo) => (
-          <li key={promo.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-card px-4 py-3 shadow-card">
-            <div>
-              <p className="font-mono font-bold">{promo.code}</p>
-              <p className="text-sm text-muted">
-                {promo.kind === "PERCENT" ? `${promo.value}%` : `${money(promo.value)} MAD`} · {promo.uses}/{promo.maxUses} {t.uses}
-                {promo.eventId ? ` · ${eventTitle.get(promo.eventId) ?? eventSlugById.get(promo.eventId)}` : ` · ${t.allDates}`}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button type="button" className="h-11 rounded-full bg-paper px-4 text-sm font-semibold" onClick={() => bump(promo)}>
-                +50
-              </button>
-              <button type="button" className="h-11 rounded-full bg-corail px-4 text-sm font-semibold text-foam" onClick={() => remove(promo)}>
-                {t.remove}
-              </button>
-            </div>
-          </li>
-        ))}
-        {promos && promos.length === 0 ? <li className="text-sm text-muted">{t.empty}</li> : null}
-      </ul>
-      <h2 className="mt-8 font-display text-2xl font-extrabold">{t.waitlist}</h2>
-      <ul className="mt-3 grid gap-2">
-        {waitlist.length === 0 ? <li className="text-sm text-muted">{t.empty}</li> : null}
-        {waitlist.map((item, i) => (
-          <li key={i} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-card px-4 py-3 text-sm shadow-card">
-            <span>{item.email}</span>
-            <span className="text-muted">
-              {item.slug} · {item.createdAt.slice(0, 10)}
-            </span>
-          </li>
-        ))}
-      </ul>
+        </tbody>
+      </DataTable>
+
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={t.addPromo}
+        icon={<Tags className="size-5" />}
+        footer={
+          <>
+            <Btn variant="secondary" onClick={() => setOpen(false)}>
+              {t.close}
+            </Btn>
+            <Btn type="submit" form="promo-form">
+              {t.save}
+            </Btn>
+          </>
+        }
+      >
+        <form id="promo-form" className="grid gap-4 sm:grid-cols-2" onSubmit={submit}>
+          <label className="grid gap-1.5 text-sm font-semibold sm:col-span-2">
+            {t.code}
+            <input className="field font-mono" value={code} onChange={(e) => setCode(e.target.value)} placeholder="SAFRAN15" required />
+          </label>
+          <label className="grid gap-1.5 text-sm font-semibold">
+            {t.kind}
+            <select className="field" value={kind} onChange={(e) => setKind(e.target.value)}>
+              <option value="PERCENT">{t.percent}</option>
+              <option value="AMOUNT">{t.amount}</option>
+            </select>
+          </label>
+          <label className="grid gap-1.5 text-sm font-semibold">
+            {kind === "PERCENT" ? t.percent : t.amount}
+            <input className="field" type="number" min={1} value={value} onChange={(e) => setValue(Number(e.target.value))} />
+          </label>
+          <label className="grid gap-1.5 text-sm font-semibold">
+            {t.allEvents}
+            <select className="field" value={eventSlug} onChange={(e) => setEventSlug(e.target.value)}>
+              <option value="">{t.allDates}</option>
+              {(events ?? []).map((event) => (
+                <option key={event.slug} value={event.slug}>
+                  {locale === "ar" ? event.titleAr : event.titleFr}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1.5 text-sm font-semibold">
+            {t.maxUses}
+            <input className="field" type="number" min={1} value={maxUses} onChange={(e) => setMaxUses(Number(e.target.value))} />
+          </label>
+        </form>
+      </Modal>
     </div>
   );
 }

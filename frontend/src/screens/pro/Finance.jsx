@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Landmark, Percent, Wallet } from "lucide-react";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
 import { planCost } from "../../strategy";
+import { Card, DataTable, EmptyState, EntityCell, MoneyCell, PageHead, SectionTitle, StatCard, StatSkeletons, Td, Th } from "./ui";
+import { cn } from "../../utils";
 import { text } from "./copy";
 
 const PLANS = [
@@ -23,58 +26,96 @@ export default function Finance() {
   const gmv = (orders ?? []).filter((order) => order.status === "PAID").reduce((sum, order) => sum + order.totalCents, 0);
   const fee = planCost(plan, gmv);
 
-  const byEvent = new Map();
-  for (const order of orders ?? []) {
-    for (const ticket of order.tickets) {
-      if (ticket.status === "CANCELLED") continue;
-      const title = locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr;
-      const current = byEvent.get(ticket.event.slug) ?? { title, gross: 0 };
-      current.gross += ticket.priceCents;
-      byEvent.set(ticket.event.slug, current);
+  const byEvent = useMemo(() => {
+    const map = new Map();
+    for (const order of orders ?? []) {
+      for (const ticket of order.tickets) {
+        if (ticket.status === "CANCELLED") continue;
+        const current = map.get(ticket.event.slug) ?? {
+          slug: ticket.event.slug,
+          title: locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr,
+          image: ticket.event.image,
+          city: ticket.event.city,
+          gross: 0,
+          tickets: 0,
+        };
+        current.gross += ticket.priceCents;
+        current.tickets += 1;
+        map.set(ticket.event.slug, current);
+      }
     }
-  }
+    return [...map.values()].sort((a, b) => b.gross - a.gross);
+  }, [orders, locale]);
 
   return (
     <div>
-      <h1 className="font-display text-4xl font-extrabold">{t.finance}</h1>
-      <p className="mt-2 max-w-2xl text-muted">{t.payout}</p>
-      <p className="mt-2 font-mono text-sm text-lagon">{t.account}</p>
-      <div className="mt-6 grid gap-3 sm:grid-cols-3">
-        <Stat label={t.gross} value={`${money(gmv)} MAD`} />
-        <Stat label={t.fee} value={`${money(fee)} MAD`} />
-        <Stat label={t.net} value={`${money(gmv - fee)} MAD`} />
+      <PageHead title={t.finance} sub={t.financeSub} />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {!orders ? (
+          <StatSkeletons count={3} />
+        ) : (
+          <>
+            <StatCard accent icon={<Wallet className="size-5" />} label={t.gross} value={`${money(gmv)} MAD`} sub={t.payout} />
+            <StatCard icon={<Percent className="size-5" />} label={t.fee} value={`${money(fee)} MAD`} sub={PLANS.find((p) => p.id === plan)?.label} />
+            <StatCard icon={<Landmark className="size-5" />} label={t.net} value={`${money(gmv - fee)} MAD`} sub={t.account} />
+          </>
+        )}
       </div>
-      <div className="mt-6 flex flex-wrap gap-2">
+
+      <SectionTitle>{t.plan}</SectionTitle>
+      <div className="flex flex-wrap gap-2">
         {PLANS.map((item) => (
           <button
             key={item.id}
             type="button"
+            aria-pressed={plan === item.id}
             onClick={() => setPlan(item.id)}
-            className={`h-11 rounded-full px-4 text-sm font-semibold ${plan === item.id ? "bg-encre text-foam" : "bg-card"}`}
+            className={cn(
+              "h-11 rounded-full border px-4 text-sm font-semibold transition",
+              plan === item.id ? "border-lagon bg-lagon text-white" : "border-line/20 bg-card text-muted hover:border-lagon hover:bg-brume hover:text-lagon-deep",
+            )}
           >
-            {t.plan} {item.label}
+            {item.label}
           </button>
         ))}
       </div>
-      <h2 className="mt-8 font-display text-2xl font-extrabold">{t.perEvent}</h2>
-      <ul className="mt-3 grid gap-2">
-        {[...byEvent.values()].map((row) => (
-          <li key={row.title} className="flex items-center justify-between rounded-xl bg-card px-4 py-3 shadow-card">
-            <span className="font-semibold">{row.title}</span>
-            <span>{money(row.gross)} MAD</span>
-          </li>
-        ))}
-        {orders && byEvent.size === 0 ? <li className="text-sm text-muted">{t.empty}</li> : null}
-      </ul>
-    </div>
-  );
-}
 
-function Stat({ label, value }) {
-  return (
-    <div className="rounded-xl border border-line/10 bg-card p-4 shadow-card">
-      <p className="text-sm text-muted">{label}</p>
-      <p className="mt-1 font-display text-2xl font-extrabold">{value}</p>
+      <SectionTitle>{t.perEvent}</SectionTitle>
+      <DataTable minWidth={620}>
+        <thead>
+          <tr>
+            <Th className="text-start">{t.events}</Th>
+            <Th>{t.tickets}</Th>
+            <Th>{t.gross}</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders && byEvent.length === 0 ? (
+            <tr>
+              <td colSpan={3}>
+                <EmptyState icon="💰" title={t.empty} />
+              </td>
+            </tr>
+          ) : null}
+          {byEvent.map((row) => (
+            <tr key={row.slug} className="transition hover:bg-brume/40">
+              <Td>
+                <EntityCell image={row.image} title={row.title} sub={row.city} />
+              </Td>
+              <Td className="text-center tabular-nums">{row.tickets}</Td>
+              <Td className="text-center">
+                <MoneyCell unit="MAD">{money(row.gross)}</MoneyCell>
+              </Td>
+            </tr>
+          ))}
+        </tbody>
+      </DataTable>
+
+      <Card className="mt-4">
+        <p className="text-sm text-muted">{t.payout}</p>
+        <p className="mt-1 font-mono text-sm text-lagon">{t.account}</p>
+      </Card>
     </div>
   );
 }

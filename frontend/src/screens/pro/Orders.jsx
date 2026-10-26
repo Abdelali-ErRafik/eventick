@@ -1,25 +1,50 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { Check, Download, ExternalLink, Trash2, Undo2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
 import { longDate } from "../../utils";
-import { cn } from "../../utils";
+import { useConfirm } from "./ConfirmContext";
+import {
+  Badge,
+  Btn,
+  DataTable,
+  EmptyState,
+  EntityCell,
+  FilterBar,
+  IconBtn,
+  MoneyCell,
+  PageHead,
+  Pager,
+  PersonCell,
+  Td,
+  Th,
+} from "./ui";
 import { text } from "./copy";
+
+const PAGE_SIZE_DEFAULT = 20;
 
 export default function Orders() {
   const { locale } = useI18n();
   const t = text[locale];
+  const confirm = useConfirm();
   const [orders, setOrders] = useState(null);
   const [query, setQuery] = useState("");
   const [eventSlug, setEventSlug] = useState("");
   const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(PAGE_SIZE_DEFAULT);
 
   const load = () => api.get("/organiser/orders/detailed").then((data) => setOrders(data.orders));
 
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, eventSlug, status, limit]);
 
   const events = useMemo(() => {
     const map = new Map();
@@ -29,48 +54,68 @@ export default function Orders() {
     return [...map.entries()];
   }, [orders, locale]);
 
-  const visible = useMemo(() => {
+  // One row per ticket — closer to what an organiser scans for than per-order.
+  const allRows = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return (orders ?? [])
-      .map((order) => ({
-        order,
-        tickets: order.tickets.filter((ticket) => {
-          if (eventSlug && ticket.event.slug !== eventSlug) return false;
-          if (status && ticket.status !== status) return false;
-          if (!needle) return true;
-          return `${order.holderName} ${order.email} ${order.id} ${ticket.ref} ${ticket.event.titleFr} ${ticket.event.titleAr}`.toLowerCase().includes(needle);
-        }),
-      }))
-      .filter((row) => row.tickets.length > 0);
+    const rows = [];
+    for (const order of orders ?? []) {
+      for (const ticket of order.tickets) {
+        if (eventSlug && ticket.event.slug !== eventSlug) continue;
+        if (status && ticket.status !== status) continue;
+        if (needle && !`${order.holderName} ${order.email} ${order.id} ${ticket.ref} ${ticket.event.titleFr} ${ticket.event.titleAr}`.toLowerCase().includes(needle))
+          continue;
+        rows.push({ order, ticket });
+      }
+    }
+    return rows;
   }, [orders, query, eventSlug, status]);
 
-  const label = (value) => (value === "VALID" ? t.valid : value === "USED" ? t.used : value === "CANCELLED" ? t.cancelled : t.transferred);
+  const pages = Math.max(1, Math.ceil(allRows.length / limit));
+  const rows = allRows.slice((page - 1) * limit, page * limit);
 
-  const cancelOrder = async (id) => {
-    await api.post(`/organiser/orders/${id}/cancel`, {});
+  const label = (value) =>
+    value === "VALID" ? t.valid : value === "USED" ? t.used : value === "CANCELLED" ? t.cancelled : t.transferred;
+  const tone = (value) => (value === "USED" ? "blue" : value === "CANCELLED" ? "red" : value === "TRANSFERRED" ? "amber" : "green");
+
+  const cancelOrder = async (order) => {
+    const ok = await confirm({
+      title: t.confirmTitle,
+      message: t.confirmCancelOrder,
+      tone: "warn",
+      confirmLabel: t.cancelOrder,
+      cancelLabel: t.cancelBtn,
+    });
+    if (!ok) return;
+    await api.post(`/organiser/orders/${order.id}/cancel`, {});
     load();
     toast.success(t.cancelled);
   };
 
-  const removeOrder = async (id) => {
-    await api.del(`/organiser/orders/${id}`);
+  const removeOrder = async (order) => {
+    const ok = await confirm({
+      title: t.confirmTitle,
+      message: t.confirmDeleteOrder,
+      tone: "danger",
+      confirmLabel: t.remove,
+      cancelLabel: t.cancelBtn,
+    });
+    if (!ok) return;
+    await api.del(`/organiser/orders/${order.id}`);
     load();
     toast.success(t.removed);
   };
 
-  const toggleAdmit = async (ticketId, currentStatus) => {
-    const next = currentStatus === "USED" ? "VALID" : "USED";
-    await api.patch(`/organiser/tickets/${ticketId}/status`, { status: next });
+  const toggleAdmit = async (ticket) => {
+    const next = ticket.status === "USED" ? "VALID" : "USED";
+    await api.patch(`/organiser/tickets/${ticket.id}/status`, { status: next });
     load();
     toast.success(next === "USED" ? t.admitted : t.undone);
   };
 
   const exportCsv = () => {
     const lines = [["order", "ref", "event", "holder", "email", "status", "price"]];
-    for (const row of visible) {
-      for (const ticket of row.tickets) {
-        lines.push([row.order.id, ticket.ref, ticket.event.titleFr, row.order.holderName, row.order.email, ticket.status, String(ticket.priceCents / 100)]);
-      }
+    for (const { order, ticket } of allRows) {
+      lines.push([order.id, ticket.ref, ticket.event.titleFr, order.holderName, order.email, ticket.status, String(ticket.priceCents / 100)]);
     }
     const csv = lines.map((line) => line.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -81,79 +126,131 @@ export default function Orders() {
     URL.revokeObjectURL(url);
   };
 
+  const activeCount = [query, eventSlug, status].filter(Boolean).length;
+
   return (
     <div>
-      <h1 className="font-display text-4xl font-extrabold">{t.orders}</h1>
-      <div className="mt-6 grid gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
-        <input className="field h-11" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.search} />
-        <select className="field h-11" value={eventSlug} onChange={(e) => setEventSlug(e.target.value)}>
-          <option value="">{t.allEvents}</option>
-          {events.map(([slug, title]) => (
-            <option key={slug} value={slug}>
-              {title}
-            </option>
+      <PageHead title={t.orders} sub={orders ? t.ordersSub.replace("{n}", String(allRows.length)) : undefined} />
+
+      <FilterBar
+        search={{ value: query, onChange: setQuery, placeholder: t.search }}
+        controls={[
+          {
+            key: "event",
+            label: t.allEvents,
+            value: eventSlug,
+            onChange: (e) => setEventSlug(e.target.value),
+            style: { width: 200 },
+            options: [{ value: "", label: t.allEvents }, ...events.map(([slug, title]) => ({ value: slug, label: title }))],
+          },
+          {
+            key: "status",
+            label: t.colStatus,
+            value: status,
+            onChange: (e) => setStatus(e.target.value),
+            style: { width: 160 },
+            options: [
+              { value: "", label: t.allStatus },
+              { value: "VALID", label: t.valid },
+              { value: "USED", label: t.used },
+              { value: "TRANSFERRED", label: t.transferred },
+              { value: "CANCELLED", label: t.cancelled },
+            ],
+          },
+        ]}
+        activeCount={activeCount}
+        resetLabel={t.reset}
+        onReset={() => {
+          setQuery("");
+          setEventSlug("");
+          setStatus("");
+        }}
+        actions={
+          <Btn variant="secondary" size="sm" disabled={allRows.length === 0} onClick={exportCsv}>
+            <Download className="size-4" />
+            {t.export}
+          </Btn>
+        }
+      />
+
+      <DataTable minWidth={980}>
+        <thead>
+          <tr>
+            <Th className="text-start">{t.search}</Th>
+            <Th className="text-start">{t.events}</Th>
+            <Th>{t.ref}</Th>
+            <Th>{t.gross}</Th>
+            <Th>{t.colStatus}</Th>
+            <Th>
+              <span className="sr-only">{t.actions}</span>
+            </Th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders && rows.length === 0 ? (
+            <tr>
+              <td colSpan={6}>
+                <EmptyState icon="🧾" title={activeCount ? t.noOrdersFilter : t.noOrdersYet} />
+              </td>
+            </tr>
+          ) : null}
+          {rows.map(({ order, ticket }) => (
+            <tr key={ticket.id} className="transition hover:bg-brume/40">
+              <Td>
+                <PersonCell name={order.holderName} sub={order.email} />
+              </Td>
+              <Td>
+                <EntityCell
+                  image={ticket.event.image}
+                  title={locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr}
+                  sub={`${longDate(ticket.event.start, locale)} · ${locale === "ar" ? ticket.tierNameAr : ticket.tierNameFr}`}
+                />
+              </Td>
+              <Td className="text-center">
+                <span className="font-mono text-xs font-bold text-lagon">{ticket.ref}</span>
+              </Td>
+              <Td className="text-center">
+                <MoneyCell unit="MAD">{money(ticket.priceCents)}</MoneyCell>
+              </Td>
+              <Td className="text-center">
+                <Badge tone={tone(ticket.status)}>{label(ticket.status)}</Badge>
+              </Td>
+              <Td className="w-px whitespace-nowrap pe-4">
+                <div className="flex justify-end gap-1.5">
+                  {ticket.status === "VALID" || ticket.status === "USED" ? (
+                    <IconBtn label={ticket.status === "USED" ? t.undo : t.admit} onClick={() => toggleAdmit(ticket)}>
+                      {ticket.status === "USED" ? <Undo2 className="size-4" /> : <Check className="size-4" />}
+                    </IconBtn>
+                  ) : null}
+                  <Link
+                    to={`/billet/${ticket.id}`}
+                    title={t.open}
+                    aria-label={t.open}
+                    className="inline-flex size-9 items-center justify-center rounded-lg border border-line/15 bg-card text-muted transition hover:-translate-y-px hover:border-lagon hover:bg-brume hover:text-lagon-deep"
+                  >
+                    <ExternalLink className="size-4" />
+                  </Link>
+                  <IconBtn label={t.cancelOrder} onClick={() => cancelOrder(order)}>
+                    <XCircle className="size-4" />
+                  </IconBtn>
+                  <IconBtn tone="danger" label={t.remove} onClick={() => removeOrder(order)}>
+                    <Trash2 className="size-4" />
+                  </IconBtn>
+                </div>
+              </Td>
+            </tr>
           ))}
-        </select>
-        <select className="field h-11" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">{t.allStatus}</option>
-          <option value="VALID">{t.valid}</option>
-          <option value="USED">{t.used}</option>
-          <option value="TRANSFERRED">{t.transferred}</option>
-          <option value="CANCELLED">{t.cancelled}</option>
-        </select>
-        <button type="button" className="h-11 rounded-full bg-paper px-4 text-sm font-semibold" onClick={exportCsv}>
-          {t.export}
-        </button>
-      </div>
-      <div className="mt-4 grid gap-3">
-        {orders && visible.length === 0 ? <p className="rounded-xl bg-card p-6 text-muted">{t.empty}</p> : null}
-        {visible.map(({ order, tickets }) => (
-          <article key={order.id} className="rounded-xl border border-line/10 bg-card p-4 shadow-card">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="font-mono text-xs font-bold text-lagon">{order.id}</p>
-                <h2 className="font-display text-xl font-extrabold">{order.holderName}</h2>
-                <p className="text-sm text-muted">
-                  {order.email} · {order.phone}
-                </p>
-              </div>
-              <p className="font-display text-xl font-extrabold">{money(tickets.reduce((sum, ticket) => sum + ticket.priceCents, 0))} MAD</p>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" className="h-11 rounded-full bg-paper px-4 text-sm font-semibold" onClick={() => cancelOrder(order.id)}>
-                {t.cancelOrder}
-              </button>
-              <button type="button" className="h-11 rounded-full bg-corail px-4 text-sm font-semibold text-foam" onClick={() => removeOrder(order.id)}>
-                {t.remove}
-              </button>
-            </div>
-            <ul className="mt-3 grid gap-2">
-              {tickets.map((ticket) => (
-                <li key={ticket.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-paper px-3 py-3">
-                  <div>
-                    <p className="font-semibold">{locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr}</p>
-                    <p className="text-sm text-muted">
-                      {longDate(ticket.event.start, locale)} · {locale === "ar" ? ticket.tierNameAr : ticket.tierNameFr}
-                    </p>
-                    <p className="font-mono text-xs">{ticket.ref}</p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={cn("rounded-full px-2 py-1 text-xs font-bold", ticket.status === "USED" ? "bg-encre text-foam" : "bg-brume text-lagon")}>{label(ticket.status)}</span>
-                    <Link to={`/billet/${ticket.id}`} className="text-sm font-semibold text-lagon">
-                      {t.open}
-                    </Link>
-                    {ticket.status === "VALID" || ticket.status === "USED" ? (
-                      <button type="button" className="h-11 rounded-full bg-lagon px-4 text-sm font-semibold text-foam" onClick={() => toggleAdmit(ticket.id, ticket.status)}>
-                        {ticket.status === "USED" ? t.undo : t.admit}
-                      </button>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </article>
-        ))}
-      </div>
+        </tbody>
+      </DataTable>
+
+      <Pager
+        page={page}
+        pages={pages}
+        onPage={setPage}
+        limit={limit}
+        onLimit={setLimit}
+        labels={{ rows: t.rows, prev: t.prev, next: t.next }}
+      />
     </div>
   );
 }
