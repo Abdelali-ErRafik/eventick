@@ -7,9 +7,11 @@ import {
   Mail,
   MapPin,
   Menu,
+  Moon,
   QrCode,
   Search,
   ShieldCheck,
+  Sun,
   Ticket,
   X,
 } from "lucide-react";
@@ -18,6 +20,7 @@ import { useAuth } from "../AuthContext";
 import { useCart } from "../CartContext";
 import { useCatalog } from "../useCatalog";
 import { categoryLabel, useI18n } from "../i18n";
+import { useTheme } from "../ThemeContext";
 import { cn, CITIES } from "../utils";
 
 export function Shell({ overlay = false, children }) {
@@ -32,6 +35,7 @@ export function Shell({ overlay = false, children }) {
 
 function SiteHeader({ overlay }) {
   const { t, locale, setLocale } = useI18n();
+  const { resolved, toggle } = useTheme();
   const navigate = useNavigate();
   const { user, loading, logout } = useAuth();
   const { cart } = useCart();
@@ -181,6 +185,15 @@ function SiteHeader({ overlay }) {
               {t("langAr")}
             </button>
           </div>
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={resolved === "dark" ? t("themeLight") : t("themeDark")}
+            title={resolved === "dark" ? t("themeLight") : t("themeDark")}
+            className={cn("hidden size-11 items-center justify-center rounded-full sm:inline-flex", dark ? "hover:bg-foam/10" : "hover:bg-paper")}
+          >
+            {resolved === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          </button>
           <span className={cn("hidden rounded-full px-3 py-1 font-mono text-xs font-bold md:inline", dark ? "bg-foam/10" : "bg-paper")}>
             {t("mad")}
           </span>
@@ -262,6 +275,10 @@ function SiteHeader({ overlay }) {
             </button>
             <button type="button" className="rounded-full bg-paper px-3 py-2 text-sm font-bold" onClick={() => setLocale("ar")}>
               عربي
+            </button>
+            <button type="button" className="inline-flex items-center gap-2 rounded-full bg-paper px-3 py-2 text-sm font-bold" onClick={toggle}>
+              {resolved === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+              {resolved === "dark" ? t("themeLight") : t("themeDark")}
             </button>
           </div>
         </div>
