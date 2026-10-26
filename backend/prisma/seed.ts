@@ -15,6 +15,17 @@ const madToCents = (mad: number) => Math.round(mad * 100);
 const SEED_ADMIN_EMAIL = "admin@eventick.ma";
 const SEED_ADMIN_PASSWORD = "eventick-admin-2026";
 
+/** Demo accounts surfaced by the login screen's dev-only quick-login buttons.
+ * Kept in sync with frontend/src/demoAccounts.js. */
+const DEMO_ACCOUNTS = [
+  { email: "organisateur@eventick.ma", password: "eventick-orga-2026", name: "Yasmine Organisatrice", role: "ORGANISER" as const },
+  { email: "client@eventick.ma", password: "eventick-client-2026", name: "Karim Client", role: "CUSTOMER" as const },
+];
+
+/** Events handed to the demo organiser so its Pro dashboard isn't empty and
+ * the per-organiser scoping is visible (admin sees all, organiser sees these). */
+const ORGANISER_EVENT_SLUGS = ["oasis-2026", "dakhla-lagoon"];
+
 async function main() {
   // The only user the app has no other way to create: every ORGANISER/ADMIN
   // account after this one is granted via PATCH /api/auth/users/:id/role by
@@ -91,6 +102,30 @@ async function main() {
     });
   }
 
+  const demoUsers = [];
+  for (const account of DEMO_ACCOUNTS) {
+    demoUsers.push(
+      await prisma.user.upsert({
+        where: { email: account.email },
+        update: {},
+        create: {
+          email: account.email,
+          name: account.name,
+          passwordHash: await bcrypt.hash(account.password, 10),
+          role: account.role,
+        },
+      }),
+    );
+  }
+
+  const demoOrganiser = demoUsers.find((user) => user.role === "ORGANISER");
+  if (demoOrganiser) {
+    await prisma.event.updateMany({
+      where: { slug: { in: ORGANISER_EVENT_SLUGS }, organiserId: admin.id },
+      data: { organiserId: demoOrganiser.id },
+    });
+  }
+
   const promos: { code: string; kind: PromoKind; value: number; eventSlug: string | null; maxUses: number }[] = [
     { code: "SAFRAN15", kind: "PERCENT", value: 15, eventSlug: null, maxUses: 200 },
     { code: "CASA50", kind: "AMOUNT", value: madToCents(50), eventSlug: "oasis-2026", maxUses: 40 },
@@ -107,6 +142,9 @@ async function main() {
 
   console.log(`Seeded ${(EVENTS as any[]).length} events and ${promos.length} promo codes.`);
   console.log(`Admin login: ${SEED_ADMIN_EMAIL} / ${SEED_ADMIN_PASSWORD} — change this password before deploying.`);
+  for (const account of DEMO_ACCOUNTS) {
+    console.log(`${account.role} login: ${account.email} / ${account.password}`);
+  }
 }
 
 main()

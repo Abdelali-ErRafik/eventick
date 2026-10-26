@@ -7,9 +7,12 @@ import { useAuth } from "../AuthContext";
 import { useI18n } from "../i18n";
 import { emailOk } from "../payment";
 import { cn } from "../utils";
+import { DEMO_ACCOUNTS } from "../demoAccounts";
+
+const SHOW_DEMO_ACCOUNTS = process.env.NODE_ENV !== "production";
 
 export default function Login() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const navigate = useNavigate();
   const { user, loading, login, register } = useAuth();
   const [mode, setMode] = useState("in");
@@ -56,6 +59,21 @@ export default function Login() {
         await login(cleanEmail, password);
         toast.success(t("welcomeBack"));
       }
+      navigate("/");
+    } catch (err) {
+      setError(authErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function quickLogin(account) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await login(account.email, account.password);
+      toast.success(t("welcomeBack"));
       navigate("/");
     } catch (err) {
       setError(authErrorMessage(err));
@@ -174,6 +192,29 @@ export default function Login() {
                 {mode === "in" ? t("signUp") : t("signIn")}
               </button>
             </p>
+            {SHOW_DEMO_ACCOUNTS ? (
+              <div className="mt-6">
+                <p className="flex items-center gap-3 text-center text-xs font-semibold text-muted">
+                  <span className="h-px flex-1 bg-line/15" />
+                  {t("demoAccounts")}
+                  <span className="h-px flex-1 bg-line/15" />
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {DEMO_ACCOUNTS.map((account) => (
+                    <button
+                      key={account.id}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => quickLogin(account)}
+                      className="rounded-xl border border-line/15 px-3 py-2.5 text-start transition hover:border-lagon/40 hover:bg-paper disabled:opacity-50"
+                    >
+                      <span className="block text-sm font-bold text-encre">{locale === "ar" ? account.labelAr : account.labelFr}</span>
+                      <span className="block text-xs text-muted">{locale === "ar" ? account.roleAr : account.roleFr}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <p className="mt-6 flex items-center justify-center gap-2 text-center text-xs text-muted md:hidden">
               <ShieldCheck className="size-4 shrink-0 text-lagon" />
               {t("loginTrust")}
