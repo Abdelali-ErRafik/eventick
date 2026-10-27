@@ -33,6 +33,20 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     res.status(400).json({ error: err.issues.map((issue) => issue.message).join(", ") });
     return;
   }
+  // Multer rejects oversize/extra files with its own error class. These are
+  // client mistakes, not server faults — a 500 here would tell an organiser
+  // the service is broken when their poster is simply too big.
+  if (typeof err === "object" && err !== null && (err as { name?: string }).name === "MulterError") {
+    const code = (err as { code?: string }).code;
+    const message =
+      code === "LIMIT_FILE_SIZE"
+        ? "Image is too large (maximum 5 MB)"
+        : code === "LIMIT_FILE_COUNT" || code === "LIMIT_UNEXPECTED_FILE"
+          ? "Upload one image at a time"
+          : "Upload rejected";
+    res.status(413).json({ error: message });
+    return;
+  }
   req.log?.error({ err }, "Unhandled error");
   res.status(500).json({ error: "Internal server error" });
 }

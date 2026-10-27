@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Route, Routes } from "react-router-dom";
-import { CalendarDays, LayoutDashboard, QrCode, ReceiptText, Tags, Wallet } from "lucide-react";
+import { CalendarDays, LayoutDashboard, LayoutGrid, QrCode, ReceiptText, Tags, Wallet } from "lucide-react";
 import { Protected } from "../../components/Protected";
 import { api } from "../../api";
 import { useI18n } from "../../i18n";
@@ -13,6 +13,7 @@ import Orders from "./Orders";
 import Gate from "./Gate";
 import Finance from "./Finance";
 import Offers from "./Offers";
+import Placements from "./Placements";
 
 const ic = (Icon) => <Icon size={19} strokeWidth={2} aria-hidden />;
 
@@ -44,6 +45,7 @@ function ProInner() {
     { group: t.grpPilotage, to: "/pro", end: true, label: t.overview, icon: ic(LayoutDashboard) },
     { group: t.grpPilotage, to: "/pro/orders", label: t.orders, icon: ic(ReceiptText), badge: todayCount },
     { group: t.grpCatalogue, to: "/pro/events", label: t.events, icon: ic(CalendarDays) },
+    { group: t.grpCatalogue, to: "/pro/placements", label: t.placements, icon: ic(LayoutGrid) },
     { group: t.grpCatalogue, to: "/pro/offers", label: t.offers, icon: ic(Tags) },
     { group: t.grpOperations, to: "/pro/gate", label: t.gate, icon: ic(QrCode) },
     { group: t.grpFinances, to: "/pro/finance", label: t.finance, icon: ic(Wallet) },
@@ -57,6 +59,7 @@ function ProInner() {
         <Route path="orders" element={<Orders />} />
         <Route path="gate" element={<Gate />} />
         <Route path="finance" element={<Finance />} />
+        <Route path="placements" element={<Placements />} />
         <Route path="offers" element={<Offers />} />
       </Routes>
     </DashboardShell>

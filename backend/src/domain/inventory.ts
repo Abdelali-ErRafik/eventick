@@ -2,9 +2,10 @@
  * stepper limit in the original frontend's event detail page. */
 export const MAX_QTY_PER_TIER = 8;
 
-/** Minutes an order holds its claimed inventory before it's released back to
- * the pool. Matches the original client-side `holdUntil` countdown. */
-export const HOLD_MINUTES = 8;
+/** Minutes a PENDING order holds its claimed inventory before the seats
+ * return to the pool. Server-authoritative: the client's countdown is a
+ * display of this, not a source of truth. */
+export const HOLD_MINUTES = 15;
 
 export function holdExpiry(now = new Date()): Date {
   return new Date(now.getTime() + HOLD_MINUTES * 60 * 1000);
@@ -27,8 +28,12 @@ export function checkQuantity(qty: number, remaining: number): { ok: boolean; re
   return { ok: true };
 }
 
-/** Numbered-tier seat assignment: 12 seats per row, 1-indexed, matching the
- * original client-side `placeOrder` math in src/lib/store.ts. */
-export function seatFor(cursor: number): { row: number; seat: number } {
-  return { row: Math.ceil(cursor / 12), seat: ((cursor - 1) % 12) + 1 };
+export const DEFAULT_SEATS_PER_ROW = 12;
+
+/** Numbered-tier seat assignment, 1-indexed. Row width comes from the tier so
+ * a venue can describe its real layout; 12 stays the default, which is what
+ * the original client-side `placeOrder` math assumed for every room. */
+export function seatFor(cursor: number, seatsPerRow = DEFAULT_SEATS_PER_ROW): { row: number; seat: number } {
+  const width = seatsPerRow > 0 ? seatsPerRow : DEFAULT_SEATS_PER_ROW;
+  return { row: Math.ceil(cursor / width), seat: ((cursor - 1) % width) + 1 };
 }

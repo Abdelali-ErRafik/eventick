@@ -32,6 +32,9 @@ enum OrderStatus {
   PENDING
   PAID
   CANCELLED
+  /// Money returned to the buyer. Distinct from CANCELLED, which only voids
+  /// tickets and releases stock without moving any money.
+  REFUNDED
 }
 
 enum TicketStatus {
@@ -60,6 +63,8 @@ model User {
 
   events Event[]
   orders Order[]
+  listings ResaleListing[]
+  shares   TicketShare[]
 
   @@map("users")
 }
@@ -97,6 +102,10 @@ model Event {
   ageAr      String @map("age_ar")
   popularity Int    @default(0)
   instant    Boolean @default(true) // sold instantly vs waitlist-only when sold out
+
+  /// Hours before the start when buyers may no longer cancel themselves.
+  /// 0 disables self-cancellation, leaving it to the organiser.
+  cancelCutoffHours Int @default(48) @map("cancel_cutoff_hours")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -140,6 +149,9 @@ model TicketTier {
   priceCents Int     @map("price_cents")
   capacity   Int
   numbered   Boolean @default(false) // true -> tickets get a row/seat on purchase
+  /// Seats per row when `numbered`. Was hardcoded to 12, which only matched
+  /// one imaginary venue; a real room has its own row width.
+  seatsPerRow Int    @default(12) @map("seats_per_row")
   recommended Boolean @default(false)
   saveCents  Int?    @map("save_cents") // displayed "you save X" vs buying tiers separately
   perks      String[] @default([]) // e.g. "qr", "lounge", "skip" — drives the VIP/perk filter on Explorer
@@ -183,11 +195,22 @@ model Order {
 
   holdUntil DateTime? @map("hold_until")
 
-  // Simulated payment metadata (no real gateway — see lib/payment-sim.ts)
+  // Payment metadata. With Stripe configured these are filled from the
+  // PaymentIntent; in mock mode (no STRIPE_SECRET_KEY) from payment-sim.ts.
   paymentRef String? @map("payment_ref")
   cardBrand  String? @map("card_brand")
   cardLast4  String? @map("card_last4")
   cardBank   String? @map("card_bank")
+
+  /// Stripe PaymentIntent id. Unique so a webhook replay can never create or
+  /// settle a second order for the same intent.
+  paymentIntentId String? @unique @map("payment_intent_id")
+
+  /// Refund audit trail. `refundedCents` accumulates across partial refunds,
+  /// so it is the amount already returned — never the amount outstanding.
+  refundedCents Int       @default(0) @map("refunded_cents")
+  refundedAt    DateTime? @map("refunded_at")
+  refundRef     String?   @map("refund_ref")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -227,11 +250,24 @@ model Ticket {
   seatRow    Int?    @map("seat_row")
   seatNumber Int?    @map("seat_number")
   usedAt     DateTime? @map("used_at")
+  /// Set when a buyer cancels their own ticket, as distinct from an
+  /// organiser voiding it — the two need telling apart in a dispute.
+  cancelledAt DateTime? @map("cancelled_at")
+  /// The ref this ticket replaced, when an organiser reissued a lost one.
+  /// Keeps the paper trail without reusing a compromised reference.
+  replacesRef String?   @map("replaces_ref")
 
-  order Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  tier  TicketTier @relation(fields: [tierId], references: [id], onDelete: Restrict)
+  order  Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tier   TicketTier     @relation(fields: [tierId], references: [id], onDelete: Restrict)
+  resale ResaleListing?
+  shares TicketShare[]
 
   @@index([orderId])
+  /// The live entry counter aggregates by status; without this it seq-scans
+  /// the whole tickets table on every dashboard refresh.
+  @@index([status])
+  /// tierId is a relation FK with no implicit index in Postgres.
+  @@index([tierId])
   @@map("tickets")
 }
 
@@ -262,14 +298,134 @@ model PromoCode {
 
 /// One email per event, left when a tier is sold out. Organisers read this
 /// list from /pro to know demand; nothing is auto-emailed yet (see docs).
+/// Someone waiting for a seat on a sold-out event.
+///
+/// When a seat frees up the next WAITING entry is OFFERED it: the seat is
+/// held for them alone until `claimExpiresAt`, reachable through a private
+/// `claimToken`. If they don't buy in time the offer lapses and the seat
+/// passes to the next person. Without that window an "a seat is free" email
+/// is just a race, which is the experience this queue exists to avoid.
 model WaitlistEntry {
   id        String   @id @default(cuid())
   eventId   String   @map("event_id")
   email     String
   createdAt DateTime @default(now()) @map("created_at")
 
+  status WaitlistStatus @default(WAITING)
+
+  /// Unguessable, single-purpose: it is the only credential a guest needs to
+  /// claim their offer, so it is CSPRNG-drawn and cleared once used.
+  claimToken     String?   @unique @map("claim_token")
+  claimTierId    String?   @map("claim_tier_id")
+  claimExpiresAt DateTime? @map("claim_expires_at")
+  offeredAt      DateTime? @map("offered_at")
+  claimedAt      DateTime? @map("claimed_at")
+
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@unique([eventId, email])
+  @@index([eventId, status, createdAt]) // picking the next person in line
+  @@index([status, claimExpiresAt]) // expiring stale offers
   @@map("waitlist_entries")
+}
+
+enum WaitlistStatus {
+  /// In the queue, no seat offered yet.
+  WAITING
+  /// A seat is held for this person until claimExpiresAt.
+  OFFERED
+  /// They bought it.
+  CLAIMED
+  /// Their window lapsed; the seat went to the next person.
+  EXPIRED
+}
+
+// ---------------------------------------------------------------------------
+// Resale
+// ---------------------------------------------------------------------------
+
+/// A ticket its owner has put back up for sale.
+///
+/// Resale is PLATFORM-MEDIATED and at FACE VALUE: the buyer pays Eventick,
+/// the seller is refunded what they originally paid, and a fresh ticket is
+/// issued to the buyer while the old reference is voided. Nobody hands money
+/// to a stranger, and a sold ticket cannot be presented twice.
+model ResaleListing {
+  id       String        @id @default(cuid())
+  ticketId String        @unique @map("ticket_id")
+  sellerId String?       @map("seller_id") // null when the original order was a guest checkout
+  status   ResaleStatus  @default(LISTED)
+
+  /// Face value at listing time, copied so a later tier price change cannot
+  /// silently alter what a listed ticket costs.
+  priceCents Int @map("price_cents")
+
+  /// Shareable, unguessable listing URL segment.
+  token String @unique
+
+  /// The order that bought it, and the ticket issued to that buyer.
+  buyerOrderId String? @map("buyer_order_id")
+  newTicketId  String? @map("new_ticket_id")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  soldAt    DateTime? @map("sold_at")
+  closedAt  DateTime? @map("closed_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  seller User?  @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@map("resale_listings")
+}
+
+enum ResaleStatus {
+  /// On sale.
+  LISTED
+  /// Bought; the seller has been refunded and a new ticket issued.
+  SOLD
+  /// Withdrawn by the seller, or voided because the ticket changed state.
+  CANCELLED
+}
+
+/// A ticket its owner has offered to someone else.
+///
+/// The recipient opens the link and claims it: a NEW ticket with a fresh QR
+/// is issued to them and the sender's is voided. The claim step matters —
+/// emailing a ticket blind means one typo sends it to a stranger with no way
+/// back, and the sender can revoke an unclaimed share at any time.
+model TicketShare {
+  id       String      @id @default(cuid())
+  ticketId String      @map("ticket_id")
+  senderId String?     @map("sender_id") // null for guest orders
+  status   ShareStatus @default(OPEN)
+
+  /// Unguessable link segment; cleared once claimed so it cannot be reused.
+  token String? @unique
+
+  /// Optional note shown to the recipient, e.g. "see you there".
+  message String?
+
+  /// The ticket issued to whoever claimed it.
+  newTicketId String? @map("new_ticket_id")
+  claimedName String? @map("claimed_name")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  claimedAt DateTime? @map("claimed_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User?  @relation(fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
+  @@index([status])
+  @@map("ticket_shares")
+}
+
+enum ShareStatus {
+  /// Waiting for the recipient.
+  OPEN
+  /// Taken; a new ticket exists and the sender's is void.
+  CLAIMED
+  /// Withdrawn by the sender, or voided because the ticket changed state.
+  REVOKED
 }

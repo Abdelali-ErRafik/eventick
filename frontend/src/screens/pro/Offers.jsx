@@ -7,6 +7,15 @@ import { useConfirm } from "./ConfirmContext";
 import { Badge, Btn, DataTable, EmptyState, IconBtn, Modal, PageHead, PersonCell, SectionTitle, Td, Th } from "./ui";
 import { text } from "./copy";
 
+const WAITLIST_TONE = { WAITING: "gray", OFFERED: "amber", CLAIMED: "green", EXPIRED: "red" };
+
+function waitlistLabel(t, status) {
+  if (status === "OFFERED") return t.wlOffered;
+  if (status === "CLAIMED") return t.wlClaimed;
+  if (status === "EXPIRED") return t.wlExpired;
+  return t.wlWaiting;
+}
+
 export default function Offers() {
   const { locale } = useI18n();
   const t = text[locale];
@@ -148,13 +157,14 @@ export default function Offers() {
           <tr>
             <Th className="text-start">{t.email}</Th>
             <Th className="text-start">{t.events}</Th>
+            <Th>{t.wlStatus}</Th>
             <Th>{t.colDate}</Th>
           </tr>
         </thead>
         <tbody>
           {waitlist.length === 0 ? (
             <tr>
-              <td colSpan={3}>
+              <td colSpan={4}>
                 <EmptyState icon="📬" title={t.noWaitlist} />
               </td>
             </tr>
@@ -165,6 +175,15 @@ export default function Offers() {
                 <PersonCell name={item.email} />
               </Td>
               <Td className="text-sm">{item.title}</Td>
+              <Td className="text-center">
+                <Badge tone={WAITLIST_TONE[item.status] ?? "gray"}>{waitlistLabel(t, item.status)}</Badge>
+                {/* An outstanding offer is the only state with a deadline. */}
+                {item.status === "OFFERED" && item.claimExpiresAt ? (
+                  <span className="mt-0.5 block text-[11px] text-muted">
+                    {t.wlExpires} {new Date(item.claimExpiresAt).toLocaleTimeString(locale === "ar" ? "ar-MA" : "fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                ) : null}
+              </Td>
               <Td className="text-center text-sm text-muted">{item.createdAt.slice(0, 10)}</Td>
             </tr>
           ))}

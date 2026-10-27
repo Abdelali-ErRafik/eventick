@@ -1,4 +1,5 @@
 import type { Event, LineupItem, Order, Ticket, TicketTier } from "@prisma/client";
+import { ticketPayload } from "./ticket-signature.js";
 
 export type EventWithTiers = Event & { tiers: TicketTier[]; lineup: LineupItem[] };
 
@@ -71,6 +72,8 @@ export function publicOrder(order: Order & { tickets: Ticket[] }) {
     cardBrand: order.cardBrand,
     cardLast4: order.cardLast4,
     cardBank: order.cardBank,
+    refundedCents: order.refundedCents,
+    refundedAt: order.refundedAt?.toISOString() ?? null,
     createdAt: order.createdAt.toISOString(),
     tickets: order.tickets.map(publicTicket),
   };
@@ -96,6 +99,7 @@ type TicketWithContext = Ticket & { tier: TicketTier & { event: Event } };
 export function publicTicketWithContext(ticket: TicketWithContext) {
   return {
     ...publicTicket(ticket),
+    qrPayload: ticketPayload(ticket.ref, ticket.tier.event.slug),
     tierId: ticket.tierId,
     tierNameFr: ticket.tier.nameFr,
     tierNameAr: ticket.tier.nameAr,

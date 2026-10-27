@@ -4,7 +4,13 @@ import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { publicEvent, publicOrderWithContext } from "../lib/serialize.js";
-import { remainingByTier } from "../lib/availability.js";
+import { committedForTier, remainingByTier } from "../lib/availability.js";
+import { broadcastRateLimit } from "../middleware/rateLimit.js";
+import { sendEmail } from "../lib/email.js";
+import { broadcastHtml } from "../lib/email-templates.js";
+import { refundOrder } from "../lib/refund.js";
+import { offerFreedSeats } from "../lib/waitlist.js";
+import { reissueTicket, renameHolder } from "../lib/ticket-admin.js";
 
 export const organiserRouter = Router();
 
@@ -33,6 +39,7 @@ const tierInput = z.object({
   priceCents: z.number().int().min(0),
   capacity: z.number().int().min(1),
   numbered: z.boolean().optional(),
+  seatsPerRow: z.number().int().min(1).max(100).optional(),
   perks: z.array(z.string()).optional(),
   zoneFr: z.string(),
   zoneAr: z.string(),
@@ -126,6 +133,19 @@ organiserRouter.delete(
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
     const event = await requireOwnedEvent(req.user!.id, req.user!.role, slug);
+
+    // Order -> Event is onDelete Restrict, so an event anyone has ever
+    // ordered against cannot be deleted. Checking first turns what was a
+    // raw Postgres 23001 and a 500 into an answer the organiser can act on:
+    // an event with sales is history, and hiding it is the real intent.
+    const orders = await prisma.order.count({ where: { eventId: event.id } });
+    if (orders > 0) {
+      throw new HttpError(
+        409,
+        `This event has ${orders} order(s) and cannot be deleted. Hide it instead to take it off sale.`,
+      );
+    }
+
     await prisma.event.delete({ where: { id: event.id } });
     res.status(204).end();
   }),
@@ -135,6 +155,8 @@ const updateEventSchema = z.object({
   titleFr: z.string().min(3).optional(),
   titleAr: z.string().min(3).optional(),
   city: z.string().optional(),
+  image: z.string().optional(),
+  cancelCutoffHours: z.number().int().min(0).max(8760).optional(),
 });
 
 /** Content fields only (title/city) — not the tiers, which carry sold
@@ -187,7 +209,16 @@ organiserRouter.get(
       where: { eventId: event.id },
       orderBy: { createdAt: "desc" },
     });
-    res.json({ entries: entries.map((entry) => ({ email: entry.email, createdAt: entry.createdAt.toISOString() })) });
+    res.json({
+      entries: entries.map((entry) => ({
+        email: entry.email,
+        createdAt: entry.createdAt.toISOString(),
+        status: entry.status,
+        offeredAt: entry.offeredAt?.toISOString() ?? null,
+        claimExpiresAt: entry.claimExpiresAt?.toISOString() ?? null,
+        // The token is a credential — the organiser's view never needs it.
+      })),
+    });
   }),
 );
 
@@ -222,11 +253,13 @@ organiserRouter.post(
   "/orders/:id/cancel",
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
-    await requireOwnedOrder(req.user!.id, req.user!.role, id);
+    const cancelled = await requireOwnedOrder(req.user!.id, req.user!.role, id);
     await prisma.$transaction([
       prisma.order.update({ where: { id }, data: { status: "CANCELLED" } }),
       prisma.ticket.updateMany({ where: { orderId: id }, data: { status: "CANCELLED" } }),
     ]);
+    // Those seats are free again — offer them to the waitlist.
+    void offerFreedSeats(cancelled.eventId);
     res.json({ ok: true });
   }),
 );
@@ -261,5 +294,277 @@ organiserRouter.patch(
       data: { status: body.status, usedAt: body.status === "USED" ? new Date() : null },
     });
     res.json({ ticket: { id: updated.id, status: updated.status } });
+  }),
+);
+
+const broadcastSchema = z.object({
+  subject: z.string().min(3).max(150),
+  message: z.string().min(10).max(5000),
+});
+
+/** Recipient list for a broadcast: one entry per distinct buyer address on
+ * non-cancelled orders for this event. */
+async function broadcastRecipients(eventId: string) {
+  const orders = await prisma.order.findMany({
+    where: { eventId, status: { not: "CANCELLED" } },
+    select: { email: true, holderName: true },
+  });
+  const byEmail = new Map<string, string>();
+  for (const order of orders) {
+    if (!byEmail.has(order.email)) byEmail.set(order.email, order.holderName);
+  }
+  return [...byEmail.entries()].map(([email, name]) => ({ email, name }));
+}
+
+/** How many people a broadcast would reach — lets the UI show a count before
+ * the organiser commits to sending. */
+organiserRouter.get(
+  "/events/:slug/audience",
+  asyncHandler(async (req, res) => {
+    const slug = param(req, "slug");
+    const event = await requireOwnedEvent(req.user!.id, req.user!.role, slug);
+    const recipients = await broadcastRecipients(event.id);
+    res.json({ count: recipients.length });
+  }),
+);
+
+organiserRouter.post(
+  "/events/:slug/broadcast",
+  broadcastRateLimit,
+  asyncHandler(async (req, res) => {
+    const slug = param(req, "slug");
+    const event = await requireOwnedEvent(req.user!.id, req.user!.role, slug);
+    const body = broadcastSchema.parse(req.body);
+
+    const recipients = await broadcastRecipients(event.id);
+    if (recipients.length === 0) throw new HttpError(422, "No buyers to contact for this event");
+
+    const html = broadcastHtml({
+      locale: "fr",
+      eventTitle: event.titleFr,
+      subject: body.subject,
+      message: body.message,
+    });
+
+    // Sequential rather than Promise.all: a burst of parallel sends is what
+    // trips provider rate limits, and this runs at human scale.
+    let sent = 0;
+    for (const recipient of recipients) {
+      const ok = await sendEmail({ to: recipient.email, subject: body.subject, html });
+      if (ok) sent += 1;
+    }
+
+    res.json({ recipients: recipients.length, sent });
+  }),
+);
+
+/**
+ * Lightweight dashboard counters, aggregated in SQL.
+ *
+ * Deliberately NOT /orders/detailed: that hydrates every order with every
+ * ticket and each ticket's tier and event, which is fine to render a table
+ * once and far too heavy to poll. These are COUNT/SUM over indexed columns.
+ */
+organiserRouter.get(
+  "/stats",
+  asyncHandler(async (req, res) => {
+    const scope = req.user!.role === "ADMIN" ? {} : { organiserId: req.user!.id };
+    const events = await prisma.event.findMany({ where: scope, select: { id: true } });
+    const eventIds = events.map((event) => event.id);
+
+    if (eventIds.length === 0) {
+      res.json({ gmvCents: 0, orders: 0, tickets: 0, inside: 0, generatedAt: new Date().toISOString() });
+      return;
+    }
+
+    const [paid, tickets, inside] = await Promise.all([
+      prisma.order.aggregate({
+        where: { eventId: { in: eventIds }, status: "PAID" },
+        _sum: { totalCents: true },
+        _count: true,
+      }),
+      prisma.ticket.count({
+        where: { order: { eventId: { in: eventIds } }, status: { not: "CANCELLED" } },
+      }),
+      prisma.ticket.count({
+        where: { order: { eventId: { in: eventIds } }, status: "USED" },
+      }),
+    ]);
+
+    res.json({
+      gmvCents: paid._sum.totalCents ?? 0,
+      orders: paid._count,
+      tickets,
+      inside,
+      generatedAt: new Date().toISOString(),
+    });
+  }),
+);
+
+const refundSchema = z.object({
+  /** Omit for a full refund of whatever is still outstanding. */
+  amountCents: z.number().int().positive().optional(),
+});
+
+/**
+ * Refund an order. Unlike /cancel above this moves money: with Stripe
+ * configured it calls the gateway, and in mock mode it records the refund so
+ * the books stay consistent without pretending a card was touched.
+ */
+organiserRouter.post(
+  "/orders/:id/refund",
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    await requireOwnedOrder(req.user!.id, req.user!.role, id);
+    const body = refundSchema.parse(req.body ?? {});
+    const result = await refundOrder(id, body.amountCents ?? null);
+    res.json(result);
+  }),
+);
+
+// ─── Placements: tier (zone) management ──────────────────────────────────
+//
+// Tiers used to be write-once — set at event creation and unchangeable after,
+// so a wrong price or a missing zone meant deleting the event and starting
+// again. These routes make a published event's seating editable, with the one
+// rule that matters: nothing may invalidate a ticket already sold.
+
+const tierPatchSchema = z.object({
+  nameFr: z.string().min(1).optional(),
+  nameAr: z.string().min(1).optional(),
+  blurbFr: z.string().optional(),
+  blurbAr: z.string().optional(),
+  priceCents: z.number().int().min(0).optional(),
+  capacity: z.number().int().min(1).optional(),
+  numbered: z.boolean().optional(),
+  seatsPerRow: z.number().int().min(1).max(100).optional(),
+  perks: z.array(z.string()).optional(),
+  recommended: z.boolean().optional(),
+  zoneFr: z.string().optional(),
+  zoneAr: z.string().optional(),
+  gateFr: z.string().optional(),
+  gateAr: z.string().optional(),
+});
+
+/** Seats of a tier someone already holds — the floor for a capacity change. */
+const soldForTier = committedForTier;
+
+/** Tiers of one event, each with what's already committed — the figure an
+ * organiser needs before changing capacity. */
+organiserRouter.get(
+  "/events/:slug/tiers",
+  asyncHandler(async (req, res) => {
+    const slug = param(req, "slug");
+    const event = await requireOwnedEvent(req.user!.id, req.user!.role, slug);
+    const tiers = await prisma.ticketTier.findMany({ where: { eventId: event.id }, orderBy: { priceCents: "asc" } });
+    const withSold = await Promise.all(
+      tiers.map(async (tier) => {
+        const sold = await soldForTier(tier.id);
+        return { ...tier, sold, remaining: Math.max(0, tier.capacity - sold) };
+      }),
+    );
+    res.json({ tiers: withSold });
+  }),
+);
+
+organiserRouter.post(
+  "/events/:slug/tiers",
+  asyncHandler(async (req, res) => {
+    const slug = param(req, "slug");
+    const event = await requireOwnedEvent(req.user!.id, req.user!.role, slug);
+    const body = tierInput.parse(req.body);
+    const tier = await prisma.ticketTier.create({ data: { ...body, eventId: event.id } });
+    res.status(201).json({ tier });
+  }),
+);
+
+organiserRouter.patch(
+  "/tiers/:id",
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const tier = await prisma.ticketTier.findUnique({ where: { id }, include: { event: true } });
+    if (!tier) throw new HttpError(404, "Tier not found");
+    if (tier.event.organiserId !== req.user!.id && req.user!.role !== "ADMIN") {
+      throw new HttpError(403, "Not your event");
+    }
+    const body = tierPatchSchema.parse(req.body);
+
+    // Capacity may grow freely, but shrinking below what's already committed
+    // would oversell retroactively — someone holding a valid ticket would
+    // have no seat.
+    if (body.capacity !== undefined) {
+      const sold = await soldForTier(id);
+      if (body.capacity < sold) {
+        throw new HttpError(409, `Capacity cannot go below the ${sold} seat(s) already sold or held`);
+      }
+    }
+
+    const updated = await prisma.ticketTier.update({ where: { id }, data: body });
+    res.json({ tier: updated });
+  }),
+);
+
+organiserRouter.delete(
+  "/tiers/:id",
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const tier = await prisma.ticketTier.findUnique({ where: { id }, include: { event: { include: { tiers: true } } } });
+    if (!tier) throw new HttpError(404, "Tier not found");
+    if (tier.event.organiserId !== req.user!.id && req.user!.role !== "ADMIN") {
+      throw new HttpError(403, "Not your event");
+    }
+
+    // A tier with tickets against it is history, not inventory: deleting it
+    // would cascade those tickets away. Set capacity to what's sold instead.
+    const sold = await soldForTier(id);
+    if (sold > 0) throw new HttpError(409, `This tier has ${sold} ticket(s) sold and cannot be deleted`);
+    if (tier.event.tiers.length <= 1) throw new HttpError(409, "An event needs at least one ticket tier");
+
+    await prisma.ticketTier.delete({ where: { id } });
+    res.status(204).end();
+  }),
+);
+
+// ─── Organiser-side ticket management ────────────────────────────────────
+
+/** Reissue a lost ticket: the old ref and its QR stop working, a fresh one
+ * replaces it. Voiding the old one is the point — the original may be in
+ * someone else's hands, and leaving it valid would admit two people. */
+organiserRouter.post(
+  "/tickets/:id/reissue",
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+      include: { order: { include: { event: true } } },
+    });
+    if (!ticket) throw new HttpError(404, "Ticket not found");
+    if (ticket.order.event.organiserId !== req.user!.id && req.user!.role !== "ADMIN") {
+      throw new HttpError(403, "Not your ticket");
+    }
+    const result = await reissueTicket(id);
+    res.status(201).json(result);
+  }),
+);
+
+const holderSchema = z.object({ holderName: z.string().min(2).max(80) });
+
+/** Correct a misspelt holder name. Distinct from a transfer: the ticket stays
+ * with the same buyer, the name just has to match the ID shown at the gate. */
+organiserRouter.patch(
+  "/tickets/:id/holder",
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const body = holderSchema.parse(req.body);
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+      include: { order: { include: { event: true } } },
+    });
+    if (!ticket) throw new HttpError(404, "Ticket not found");
+    if (ticket.order.event.organiserId !== req.user!.id && req.user!.role !== "ADMIN") {
+      throw new HttpError(403, "Not your ticket");
+    }
+    await renameHolder(id, body.holderName);
+    res.json({ ok: true });
   }),
 );

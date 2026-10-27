@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { QrCode, Ticket, Wallet } from "lucide-react";
+import { QrCode, RefreshCw, Ticket, Wallet } from "lucide-react";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
 import { longDate, todayKey } from "../../utils";
-import { Card, EmptyState, PageHead, SectionTitle, StatCard, StatSkeletons } from "./ui";
+import { useRealtime } from "./useRealtime";
+import { Badge, Card, EmptyState, PageHead, SectionTitle, StatCard, StatSkeletons } from "./ui";
+import { cn } from "../../utils";
 import { text } from "./copy";
 
 export default function Overview() {
@@ -12,20 +14,40 @@ export default function Overview() {
   const t = text[locale];
   const [events, setEvents] = useState(null);
   const [orders, setOrders] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [pulse, setPulse] = useState(false);
+
+  const loadStats = useCallback(() => api.get("/organiser/stats").then(setStats).catch(() => {}), []);
 
   useEffect(() => {
     api.get("/organiser/events").then((data) => setEvents(data.events));
     api.get("/organiser/orders/detailed").then((data) => setOrders(data.orders));
-  }, []);
+    loadStats();
+  }, [loadStats]);
 
-  const loading = !events || !orders;
+  // A check-in or a sale moves the counters without a reload. The lists
+  // themselves are refetched only on a sale, where a new row actually appears.
+  const onRealtime = useCallback(
+    (event) => {
+      setPulse(true);
+      setTimeout(() => setPulse(false), 1200);
+      loadStats();
+      if (event.type === "order") {
+        api.get("/organiser/orders/detailed").then((data) => setOrders(data.orders)).catch(() => {});
+      }
+    },
+    [loadStats],
+  );
+  useRealtime(onRealtime);
+
+  const loading = !events || !orders || !stats;
   const today = todayKey();
   const upcoming = (events ?? []).filter((event) => event.end >= today).slice(0, 5);
   const recent = (orders ?? []).slice(0, 5);
-  const tickets = (orders ?? []).flatMap((order) => order.tickets).filter((ticket) => ticket.status !== "CANCELLED");
-  const inside = tickets.filter((ticket) => ticket.status === "USED").length;
-  const gmv = (orders ?? []).filter((order) => order.status === "PAID").reduce((sum, order) => sum + order.totalCents, 0);
-  const scanRate = tickets.length > 0 ? Math.round((inside / tickets.length) * 100) : 0;
+  const gmv = stats?.gmvCents ?? 0;
+  const ticketCount = stats?.tickets ?? 0;
+  const inside = stats?.inside ?? 0;
+  const scanRate = ticketCount > 0 ? Math.round((inside / ticketCount) * 100) : 0;
 
   return (
     <div>
@@ -33,12 +55,27 @@ export default function Overview() {
         title={t.overview}
         sub={t.overviewSub}
         actions={
-          <Link
-            to="/organiser"
-            className="inline-flex h-11 items-center rounded-full bg-safran px-4 text-sm font-semibold text-encre transition hover:bg-safran-deep active:scale-[0.97]"
-          >
-            {t.create}
-          </Link>
+          <>
+            {stats ? (
+              <span className="flex items-center gap-2 text-xs text-muted">
+                <RefreshCw className={cn("size-3.5", pulse && "animate-spin text-lagon")} aria-hidden />
+                {t.updatedAt.replace(
+                  "{t}",
+                  new Date(stats.generatedAt).toLocaleTimeString(locale === "ar" ? "ar-MA" : "fr-FR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
+                )}
+              </span>
+            ) : null}
+            <Badge tone={pulse ? "green" : "gray"}>{t.live}</Badge>
+            <Link
+              to="/organiser"
+              className="inline-flex h-11 items-center rounded-full bg-safran px-4 text-sm font-semibold text-encre transition hover:bg-safran-deep active:scale-[0.97]"
+            >
+              {t.create}
+            </Link>
+          </>
         }
       />
 
@@ -53,20 +90,20 @@ export default function Overview() {
               label={t.gmv}
               info={t.tipGmv}
               value={`${money(gmv)} MAD`}
-              sub={`${orders.length} ${t.orders.toLowerCase()}`}
+              sub={`${stats.orders} ${t.orders.toLowerCase()}`}
             />
             <StatCard
               icon={<Ticket className="size-5" />}
               label={t.tickets}
               info={t.tipTickets}
-              value={String(tickets.length)}
+              value={String(ticketCount)}
               sub={`${events.length} ${t.events.toLowerCase()}`}
             />
             <StatCard
               icon={<QrCode className="size-5" />}
               label={t.inside}
               info={t.tipInside}
-              value={`${inside}/${tickets.length}`}
+              value={`${inside}/${ticketCount}`}
               trend={{ dir: scanRate > 0 ? "up" : "flat", text: `${scanRate}%` }}
             />
           </>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "../components/Shell";
 import { Protected } from "../components/Protected";
-import { api, money } from "../api";
+import { api, money, uploadImage } from "../api";
 import { categoryLabel, useI18n } from "../i18n";
 import { CATEGORIES, CITIES } from "../utils";
 import { parseBrief, EXAMPLE_BRIEF } from "../strategy";
@@ -55,6 +56,7 @@ function OrganiserInner() {
   const [price, setPrice] = useState(250);
   const [stock, setStock] = useState(500);
   const [cover, setCover] = useState(COVERS[0]);
+  const [uploading, setUploading] = useState(false);
   const [vipOn, setVipOn] = useState(false);
   const [vipName, setVipName] = useState("VIP");
   const [vipPrice, setVipPrice] = useState(400);
@@ -115,6 +117,20 @@ function OrganiserInner() {
     setEarlyPct(brief.discountPct ?? 0);
     setEarlyCount(brief.discountFirst ?? 0);
     if (!instruction) setInstruction(EXAMPLE_BRIEF[locale]);
+  };
+
+  const uploadCover = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      setCover(await uploadImage(file));
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const fillDemo = () => {
@@ -332,8 +348,28 @@ function OrganiserInner() {
                 <textarea className="field field-area mt-1" value={about} onChange={(e) => setAbout(e.target.value)} />
               </label>
             </div>
-            <p className="mt-4 text-sm font-semibold">{t("cover")}</p>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold">{t("cover")}</p>
+              <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-line/20 px-3 text-sm font-semibold hover:border-lagon hover:bg-brume hover:text-lagon-deep">
+                <Upload className="size-4" />
+                {uploading ? t("posterUploading") : t("posterUpload")}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={uploadCover}
+                />
+              </label>
+            </div>
+            <p className="mt-1 text-xs text-muted">{t("posterHint")}</p>
             <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6">
+              {/* An uploaded poster appears first, already selected. */}
+              {!COVERS.includes(cover) ? (
+                <span className="overflow-hidden rounded-lg border-2 border-lagon">
+                  <img src={cover} alt="" className="h-16 w-full object-cover" />
+                </span>
+              ) : null}
               {COVERS.map((src) => (
                 <button key={src} type="button" className={`overflow-hidden rounded-lg border-2 ${cover === src ? "border-lagon" : "border-transparent"}`} onClick={() => setCover(src)}>
                   <img src={src} alt="" className="h-16 w-full object-cover" />

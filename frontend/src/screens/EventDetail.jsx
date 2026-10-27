@@ -24,13 +24,21 @@ export default function EventDetail() {
   const [qty, setQty] = useState({});
   const [waitEmail, setWaitEmail] = useState("");
   const [waitBusy, setWaitBusy] = useState(false);
+  const [booking, setBooking] = useState(false);
+  // Live remaining counts, refreshed after a failed booking so the buyer sees
+  // the real numbers rather than the ones the page loaded with.
+  const [remaining, setRemaining] = useState(null);
+
+  /** Seats left per tier: the live figure once we've refreshed, else the one
+   * the catalogue was loaded with. */
+  const leftFor = (tier) => remaining?.[tier.id] ?? tier.remaining;
 
   const lines = useMemo(() => {
     if (!event) return [];
     return event.tiers
-      .map((tier) => ({ tier, qty: qty[tier.id] ?? 0, left: tier.remaining }))
+      .map((tier) => ({ tier, qty: qty[tier.id] ?? 0, left: remaining?.[tier.id] ?? tier.remaining }))
       .filter((line) => line.qty > 0);
-  }, [event, qty]);
+  }, [event, qty, remaining]);
 
   if (!events.length) return <Shell><div className="h-80" /></Shell>;
 
@@ -63,17 +71,45 @@ export default function EventDetail() {
     });
   };
 
-  const checkout = () => {
+  /**
+   * Reserve the seats NOW, before the buyer fills anything in.
+   *
+   * The reservation used to happen when the checkout form was submitted, so a
+   * buyer could type their whole name, email and phone and only then be told
+   * the tickets had gone. Claiming the seat on this click means the form is
+   * only ever shown for tickets they already hold.
+   */
+  const checkout = async () => {
     if (!count) {
       toast.error(t("emptyCart"));
       return;
     }
-    setCart({
-      eventSlug: event.slug,
-      lines: lines.map((line) => ({ tierId: line.tier.id, qty: line.qty })),
-      holdUntil: new Date(Date.now() + 8 * 60 * 1000).toISOString(),
-    });
-    navigate("/paiement");
+    if (booking) return;
+    setBooking(true);
+    try {
+      const hold = await api.post("/orders/hold", {
+        eventSlug: event.slug,
+        lines: lines.map((line) => ({ tierId: line.tier.id, qty: line.qty })),
+      });
+      setCart({
+        eventSlug: event.slug,
+        lines: lines.map((line) => ({ tierId: line.tier.id, qty: line.qty })),
+        orderId: hold.order.id,
+        holdUntil: hold.holdUntil,
+      });
+      navigate("/paiement");
+    } catch (err) {
+      // 409 means someone else took them between the page loading and this
+      // click — tell them here, where they've lost nothing but a tap.
+      toast.error(err.status === 409 ? t("oversell") : err.message || t("reserveFail"));
+      api
+        .get(`/orders/availability/${event.slug}`)
+        .then((data) => setRemaining(data.remaining))
+        .catch(() => {});
+      setQty({});
+    } finally {
+      setBooking(false);
+    }
   };
 
   const joinWaitlist = async (e) => {
@@ -156,7 +192,7 @@ export default function EventDetail() {
             </div>
             <div className="mt-4 space-y-3">
               {event.tiers.map((tier) => {
-                const left = tier.remaining;
+                const left = leftFor(tier);
                 const value = qty[tier.id] ?? 0;
                 return (
                   <article key={tier.id} className={`rounded-xl border p-4 ${tier.recommended ? "border-lagon bg-brume/40" : "border-line/10"}`}>

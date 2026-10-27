@@ -6,6 +6,7 @@ import { publicEvent } from "../lib/serialize.js";
 import { remainingByTier } from "../lib/availability.js";
 import { authRateLimit } from "../middleware/rateLimit.js";
 import { quotePromo, type PromoCandidate } from "../domain/pricing.js";
+import { resolveClaim } from "../lib/waitlist.js";
 
 export const eventsRouter = Router();
 
@@ -23,6 +24,35 @@ eventsRouter.get(
       events.map(async (event) => publicEvent(event, await remainingByTier(event.id))),
     );
     res.json({ events: shaped });
+  }),
+);
+
+/**
+ * What a waitlist claim link is offering.
+ *
+ * Public by design: the token IS the credential, exactly like the guest
+ * order links. It returns only what the holder needs to decide — which event,
+ * which zone, how long is left.
+ */
+eventsRouter.get(
+  "/claims/:token",
+  asyncHandler(async (req, res) => {
+    const token = param(req, "token");
+    const claim = await resolveClaim(token);
+    if (!claim) throw new HttpError(410, "This offer has expired or is no longer valid");
+
+    const tier = claim.claimTierId ? await prisma.ticketTier.findUnique({ where: { id: claim.claimTierId } }) : null;
+    res.json({
+      entryId: claim.id,
+      eventSlug: claim.event.slug,
+      eventTitleFr: claim.event.titleFr,
+      eventTitleAr: claim.event.titleAr,
+      tierId: tier?.id ?? null,
+      tierNameFr: tier?.nameFr ?? null,
+      tierNameAr: tier?.nameAr ?? null,
+      priceCents: tier?.priceCents ?? null,
+      expiresAt: claim.claimExpiresAt?.toISOString() ?? null,
+    });
   }),
 );
 
@@ -93,3 +123,4 @@ eventsRouter.get(
     res.json({ valid: true, discountCents: quote.discountCents });
   }),
 );
+

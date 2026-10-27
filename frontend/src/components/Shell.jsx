@@ -19,7 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../AuthContext";
 import { useCart } from "../CartContext";
 import { useCatalog } from "../useCatalog";
-import { categoryLabel, useI18n } from "../i18n";
+import { categoryLabel, LOCALES, LOCALE_LABELS, useI18n } from "../i18n";
 import { useTheme } from "../ThemeContext";
 import { cn, CITIES } from "../utils";
 
@@ -170,20 +170,16 @@ function SiteHeader({ overlay }) {
             ) : null}
           </div>
           <div className={cn("hidden items-center rounded-full p-1 text-xs font-bold sm:flex", dark ? "bg-foam/10" : "bg-paper")}>
-            <button
-              type="button"
-              className={cn("rounded-full px-2 py-1", locale === "fr" && (dark ? "bg-foam text-encre" : "bg-card text-encre shadow-card"))}
-              onClick={() => setLocale("fr")}
-            >
-              {t("langFr")}
-            </button>
-            <button
-              type="button"
-              className={cn("rounded-full px-2 py-1", locale === "ar" && (dark ? "bg-foam text-encre" : "bg-card text-encre shadow-card"))}
-              onClick={() => setLocale("ar")}
-            >
-              {t("langAr")}
-            </button>
+            {LOCALES.map((code) => (
+              <button
+                key={code}
+                type="button"
+                className={cn("rounded-full px-2 py-1", locale === code && (dark ? "bg-foam text-encre" : "bg-card text-encre shadow-card"))}
+                onClick={() => setLocale(code)}
+              >
+                {t(LOCALE_LABELS[code])}
+              </button>
+            ))}
           </div>
           <button
             type="button"
@@ -270,12 +266,16 @@ function SiteHeader({ overlay }) {
             ))}
           </div>
           <div className="mt-4 flex gap-2">
-            <button type="button" className="rounded-full bg-paper px-3 py-2 text-sm font-bold" onClick={() => setLocale("fr")}>
-              FR
-            </button>
-            <button type="button" className="rounded-full bg-paper px-3 py-2 text-sm font-bold" onClick={() => setLocale("ar")}>
-              عربي
-            </button>
+            {LOCALES.map((code) => (
+              <button
+                key={code}
+                type="button"
+                className={cn("rounded-full px-3 py-2 text-sm font-bold", locale === code ? "bg-lagon text-foam" : "bg-paper")}
+                onClick={() => setLocale(code)}
+              >
+                {t(LOCALE_LABELS[code])}
+              </button>
+            ))}
             <button type="button" className="inline-flex items-center gap-2 rounded-full bg-paper px-3 py-2 text-sm font-bold" onClick={toggle}>
               {resolved === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
               {resolved === "dark" ? t("themeLight") : t("themeDark")}

@@ -9,25 +9,25 @@ export function seatLabel(ticket, locale) {
   return locale === "ar" ? `الصف ${row} · المقعد ${ticket.seatNumber}` : `Rang ${row} · Place ${ticket.seatNumber}`;
 }
 
-export function ticketPayload(ticket, eventSlug) {
-  return `EVENTICK|${ticket.ref}|${eventSlug}|${ticket.holderName}`;
-}
+// The QR payload is HMAC-signed server-side and arrives on the ticket, so the
+// client can render it but cannot mint one. A ticket without a payload gets no
+// QR rather than an unverifiable placeholder.
 
 // Reshapes GET /orders' and GET /orders/:id's enriched ticket shape
 // (publicTicketWithContext on the backend) into the {ticket, event, tier,
-// eventSlug, priceCents} props TicketPass expects.
+// priceCents, qrPayload} props TicketPass expects.
 export function toTicketPassProps(item) {
   return {
     ticket: { id: item.id, ref: item.ref, holderName: item.holderName, seatRow: item.seatRow, seatNumber: item.seatNumber },
     event: { titleFr: item.event.titleFr, titleAr: item.event.titleAr, venueFr: item.event.venueFr, venueAr: item.event.venueAr, start: item.event.start },
     tier: { nameFr: item.tierNameFr, nameAr: item.tierNameAr, zoneFr: item.zoneFr, zoneAr: item.zoneAr, gateFr: item.gateFr, gateAr: item.gateAr },
-    eventSlug: item.event.slug,
     priceCents: item.priceCents,
+    qrPayload: item.qrPayload,
   };
 }
 
 // `ticket`, `event`, `tier` match GET /api/tickets/:id's response shape.
-export function TicketPass({ ticket, event, tier, eventSlug, priceCents }) {
+export function TicketPass({ ticket, event, tier, priceCents, qrPayload }) {
   const { locale, t } = useI18n();
   const title = locale === "ar" ? event.titleAr : event.titleFr;
   const venue = locale === "ar" ? event.venueAr : event.venueFr;
@@ -65,7 +65,7 @@ export function TicketPass({ ticket, event, tier, eventSlug, priceCents }) {
         <div className="flex flex-col items-center justify-center gap-2 border-t border-dashed border-line/20 bg-brume/40 p-5 lg:border-s lg:border-t-0">
           <span className="rounded-full bg-lagon px-3 py-1 text-xs font-bold text-foam">{t("validEntry")}</span>
           <div className="rounded-xl bg-card p-2 shadow-card">
-            <QrMark value={ticketPayload(ticket, eventSlug)} />
+            <QrMark value={qrPayload} />
           </div>
           <p className="max-w-48 text-center font-mono text-xs text-muted">{t("brightness")}</p>
         </div>

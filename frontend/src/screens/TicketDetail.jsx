@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { QrMark } from "../components/QrMark";
 import { Shell } from "../components/Shell";
-import { seatLabel, ticketPayload } from "../components/TicketPass";
-import { api, money } from "../api";
+import { toast } from "sonner";
+import { seatLabel } from "../components/TicketPass";
+import { api, downloadFile, money } from "../api";
 import { useI18n } from "../i18n";
 
 export default function TicketDetail() {
@@ -11,13 +12,117 @@ export default function TicketDetail() {
   const { locale, t } = useI18n();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [options, setOptions] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [shareMessage, setShareMessage] = useState("");
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api
       .get(`/tickets/${ticketId}`)
       .then(setData)
       .catch((err) => setError(err.message));
+    // What the holder may actually do — drives which controls appear, so the
+    // page never offers an action the server will reject.
+    api
+      .get(`/tickets/${ticketId}/options`)
+      .then(setOptions)
+      .catch(() => setOptions(null));
   }, [ticketId]);
+
+  useEffect(load, [load]);
+
+  const cancelTicket = async () => {
+    if (busy) return;
+    if (!window.confirm(t("confirmCancelTicket"))) return;
+    setBusy(true);
+    try {
+      await api.post(`/tickets/${ticketId}/cancel`, {});
+      toast.success(t("cancelDone"));
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const changeZone = async (tierId) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api.post(`/tickets/${ticketId}/exchange`, { tierId });
+      toast.success(t("zoneChanged"));
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const fixName = async () => {
+    const next = window.prompt(t("fixName"), data?.ticket?.holderName ?? "");
+    if (!next || next.trim().length < 2) return;
+    setBusy(true);
+    try {
+      await api.patch(`/tickets/${ticketId}/holder`, { holderName: next.trim() });
+      toast.success(t("nameFixed"));
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Giving the ticket away. The link is created here but nothing moves until
+  // the recipient claims it, so until then this ticket keeps working and the
+  // share can be pulled back.
+  const shareUrl = (token) => `${window.location.origin}/billet-offert/${token}`;
+
+  const createShare = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const share = await api.post("/share", {
+        ticketId,
+        message: shareMessage.trim() || undefined,
+      });
+      setShareMessage("");
+      // Offer the link straight away — copying is the whole point of creating it.
+      await copyShare(share.token);
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyShare = async (token) => {
+    try {
+      await navigator.clipboard.writeText(shareUrl(token));
+      toast.success(t("shareCopied"));
+    } catch {
+      // Clipboard access needs a secure context and can be blocked outright;
+      // showing the link is a worse UX than copying but better than silence.
+      window.prompt(t("shareLink"), shareUrl(token));
+    }
+  };
+
+  const revokeShare = async (shareId) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api.del(`/share/${shareId}`);
+      toast.success(t("shareRevoked"));
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   if (error) {
     return (
@@ -54,9 +159,18 @@ export default function TicketDetail() {
           <Link to="/billets" className="text-sm font-semibold text-lagon">
             {t("back")}
           </Link>
-          <button type="button" className="h-11 rounded-full bg-encre px-4 text-sm font-semibold text-foam" onClick={() => window.print()}>
-            {t("print")}
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="h-11 rounded-full bg-lagon px-4 text-sm font-semibold text-foam"
+              onClick={() => downloadFile(`/tickets/${ticketId}/pdf`, `${ticket.ref}.pdf`).catch((err) => toast.error(err.message))}
+            >
+              {t("download")}
+            </button>
+            <button type="button" className="h-11 rounded-full bg-encre px-4 text-sm font-semibold text-foam" onClick={() => window.print()}>
+              {t("print")}
+            </button>
+          </div>
         </div>
         <article className="mt-4 overflow-hidden rounded-2xl bg-card shadow-pop">
           {event.image ? <img src={event.image} alt="" className="h-44 w-full object-cover" /> : null}
@@ -73,7 +187,7 @@ export default function TicketDetail() {
               {t("holderOf")} · {ticket.holderName}
             </p>
             <div className="mt-4 flex justify-center rounded-xl bg-paper p-4">
-              <QrMark value={ticketPayload(ticket, event.slug)} className="size-52" />
+              <QrMark value={data.qrPayload} className="size-52" />
             </div>
             <p className="mt-2 text-center text-xs text-muted">{t("brightness")}</p>
             {ticket.status !== "VALID" ? (
@@ -107,6 +221,121 @@ export default function TicketDetail() {
             {order.paymentRef} · {order.cardBank} ···· {order.cardLast4}
           </p>
         </section>
+
+        {/* Only offered while the ticket is still a live entitlement. */}
+        {options && ticket.status === "VALID" ? (
+          <section className="no-print mt-4 rounded-xl border border-line/10 bg-card p-4">
+            <h2 className="font-display text-lg font-bold">{t("manageTicket")}</h2>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="h-11 rounded-full border border-line/20 px-4 text-sm font-semibold hover:bg-paper disabled:opacity-50"
+                onClick={fixName}
+                disabled={busy}
+              >
+                {t("fixName")}
+              </button>
+              {options.cancel?.allowed ? (
+                <button
+                  type="button"
+                  className="h-11 rounded-full bg-corail px-4 text-sm font-semibold text-white disabled:opacity-50"
+                  onClick={cancelTicket}
+                  disabled={busy}
+                >
+                  {t("cancelTicket")}
+                </button>
+              ) : null}
+            </div>
+
+            <p className="mt-2 text-xs text-muted">
+              {options.cancel?.allowed
+                ? t("cancelUntil").replace("{n}", String(options.cancel.cutoffHours))
+                : options.cancel?.reason === "self-cancel-disabled"
+                  ? t("cancelDisabled")
+                  : t("cancelClosed")}
+            </p>
+
+            {options.exchange?.length ? (
+              <>
+                <h3 className="mt-4 text-sm font-bold">{t("changeZone")}</h3>
+                <ul className="mt-2 grid gap-2">
+                  {options.exchange.map((zone) => (
+                    <li key={zone.tierId} className="flex items-center justify-between gap-3 rounded-lg bg-paper px-3 py-2">
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold">
+                          {locale === "ar" ? zone.nameAr : zone.nameFr}
+                        </span>
+                        <span className="block text-xs text-muted">
+                          {zone.dueCents > 0 ? t("zoneExtra").replace("{n}", money(zone.dueCents)) : t("zoneIncluded")}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        className="h-10 shrink-0 rounded-full bg-lagon px-3 text-xs font-semibold text-foam disabled:opacity-40"
+                        onClick={() => changeZone(zone.tierId)}
+                        // An upgrade owes money, which this page cannot yet
+                        // collect — the server refuses it, so don't offer it.
+                        disabled={busy || zone.soldOut || zone.dueCents > 0}
+                      >
+                        {zone.soldOut ? t("zoneSoldOut") : t("changeZone")}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+
+            {/* Give it away. An open link is shown back rather than offering
+                a second "share" button the server would refuse. */}
+            {options.share ? (
+              <>
+                <h3 className="mt-4 text-sm font-bold">{t("shareTicket")}</h3>
+                <p className="mt-1 text-xs text-muted">{t("shareOpen")}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="h-11 rounded-full bg-lagon px-4 text-sm font-semibold text-foam disabled:opacity-50"
+                    onClick={() => copyShare(options.share.token)}
+                    disabled={busy}
+                  >
+                    {t("shareCopy")}
+                  </button>
+                  <button
+                    type="button"
+                    className="h-11 rounded-full border border-line/20 px-4 text-sm font-semibold hover:bg-paper disabled:opacity-50"
+                    onClick={() => revokeShare(options.share.id)}
+                    disabled={busy}
+                  >
+                    {t("shareRevoke")}
+                  </button>
+                </div>
+              </>
+            ) : options.shareable ? (
+              <>
+                <h3 className="mt-4 text-sm font-bold">{t("shareTicket")}</h3>
+                <p className="mt-1 text-xs text-muted">{t("shareTicketHint")}</p>
+                <input
+                  value={shareMessage}
+                  onChange={(event) => setShareMessage(event.target.value)}
+                  maxLength={280}
+                  placeholder={t("shareMessagePlaceholder")}
+                  aria-label={t("shareMessage")}
+                  className="mt-2 h-11 w-full rounded-xl border border-line/20 bg-paper px-3 text-sm"
+                />
+                <button
+                  type="button"
+                  className="mt-2 h-11 rounded-full bg-lagon px-4 text-sm font-semibold text-foam disabled:opacity-50"
+                  onClick={createShare}
+                  disabled={busy}
+                >
+                  {t("shareCreate")}
+                </button>
+                <p className="mt-2 text-xs text-muted">{t("shareNote")}</p>
+              </>
+            ) : null}
+          </section>
+        ) : null}
       </div>
     </Shell>
   );

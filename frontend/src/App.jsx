@@ -6,6 +6,7 @@ import Checkout from "./screens/Checkout";
 import Confirmation from "./screens/Confirmation";
 import Billets from "./screens/Billets";
 import TicketDetail from "./screens/TicketDetail";
+import ClaimShare from "./screens/ClaimShare";
 import Login from "./screens/Login";
 import Organiser from "./screens/Organiser";
 import Pro from "./screens/pro/Pro";
@@ -22,6 +23,9 @@ export default function App() {
       <Route path="/confirmation/:orderId" element={<Confirmation />} />
       <Route path="/billets" element={<Billets />} />
       <Route path="/billet/:ticketId" element={<TicketDetail />} />
+      {/* Public: the token is the credential, so a recipient with no account
+          can claim a ticket someone gave them. */}
+      <Route path="/billet-offert/:token" element={<ClaimShare />} />
       <Route path="/login" element={<Login />} />
       <Route path="/organiser" element={<Organiser />} />
       <Route path="/pro/*" element={<Pro />} />

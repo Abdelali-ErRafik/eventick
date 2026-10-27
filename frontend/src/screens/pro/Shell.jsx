@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ExternalLink, LogOut, Menu, Moon, Search, Sun, X } from "lucide-react";
 import { useAuth } from "../../AuthContext";
-import { useI18n } from "../../i18n";
+import { LOCALES, LOCALE_SHORT, useI18n } from "../../i18n";
 import { useTheme } from "../../ThemeContext";
 import { cn } from "../../utils";
 import { text } from "./copy";
@@ -185,14 +185,14 @@ export default function DashboardShell({ sections, children }) {
             <ExternalLink className="size-[18px]" />
           </Link>
           <div className="flex items-center rounded-full bg-paper p-1 text-xs font-bold">
-            {["fr", "ar"].map((code) => (
+            {LOCALES.map((code) => (
               <button
                 key={code}
                 type="button"
                 onClick={() => setLocale(code)}
                 className={cn("rounded-full px-2 py-1", locale === code && "bg-card text-encre shadow-card")}
               >
-                {code === "fr" ? "FR" : "عربي"}
+                {LOCALE_SHORT[code]}
               </button>
             ))}
           </div>

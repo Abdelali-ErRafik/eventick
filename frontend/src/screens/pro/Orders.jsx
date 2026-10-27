@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Download, ExternalLink, Trash2, Undo2, XCircle } from "lucide-react";
+import { Banknote, Check, Download, ExternalLink, Trash2, Undo2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
@@ -103,6 +103,25 @@ export default function Orders() {
     await api.del(`/organiser/orders/${order.id}`);
     load();
     toast.success(t.removed);
+  };
+
+  const refundOrder = async (order) => {
+    const outstanding = order.totalCents - (order.refundedCents ?? 0);
+    const ok = await confirm({
+      title: t.refundTitle,
+      message: `${t.confirmRefund} ${t.refundOutstanding.replace("{n}", money(outstanding))}`,
+      tone: "warn",
+      confirmLabel: t.refund,
+      cancelLabel: t.cancelBtn,
+    });
+    if (!ok) return;
+    try {
+      await api.post(`/organiser/orders/${order.id}/refund`, {});
+      load();
+      toast.success(t.refundDone);
+    } catch (err) {
+      toast.error(err.message);
+    }
   };
 
   const toggleAdmit = async (ticket) => {
@@ -230,6 +249,11 @@ export default function Orders() {
                   >
                     <ExternalLink className="size-4" />
                   </Link>
+                  {order.status === "PAID" ? (
+                    <IconBtn label={t.refund} onClick={() => refundOrder(order)}>
+                      <Banknote className="size-4" />
+                    </IconBtn>
+                  ) : null}
                   <IconBtn label={t.cancelOrder} onClick={() => cancelOrder(order)}>
                     <XCircle className="size-4" />
                   </IconBtn>

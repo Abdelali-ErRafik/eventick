@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Copy, ExternalLink, Eye, EyeOff, Pencil, Ticket, Trash2, Users } from "lucide-react";
+import { Copy, ExternalLink, Eye, EyeOff, Mail, Pencil, Ticket, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
@@ -35,8 +35,14 @@ export default function Events() {
   const [city, setCity] = useState("");
   const [visibility, setVisibility] = useState("");
   const [edit, setEdit] = useState(null);
-  const [title, setTitle] = useState("");
+  const [titleFr, setTitleFr] = useState("");
+  const [titleAr, setTitleAr] = useState("");
   const [editCity, setEditCity] = useState("Casablanca");
+  const [contact, setContact] = useState(null);
+  const [audience, setAudience] = useState(null);
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
 
   const load = () => {
     api.get("/organiser/events").then((data) => setEvents(data.events));
@@ -78,16 +84,47 @@ export default function Events() {
 
   const openEdit = (event) => {
     setEdit(event);
-    setTitle(locale === "ar" ? event.titleAr : event.titleFr);
+    // Both titles, each in its own field. Loading only the current locale's
+    // and writing it to both overwrote the Arabic title with French text the
+    // moment an organiser edited the city.
+    setTitleFr(event.titleFr);
+    setTitleAr(event.titleAr);
     setEditCity(event.city);
   };
 
   const save = async (e) => {
     e.preventDefault();
-    await api.patch(`/organiser/events/${edit.slug}`, { titleFr: title, titleAr: title, city: editCity });
+    await api.patch(`/organiser/events/${edit.slug}`, { titleFr, titleAr, city: editCity });
     setEdit(null);
     load();
     toast.success(t.saved);
+  };
+
+  const openContact = async (event) => {
+    setContact(event);
+    setSubject("");
+    setMessage("");
+    setAudience(null);
+    const data = await api.get(`/organiser/events/${event.slug}/audience`);
+    setAudience(data.count);
+  };
+
+  const sendBroadcast = async (e) => {
+    e.preventDefault();
+    if (sending) return;
+    setSending(true);
+    try {
+      const res = await api.post(`/organiser/events/${contact.slug}/broadcast`, { subject, message });
+      // `sent` can be 0 while `recipients` is not, when no mail provider is
+      // configured — say so rather than claiming a successful send.
+      if (res.sent > 0) toast.success(t.sentOk.replace("{n}", String(res.sent)));
+      else toast.warning(t.sentNone);
+      setContact(null);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSending(false);
+    }
   };
 
   const toggleHidden = async (slug, hidden) => {
@@ -249,6 +286,9 @@ export default function Events() {
                   <IconBtn label={t.guests} onClick={() => exportGuests(row.event)}>
                     <Users className="size-4" />
                   </IconBtn>
+                  <IconBtn label={t.contact} onClick={() => openContact(row.event)}>
+                    <Mail className="size-4" />
+                  </IconBtn>
                   <IconBtn label={row.hidden ? t.restore : t.hide} onClick={() => toggleHidden(row.event.slug, !row.hidden)}>
                     {row.hidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
                   </IconBtn>
@@ -291,11 +331,22 @@ export default function Events() {
       >
         <form id="event-edit" className="grid gap-4" onSubmit={save}>
           <label className="grid gap-1.5 text-sm font-semibold">
-            {t.events}
-            <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} required />
+            {t.titleFrLabel}
+            <input className="field" value={titleFr} onChange={(e) => setTitleFr(e.target.value)} required minLength={3} />
           </label>
           <label className="grid gap-1.5 text-sm font-semibold">
-            {t.allEvents}
+            {t.titleArLabel}
+            <input
+              className="field"
+              dir="rtl"
+              value={titleAr}
+              onChange={(e) => setTitleAr(e.target.value)}
+              required
+              minLength={3}
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm font-semibold">
+            {t.cityLabel}
             <select className="field" value={editCity} onChange={(e) => setEditCity(e.target.value)}>
               {CITIES.map((name) => (
                 <option key={name}>{name}</option>
@@ -303,6 +354,55 @@ export default function Events() {
             </select>
           </label>
         </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(contact)}
+        onClose={() => setContact(null)}
+        wide
+        title={t.contact}
+        sub={
+          contact
+            ? audience === null
+              ? locale === "ar"
+                ? contact.titleAr
+                : contact.titleFr
+              : t.contactSub.replace("{n}", String(audience))
+            : undefined
+        }
+        icon={<Mail className="size-5" />}
+        footer={
+          <>
+            <Btn variant="secondary" onClick={() => setContact(null)}>
+              {t.close}
+            </Btn>
+            <Btn type="submit" form="broadcast-form" disabled={sending || audience === 0}>
+              {sending ? t.sending : t.send}
+            </Btn>
+          </>
+        }
+      >
+        {audience === 0 ? (
+          <EmptyState icon="📭" title={t.contactNone} />
+        ) : (
+          <form id="broadcast-form" className="grid gap-4" onSubmit={sendBroadcast}>
+            <label className="grid gap-1.5 text-sm font-semibold">
+              {t.subject}
+              <input className="field" value={subject} onChange={(e) => setSubject(e.target.value)} minLength={3} maxLength={150} required />
+            </label>
+            <label className="grid gap-1.5 text-sm font-semibold">
+              {t.message}
+              <textarea
+                className="field field-area"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                minLength={10}
+                maxLength={5000}
+                required
+              />
+            </label>
+          </form>
+        )}
       </Modal>
     </div>
   );

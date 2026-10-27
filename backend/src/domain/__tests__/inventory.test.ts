@@ -47,4 +47,18 @@ describe("seatFor", () => {
   it("rolls into row 2 at cursor 13", () => {
     expect(seatFor(13)).toEqual({ row: 2, seat: 1 });
   });
+
+  it("honours a tier's own row width", () => {
+    // A 20-wide room: row 1 runs to 20, row 2 starts at 21.
+    expect(seatFor(20, 20)).toEqual({ row: 1, seat: 20 });
+    expect(seatFor(21, 20)).toEqual({ row: 2, seat: 1 });
+    // A narrow 4-wide block.
+    expect(seatFor(5, 4)).toEqual({ row: 2, seat: 1 });
+  });
+
+  it("falls back to 12 when the width is nonsense", () => {
+    // Guards against a 0 or negative slipping in and producing Infinity rows.
+    expect(seatFor(13, 0)).toEqual({ row: 2, seat: 1 });
+    expect(seatFor(13, -5)).toEqual({ row: 2, seat: 1 });
+  });
 });

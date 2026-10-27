@@ -11,3 +11,13 @@ export const authRateLimit = rateLimit({
   skipSuccessfulRequests: true,
   message: { error: "Too many attempts. Please wait and try again." },
 });
+
+// Mass email is the one route where a mistake is expensive and irreversible —
+// a loop or a double-click would mail every buyer twice.
+export const broadcastRateLimit = rateLimit({
+  windowMs: Number(process.env.BROADCAST_RATE_LIMIT_WINDOW_MS ?? 60 * 60 * 1000),
+  max: Number(process.env.BROADCAST_RATE_LIMIT_MAX ?? 6),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many broadcasts. Please wait before sending again." },
+});

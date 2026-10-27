@@ -1,7 +1,9 @@
 {
   "version": 1,
   "config": {
-    "env": {},
+    "env": {
+      "NEXT_PUBLIC_REALTIME_URL": "http://localhost:4100"
+    },
     "webpack": null,
     "typescript": {
       "ignoreBuildErrors": false
