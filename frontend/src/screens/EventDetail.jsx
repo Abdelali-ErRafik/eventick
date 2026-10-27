@@ -198,7 +198,7 @@ export default function EventDetail() {
                 toast.success(isSaved ? t("savedOk") : t("savedAdd"));
               }}
             >
-              <Heart className={isSaved ? "size-5 fill-safran text-accent" : "size-5"} />
+              <Heart className={isSaved ? "size-5 fill-accent text-accent" : "size-5"} />
             </button>
           </div>
         </div>
