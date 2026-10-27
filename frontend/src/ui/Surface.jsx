@@ -1,12 +1,19 @@
 import { cn } from "../utils";
 
-/** A panel. `pad` off when the content manages its own padding (a table, a
- * full-bleed image), which is why the old Card's fixed p-5 kept being undone. */
+/**
+ * A panel.
+ *
+ * Shape language v2: a tighter `--radius-card` (1rem, was 1.5rem/rounded-2xl)
+ * and a crisper, less diffuse shadow (see --shadow-card in styles.css) — part
+ * of moving away from the old soft-pill, soft-glow language toward something
+ * more geometric. `pad` off when the content manages its own padding (a
+ * table, a full-bleed image).
+ */
 export function Card({ pad = true, raised = false, className, children, ...rest }) {
   return (
     <div
       className={cn(
-        "rounded-2xl border border-line/10 bg-card",
+        "rounded-card border border-line/10 bg-card",
         raised ? "shadow-pop" : "shadow-card",
         pad && "p-5",
         className,
@@ -24,7 +31,7 @@ export function PageHeader({ title, sub, actions, className }) {
   return (
     <div className={cn("mb-6 flex flex-wrap items-end justify-between gap-4", className)}>
       <div className="min-w-0">
-        <h1 className="font-display text-title font-extrabold">{title}</h1>
+        <h1 className="font-display text-title font-bold">{title}</h1>
         {sub ? <p className="mt-1 text-sm text-muted">{sub}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2.5">{actions}</div> : null}
@@ -36,7 +43,7 @@ export function SectionHeader({ title, sub, action, className }) {
   return (
     <div className={cn("mb-4 flex flex-wrap items-end justify-between gap-3", className)}>
       <div className="min-w-0">
-        <h2 className="font-display text-heading font-extrabold">{title}</h2>
+        <h2 className="font-display text-heading font-bold">{title}</h2>
         {sub ? <p className="mt-0.5 text-sm text-muted">{sub}</p> : null}
       </div>
       {action}
@@ -56,28 +63,35 @@ export function Container({ size = "wide", className, children }) {
   return <div className={cn("mx-auto w-full px-4 md:px-8", sizes[size], className)}>{children}</div>;
 }
 
-/** A labelled figure. Used for both dashboard stats and buyer-facing counts. */
+/**
+ * A labelled figure.
+ *
+ * Shape v2: dropped the left accent bar (every stat tile had one, so it
+ * stopped meaning anything) in favour of a small square icon tile with a
+ * flat fill — closer to how Linear/Vercel-style dashboards mark a metric's
+ * category without a coloured edge competing with six others on the same
+ * screen. `tone` now colours the icon tile itself.
+ */
 export function Stat({ label, value, sub, tone = "neutral", icon, className }) {
-  const bars = {
-    neutral: "bg-mist",
-    primary: "bg-primary",
-    accent: "bg-accent",
-    success: "bg-success",
-    danger: "bg-danger",
+  const tiles = {
+    neutral: "bg-sunken text-muted",
+    primary: "bg-primary text-primary-fg",
+    accent: "bg-accent text-accent-fg",
+    success: "bg-success-bg text-success",
+    danger: "bg-danger-bg text-danger",
   };
   return (
-    <div className={cn("relative overflow-hidden rounded-2xl border border-line/10 bg-card p-5 shadow-card", className)}>
-      <span className={cn("absolute inset-y-0 start-0 w-1", bars[tone])} aria-hidden />
-      <div className="flex items-center gap-3">
+    <div className={cn("rounded-card border border-line/10 bg-card p-5 shadow-card", className)}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-muted">{label}</p>
+          <p className="mt-1.5 font-display text-heading font-bold tabular-nums">{value}</p>
+        </div>
         {icon ? (
-          <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-brume text-primary" aria-hidden>
+          <span className={cn("inline-flex size-9 shrink-0 items-center justify-center rounded-control", tiles[tone])} aria-hidden>
             {icon}
           </span>
         ) : null}
-        <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-wide text-muted">{label}</p>
-          <p className="font-display text-heading font-extrabold tabular-nums">{value}</p>
-        </div>
       </div>
       {sub ? <p className="mt-3 border-t border-line/10 pt-3 text-xs text-muted">{sub}</p> : null}
     </div>

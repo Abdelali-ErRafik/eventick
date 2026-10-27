@@ -23,7 +23,7 @@ export function PageHead({ title, sub, actions }) {
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="font-display text-[26px] font-extrabold leading-tight tracking-tight">{title}</h1>
+        <h1 className="font-display text-[26px] font-bold leading-tight tracking-tight">{title}</h1>
         {sub ? <p className="mt-0.5 text-sm text-muted">{sub}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2.5">{actions}</div> : null}
@@ -34,7 +34,7 @@ export function PageHead({ title, sub, actions }) {
 export function SectionTitle({ children, action }) {
   return (
     <div className="mb-4 mt-8 flex items-center justify-between gap-3">
-      <h2 className="font-display text-[22px] font-extrabold tracking-tight">{children}</h2>
+      <h2 className="font-display text-[22px] font-bold tracking-tight">{children}</h2>
       {action}
     </div>
   );
@@ -61,7 +61,7 @@ export function InfoTip({ text }) {
         <Info className="size-3.5" />
       </button>
       {open ? (
-        <span className="absolute bottom-full z-50 mb-1.5 inset-inline-0 mx-auto w-56 rounded-lg bg-encre px-3 py-2 text-xs font-medium normal-case tracking-normal text-foam shadow-pop">
+        <span className="absolute bottom-full z-50 mb-1.5 inset-inline-0 mx-auto w-56 rounded-control bg-encre px-3 py-2 text-xs font-medium normal-case tracking-normal text-foam shadow-pop">
           {text}
         </span>
       ) : null}
@@ -69,23 +69,39 @@ export function InfoTip({ text }) {
   );
 }
 
+/**
+ * The dashboard's headline metric tile.
+ *
+ * Shape v2: the left accent bar is gone — every tile had one, so by the third
+ * card it stopped reading as a signal and just became a stripe. In its place,
+ * a flat icon tile (square, not circular, filled solid rather than tinted)
+ * marks the category, and `accent` now distinguishes the one metric meant to
+ * draw the eye (e.g. gross sales) by giving IT the lime fill, leaving the
+ * others a quiet neutral tile — closer to how a Linear/Vercel dashboard uses
+ * one bright moment per screen instead of six faint ones.
+ */
 export function StatCard({ icon, label, value, sub, trend, accent, info }) {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-line/10 bg-card p-5 shadow-card">
-      <span className={cn("absolute inset-y-0 start-0 w-1", accent ? "bg-accent" : "bg-primary")} aria-hidden />
-      <div className="flex items-center gap-3">
-        {icon ? (
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brume text-primary" aria-hidden>
-            {icon}
-          </div>
-        ) : null}
+    <div className="rounded-card border border-line/10 bg-card p-5 shadow-card">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-muted">
+          <p className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted">
             {label}
             {info ? <InfoTip text={info} /> : null}
           </p>
-          <p className="font-display text-2xl font-extrabold tracking-tight tabular-nums">{value}</p>
+          <p className="mt-1.5 font-display text-2xl font-bold tracking-tight tabular-nums">{value}</p>
         </div>
+        {icon ? (
+          <div
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center rounded-control",
+              accent ? "bg-accent text-accent-fg" : "bg-sunken text-muted",
+            )}
+            aria-hidden
+          >
+            {icon}
+          </div>
+        ) : null}
       </div>
       {sub || trend ? (
         <div className="mt-3 flex items-center justify-between gap-2.5 border-t border-line/10 pt-3">
@@ -93,10 +109,10 @@ export function StatCard({ icon, label, value, sub, trend, accent, info }) {
           {trend ? (
             <span
               className={cn(
-                "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-extrabold",
-                trend.dir === "up" && "bg-primary/12 text-primary",
-                trend.dir === "down" && "bg-danger/12 text-danger",
-                trend.dir === "flat" && "bg-paper text-muted",
+                "shrink-0 rounded-control px-2 py-0.5 text-xs font-bold",
+                trend.dir === "up" && "bg-success-bg text-success",
+                trend.dir === "down" && "bg-danger-bg text-danger",
+                trend.dir === "flat" && "bg-sunken text-muted",
               )}
             >
               {trend.text}
@@ -148,7 +164,7 @@ export function SearchInput({ value, onChange, placeholder, onSubmit }) {
 
 export function FilterBar({ search, controls = [], activeCount = 0, onReset, resetLabel, actions }) {
   return (
-    <div className="mb-4 rounded-xl border border-line/10 bg-card p-4 shadow-card">
+    <div className="mb-4 rounded-card border border-line/10 bg-card p-4 shadow-card">
       <div className="flex flex-wrap items-end gap-2.5">
         {search ? <SearchInput {...search} /> : null}
         {controls.map((control) => (
@@ -158,7 +174,7 @@ export function FilterBar({ search, controls = [], activeCount = 0, onReset, res
               value={control.value}
               onChange={control.onChange}
               style={control.style}
-              className="h-11 rounded-xl border border-line/20 bg-card px-3 text-sm outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/15"
+              className="h-11 rounded-control border border-line/20 bg-card px-3 text-sm outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/15"
             >
               {control.options.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -172,7 +188,7 @@ export function FilterBar({ search, controls = [], activeCount = 0, onReset, res
           <button
             type="button"
             onClick={onReset}
-            className="h-11 rounded-xl border border-dashed border-line/30 px-3.5 text-[13px] font-bold text-muted transition hover:border-solid hover:border-danger hover:text-danger"
+            className="h-11 rounded-control border border-dashed border-line/30 px-3.5 text-[13px] font-bold text-muted transition hover:border-solid hover:border-danger hover:text-danger"
           >
             {resetLabel} ({activeCount})
           </button>
@@ -185,7 +201,7 @@ export function FilterBar({ search, controls = [], activeCount = 0, onReset, res
 
 export function DataTable({ minWidth = 760, children }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-line/10 bg-card shadow-card">
+    <div className="overflow-x-auto rounded-card border border-line/10 bg-card shadow-card">
       <table className="w-full border-collapse" style={{ minWidth }}>
         {children}
       </table>
@@ -235,9 +251,9 @@ export function EntityCell({ image, title, sub }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5">
       {image ? (
-        <img src={image} alt="" className="size-9 shrink-0 rounded-lg object-cover" />
+        <img src={image} alt="" className="size-9 shrink-0 rounded-control object-cover" />
       ) : (
-        <span className="size-9 shrink-0 rounded-lg bg-brume" aria-hidden />
+        <span className="size-9 shrink-0 rounded-control bg-brume" aria-hidden />
       )}
       <span className="min-w-0">
         <span className="block truncate text-sm font-bold" title={title}>
@@ -296,7 +312,7 @@ export function StatSkeletons({ count = 3 }) {
   return (
     <>
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="rounded-xl border border-line/10 bg-card p-5 shadow-card">
+        <div key={i} className="rounded-card border border-line/10 bg-card p-5 shadow-card">
           <Skeleton className="h-4 w-16" />
           <Skeleton className="mt-2.5 h-7 w-28" />
         </div>
@@ -315,7 +331,7 @@ export function Pager({ page, pages, onPage, limit, onLimit, labels }) {
           <select
             value={limit}
             onChange={(e) => onLimit(Number(e.target.value))}
-            className="h-9 rounded-lg border border-line/20 bg-card px-2 text-sm outline-none focus:border-primary"
+            className="h-9 rounded-control border border-line/20 bg-card px-2 text-sm outline-none focus:border-primary"
           >
             {[10, 20, 50, 100].map((n) => (
               <option key={n} value={n}>

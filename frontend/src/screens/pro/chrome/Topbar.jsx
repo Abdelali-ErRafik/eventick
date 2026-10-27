@@ -59,7 +59,7 @@ export function Topbar({ title, onOpenNav, user, onLogout, theme, onToggleTheme,
         to="/"
         aria-label={labels.market}
         title={labels.market}
-        className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl text-muted transition hover:bg-brume hover:text-primary active:scale-95"
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-control text-muted transition hover:bg-brume hover:text-primary active:scale-95"
       >
         <ExternalLink className="size-[18px]" aria-hidden />
       </Link>
@@ -75,10 +75,12 @@ export function Topbar({ title, onOpenNav, user, onLogout, theme, onToggleTheme,
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           aria-label={labels.userMenu}
-          className="flex items-center gap-2 rounded-xl py-1 ps-1 pe-1.5 transition hover:bg-paper active:scale-[0.98]"
+          className="flex items-center gap-2 rounded-control py-1 ps-1 pe-1.5 transition hover:bg-sunken active:scale-[0.98]"
         >
+          {/* A squared avatar tile, not a circle — part of the shift away
+              from the old soft/round surface language. */}
           <span
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-[13px] font-extrabold text-primary-fg"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-control bg-primary text-[13px] font-bold text-primary-fg"
             aria-hidden
           >
             {initial}
@@ -95,7 +97,7 @@ export function Topbar({ title, onOpenNav, user, onLogout, theme, onToggleTheme,
             ref={menuRef}
             role="menu"
             aria-label={labels.userMenu}
-            className="absolute end-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-line/10 bg-card shadow-modal"
+            className="absolute end-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-panel border border-line/10 bg-card shadow-modal"
           >
             <div className="border-b border-line/10 px-4 py-3">
               <p className="truncate text-sm font-bold">{user?.name}</p>
@@ -107,7 +109,7 @@ export function Topbar({ title, onOpenNav, user, onLogout, theme, onToggleTheme,
               type="button"
               role="menuitem"
               onClick={onToggleTheme}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-start text-sm font-semibold text-ink transition hover:bg-paper"
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-start text-sm font-semibold text-ink transition hover:bg-sunken"
             >
               {theme === "dark" ? <Sun className="size-4 shrink-0 text-muted" aria-hidden /> : <Moon className="size-4 shrink-0 text-muted" aria-hidden />}
               <span>{theme === "dark" ? labels.themeLight : labels.themeDark}</span>
@@ -115,7 +117,7 @@ export function Topbar({ title, onOpenNav, user, onLogout, theme, onToggleTheme,
 
             {/* Language */}
             <div className="border-t border-line/10 px-4 py-3">
-              <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-muted">{labels.langLabel}</p>
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted">{labels.langLabel}</p>
               <div className="flex gap-1.5" role="group" aria-label={labels.langLabel}>
                 {locales.map((code) => (
                   <button
@@ -124,8 +126,8 @@ export function Topbar({ title, onOpenNav, user, onLogout, theme, onToggleTheme,
                     onClick={() => onSetLocale(code)}
                     aria-pressed={locale === code}
                     className={cn(
-                      "h-9 flex-1 rounded-lg text-xs font-extrabold transition",
-                      locale === code ? "bg-primary text-primary-fg" : "bg-paper text-muted hover:text-ink",
+                      "h-9 flex-1 rounded-control text-xs font-bold transition",
+                      locale === code ? "bg-primary text-primary-fg" : "bg-sunken text-muted hover:text-ink",
                     )}
                   >
                     {localeShort[code]}

@@ -1,21 +1,19 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { PanelLeftClose, PanelLeftOpen, Search, X } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { IconButton } from "../../../ui";
 import { cn } from "../../../utils";
 
 /**
  * Dashboard navigation.
  *
- * Rebuilt rather than patched. The previous sidebar expanded on hover when
- * collapsed, which meant the nav moved under the pointer on the way to the
- * page content and covered it — a rail should stay a rail until asked. It also
- * put a search box above the nav that filtered seven links, spending permanent
- * vertical space on a problem seven items do not have.
+ * The rail is stable — it no longer expands on hover when collapsed, which
+ * used to slide the nav under the pointer on its way to the page content —
+ * and the groups are always visible rather than hidden behind a search box
+ * seven items did not need.
  *
- * So: the rail is stable, the groups are always visible, and the active item
- * is marked by a start bar plus weight rather than a filled pill, which at
- * seven items was the loudest thing on the screen.
+ * Shape v2: the active item is a solid primary fill, not a soft tint plus a
+ * start bar — one unambiguous "you are here" instead of two weak signals.
  */
 
 export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed, labels }) {
@@ -74,24 +72,23 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
           open ? "translate-x-0" : "-translate-x-full rtl:translate-x-full lg:rtl:translate-x-0",
         )}
       >
-        {/* Brand */}
+        {/* Brand. Squared-off mark (was rounded-xl/soft) with a hard-edged
+            accent underline on the wordmark instead of a tinted word — more
+            Linear/Vercel-lockup than the old soft pill treatment. */}
         <div className={cn("flex h-16 shrink-0 items-center gap-2 border-b border-line/10 px-4", collapsed && "justify-center px-0")}>
           <Link
             to="/pro"
-            className={cn(
-              "flex min-w-0 items-center gap-2.5 rounded-lg font-display font-extrabold tracking-tight",
-              collapsed && "justify-center",
-            )}
+            className={cn("flex min-w-0 items-center gap-2.5 font-display font-bold tracking-tight", collapsed && "justify-center")}
           >
             <span
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-fg text-[15px]"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-control bg-primary text-[15px] text-primary-fg"
               aria-hidden
             >
               E
             </span>
             {!collapsed ? (
               <span className="min-w-0 truncate text-[17px]">
-                Eventick<span className="text-accent">.ma</span>
+                Eventick<span className="border-b-2 border-accent pb-px">.ma</span>
               </span>
             ) : null}
           </Link>
@@ -123,25 +120,17 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
                       title={collapsed ? item.label : undefined}
                       className={({ isActive }) =>
                         cn(
-                          "group relative flex items-center gap-3 rounded-xl py-2.5 text-sm font-semibold transition",
+                          "group relative flex items-center gap-3 rounded-control py-2.5 text-sm font-semibold transition",
                           collapsed ? "justify-center px-0" : "px-3",
-                          isActive
-                            ? "bg-brume text-primary"
-                            : "text-muted hover:bg-paper hover:text-ink",
+                          // Solid fill for the active row, not a soft tint —
+                          // one clear "you are here" instead of the previous
+                          // brume wash, which barely separated from hover.
+                          isActive ? "bg-primary text-primary-fg" : "text-muted hover:bg-sunken hover:text-ink",
                         )
                       }
                     >
                       {({ isActive }) => (
                         <>
-                          {/* A start bar, not a filled pill: it marks the
-                              active row without shouting over six others. */}
-                          <span
-                            className={cn(
-                              "absolute inset-y-1.5 start-0 w-[3px] rounded-full transition",
-                              isActive ? "bg-primary" : "bg-transparent",
-                            )}
-                            aria-hidden
-                          />
                           <span className="shrink-0" aria-hidden>
                             {item.icon}
                           </span>
@@ -150,7 +139,12 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
                             collapsed ? (
                               <span className="absolute end-2.5 top-2 size-2 rounded-full bg-accent" aria-hidden />
                             ) : (
-                              <span className="min-w-5 shrink-0 rounded-full bg-accent px-1.5 text-center text-[11px] font-extrabold text-accent-fg tabular-nums">
+                              <span
+                                className={cn(
+                                  "min-w-5 shrink-0 rounded-full px-1.5 text-center text-[11px] font-bold tabular-nums",
+                                  isActive ? "bg-primary-fg/20 text-primary-fg" : "bg-accent text-accent-fg",
+                                )}
+                              >
                                 {item.badge > 99 ? "99+" : item.badge}
                               </span>
                             )
@@ -177,7 +171,7 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
             aria-expanded={!collapsed}
             title={collapsed ? labels.expand : labels.collapse}
             className={cn(
-              "flex items-center gap-2.5 rounded-xl py-2.5 text-[13px] font-semibold text-muted transition hover:bg-paper hover:text-ink",
+              "flex items-center gap-2.5 rounded-control py-2.5 text-[13px] font-semibold text-muted transition hover:bg-sunken hover:text-ink",
               collapsed ? "size-10 justify-center" : "w-full px-3",
             )}
           >

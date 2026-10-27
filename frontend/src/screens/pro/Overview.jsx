@@ -68,10 +68,14 @@ export default function Overview() {
                 )}
               </span>
             ) : null}
-            <Badge tone={pulse ? "success" : "neutral"}>{t.live}</Badge>
+            {/* The one accent moment on this screen: a fresh sale or
+                check-in flashes lime rather than the quiet success-green
+                used everywhere else, so it is unmistakably "something just
+                happened" rather than a routine status. */}
+            <Badge tone={pulse ? "accent" : "neutral"}>{t.live}</Badge>
             <Link
               to="/organiser"
-              className="inline-flex h-11 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover active:scale-[0.97]"
+              className="inline-flex h-11 items-center rounded-control bg-primary px-4 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover active:scale-[0.97]"
             >
               {t.create}
             </Link>
@@ -112,7 +116,7 @@ export default function Overview() {
 
       <ol className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {t.loop.map((step, index) => (
-          <li key={step} className="rounded-xl border border-line/10 bg-card px-4 py-3 shadow-card">
+          <li key={step} className="rounded-card border border-line/10 bg-card px-4 py-3 shadow-card">
             <span className="font-mono text-xs font-bold text-primary">0{index + 1}</span>
             <p className="text-sm font-semibold">{step}</p>
           </li>
@@ -134,7 +138,7 @@ export default function Overview() {
             {upcoming.map((event) => (
               <li key={event.slug} className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <img src={event.image} alt="" className="size-10 shrink-0 rounded-lg object-cover" />
+                  <img src={event.image} alt="" className="size-10 shrink-0 rounded-control object-cover" />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold">{locale === "ar" ? event.titleAr : event.titleFr}</p>
                     <p className="truncate text-xs text-muted">
@@ -169,7 +173,7 @@ export default function Overview() {
             {recent.map((order) => (
               <li key={order.id} className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-brume text-[13px] font-extrabold text-primary" aria-hidden>
+                  <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-control bg-brume text-[13px] font-bold text-primary" aria-hidden>
                     {(order.holderName || "?").slice(0, 1).toUpperCase()}
                   </span>
                   <div className="min-w-0">

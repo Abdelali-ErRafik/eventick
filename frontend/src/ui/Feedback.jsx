@@ -84,7 +84,11 @@ const TONES = {
   warn: "bg-warn-bg text-warn",
   danger: "bg-danger-bg text-danger",
   info: "bg-info-bg text-info",
-  accent: "bg-accent/20 text-accent-fg",
+  // Solid fill, not a tint: the accent lime is already high-luminance, so a
+  // soft 20%-opacity wash nearly disappeared on both a white card and a
+  // near-black one. This is the one tone meant to interrupt — a live pulse,
+  // a scarcity badge — so it gets full strength.
+  accent: "bg-accent text-accent-fg",
 };
 
 export function Badge({ tone = "neutral", icon, children, className }) {
