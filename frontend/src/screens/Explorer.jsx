@@ -127,7 +127,7 @@ export default function Explorer() {
               key={id}
               type="button"
               className={`h-11 rounded-full px-3.5 text-sm font-semibold transition ${
-                search.quand === id ? "bg-primary text-primary-fg" : "bg-paper text-ink hover:bg-brume"
+                search.quand === id ? "bg-action text-action-fg" : "bg-paper text-ink hover:bg-brume"
               }`}
               onClick={() => setSearch({ quand: search.quand === id ? "" : id })}
             >
@@ -280,7 +280,7 @@ export default function Explorer() {
               <span className="text-sm">{tf("pageOf", { p: page, t: pages })}</span>
               <button
                 type="button"
-                className="size-11 rounded-full bg-primary text-foam disabled:opacity-40"
+                className="size-11 rounded-full bg-action text-action-fg disabled:opacity-40"
                 disabled={page >= pages}
                 onClick={() => setSearch({ page: page + 1 })}
               >
@@ -329,7 +329,7 @@ function Chip({ active, children, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`h-11 shrink-0 rounded-full px-4 text-sm font-semibold ${active ? "bg-primary text-foam" : "border border-line/15 bg-card text-ink"}`}
+      className={`h-11 shrink-0 rounded-full px-4 text-sm font-semibold ${active ? "bg-action text-action-fg" : "border border-line/15 bg-card text-ink"}`}
     >
       {children}
     </button>

@@ -10,16 +10,21 @@ import { cn } from "../utils";
  * primary action that was Safran on Checkout but Lagon on the event page, so
  * nobody could learn what "the go colour" was.
  *
- * `variant` is now the only way to express intent, and the colour follows from
- * it: primary is always Lagon, danger is always Corail, and Safran is an
- * accent that never carries an action.
+ * `variant` is the only way to express intent. `primary` is NOT a brand
+ * colour fill here — per the v3 reference it is a near-black pill (near-white
+ * in dark mode) via the dedicated `--color-action` tokens, with pink reserved
+ * for the brand itself (logo, active nav, links, badges). A button never
+ * carries the brand colour as its own background; `brand` exists for the rare
+ * exception that genuinely wants it (a hero "get the app" style moment), and
+ * even then it is used sparingly on purpose.
  */
 
 const VARIANTS = {
-  primary: "bg-primary text-primary-fg hover:bg-primary-hover shadow-sm",
+  primary: "bg-action text-action-fg hover:bg-action-hover shadow-sm border border-line/10",
   secondary: "border border-line/20 bg-card text-ink hover:bg-paper",
   ghost: "text-primary hover:bg-brume",
   danger: "bg-danger text-danger-fg hover:brightness-110",
+  brand: "bg-primary text-primary-fg hover:bg-primary-hover shadow-sm",
   // Reads as a button on a dark photographic or encre background.
   inverse: "bg-foam/15 text-foam backdrop-blur-sm hover:bg-foam/25 border border-foam/25",
 };

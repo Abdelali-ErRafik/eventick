@@ -216,7 +216,7 @@ export default function Checkout() {
                   aria-current={step.active ? "step" : undefined}
                   className={
                     step.active
-                      ? "rounded-full bg-primary px-3 py-1.5 text-primary-fg"
+                      ? "rounded-full bg-action px-3 py-1.5 text-action-fg"
                       : step.done
                         ? "rounded-full bg-brume px-3 py-1.5 text-primary"
                         : "rounded-full bg-paper px-3 py-1.5 text-muted"

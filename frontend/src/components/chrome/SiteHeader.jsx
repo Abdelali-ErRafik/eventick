@@ -408,7 +408,7 @@ export function SiteHeader({ overlay = false }) {
                       aria-pressed={locale === code}
                       className={cn(
                         "h-10 flex-1 rounded-control text-xs font-extrabold transition",
-                        locale === code ? "bg-primary text-primary-fg" : "bg-paper text-muted",
+                        locale === code ? "bg-action text-action-fg" : "bg-paper text-muted",
                       )}
                     >
                       {t(LOCALE_LABELS[code])}
@@ -462,7 +462,7 @@ function LocaleRow({ locale, setLocale, t }) {
             aria-pressed={locale === code}
             className={cn(
               "h-9 flex-1 rounded-control text-xs font-extrabold transition",
-              locale === code ? "bg-primary text-primary-fg" : "bg-paper text-muted hover:text-ink",
+              locale === code ? "bg-action text-action-fg" : "bg-paper text-muted hover:text-ink",
             )}
           >
             {t(LOCALE_LABELS[code])}

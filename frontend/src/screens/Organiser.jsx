@@ -258,7 +258,7 @@ function OrganiserInner() {
                 {t("briefLabel")}
                 <textarea className="field field-area mt-1" value={instruction} placeholder={t("briefHint")} onChange={(e) => setInstruction(e.target.value)} />
               </label>
-              <button type="button" className="h-11 rounded-full bg-primary px-4 text-sm font-semibold text-foam md:col-span-2" onClick={applyInstruction}>
+              <button type="button" className="h-11 rounded-full bg-action px-4 text-sm font-semibold text-action-fg md:col-span-2" onClick={applyInstruction}>
                 {t("briefApply")}
               </button>
               <label className="text-sm md:col-span-2">

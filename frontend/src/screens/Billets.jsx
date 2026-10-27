@@ -139,7 +139,7 @@ function BilletsInner() {
               type="button"
               aria-current={tab === id ? "true" : undefined}
               className={`h-11 shrink-0 rounded-full px-4 text-sm font-semibold transition ${
-                tab === id ? "bg-primary text-primary-fg" : "bg-card text-ink hover:bg-brume"
+                tab === id ? "bg-action text-action-fg" : "bg-card text-ink hover:bg-brume"
               }`}
               onClick={() => setTab(id)}
             >

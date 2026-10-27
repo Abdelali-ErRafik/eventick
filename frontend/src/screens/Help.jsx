@@ -25,7 +25,7 @@ export default function Help() {
           ))}
         </div>
         <a
-          className="mt-6 inline-flex h-12 items-center rounded-full bg-primary px-5 text-sm font-semibold text-foam"
+          className="mt-6 inline-flex h-12 items-center rounded-full bg-action px-5 text-sm font-semibold text-action-fg"
           href="https://wa.me/212537001122"
           target="_blank"
           rel="noreferrer"

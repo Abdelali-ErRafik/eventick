@@ -122,10 +122,12 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
                         cn(
                           "group relative flex items-center gap-3 rounded-control py-2.5 text-sm font-semibold transition",
                           collapsed ? "justify-center px-0" : "px-3",
-                          // Solid fill for the active row, not a soft tint —
-                          // one clear "you are here" instead of the previous
-                          // brume wash, which barely separated from hover.
-                          isActive ? "bg-primary text-primary-fg" : "text-muted hover:bg-sunken hover:text-ink",
+                          // Solid violet fill for the active row — matches the
+                          // reference dashboard's nav exactly (pink is kept
+                          // for the brand mark/avatar so the two read as
+                          // distinct, deliberate colours rather than one hue
+                          // used for everything).
+                          isActive ? "bg-secondary text-secondary-fg" : "text-muted hover:bg-sunken hover:text-ink",
                         )
                       }
                     >
@@ -142,7 +144,7 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
                               <span
                                 className={cn(
                                   "min-w-5 shrink-0 rounded-full px-1.5 text-center text-[11px] font-bold tabular-nums",
-                                  isActive ? "bg-primary-fg/20 text-primary-fg" : "bg-accent text-accent-fg",
+                                  isActive ? "bg-secondary-fg/20 text-secondary-fg" : "bg-accent text-accent-fg",
                                 )}
                               >
                                 {item.badge > 99 ? "99+" : item.badge}

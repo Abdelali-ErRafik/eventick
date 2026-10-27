@@ -1,99 +1,129 @@
 @import "tailwindcss";
 
 /*
- * Eventick 2026 — Visual identity v2.
+ * Eventick 2026 — Visual identity v3.
  *
- * Replaces the teal/yellow/navy charte entirely: indigo/violet primary,
- * near-black/near-white surfaces, one vivid lime accent reserved for the
- * moments that need to pop (a live badge, a highlight, a QR "valid" chip).
- * Every component already reads these through semantic names
- * (--color-primary, --color-accent, --color-ink…) rather than a brand name,
- * so this file is the ONLY place the palette lives — nothing downstream
- * should ever need to change for a colour decision made here.
+ * Reference: a webook.com-style ticketing look — near-black surfaces, a hot
+ * pink/magenta brand mark, a violet secondary used for small highlights, and
+ * WHITE pill buttons as the primary action pattern rather than a colour fill.
+ * That last point is a real structural change, not a palette swap: the
+ * button is `--et-action` (near-white / near-black depending on theme), and
+ * `--et-primary` (pink) is now reserved for brand moments — the logo, active
+ * nav, links, small badges — never a call-to-action background.
+ *
+ * Every component reads these through semantic names, so this file is still
+ * the only place a colour decision lives.
  */
 
 :root {
-  /* Surfaces — a cooler, slightly blue-tinted neutral scale instead of the
-   * old warm paper/card pairing. */
-  --et-paper: #f5f5fa;
+  /* Surfaces: warm-neutral off-white, not the previous blue-tinted gray. */
+  --et-paper: #f7f6f9;
   --et-card: #ffffff;
-  --et-brume: #ece9fe;
-  --et-brume-deep: #ded8fd;
-  --et-encre: #0b0b14;
-  --et-ink: #0f0f1a;
-  --et-muted: #5b5b72;
-  --et-mist: #c6c6d6;
-  --et-line: #0b0b14;
+  --et-brume: #fbe4ee;
+  --et-brume-deep: #f6c9dc;
+  --et-encre: #141418;
+  --et-ink: #17171c;
+  --et-muted: #5f5f6b;
+  --et-mist: #c9c9d2;
+  --et-line: #141418;
   --et-foam: #ffffff;
   --et-line-alpha: 0.1;
-  --et-shadow-alpha: 0.07;
+  --et-shadow-alpha: 0.08;
 
-  /* Primary — indigo/violet, the one "go" colour. Deliberately cooler and
-   * more saturated than the old teal so it reads as a different product at
-   * a glance, not a tint shift. */
-  --et-primary: #5b3df6;
-  --et-primary-hover: #4a2fe0;
+  /* Brand — hot pink/magenta. Logo, active states, links, small badges.
+   * Darker than the dark-mode value on purpose: it has to clear 4.5:1 as
+   * TEXT on a near-white card, which the vivid dark-mode shade cannot. */
+  --et-primary: #d6246e;
+  --et-primary-hover: #b81b5c;
   --et-primary-fg: #ffffff;
 
-  /* Accent — electric lime, reserved for the handful of moments that must
-   * pop (a live pulse, a scarcity badge, a "valid" chip). It is never a
-   * button colour: that rule survives the repaint. */
+  /* Secondary — violet. Used alongside pink for badges and small highlights,
+   * never alone as an action colour. */
+  --et-secondary: #6d28d9;
+  --et-secondary-fg: #ffffff;
+
+  /* Accent — kept from v2 for scarcity/live-pulse badges, the one place a
+   * third colour earns its keep. */
   --et-accent: #c6f135;
   --et-accent-fg: #0b0b14;
 
+  /*
+   * The primary ACTION colour — what "Book", "Pay", "Search" sit on.
+   * Per the reference this is not a brand colour at all: a near-black pill
+   * with white text in light mode, inverted to a near-white pill with black
+   * text in dark mode. The one color decision that changed shape, not just
+   * hue, in this revision.
+   */
+  --et-action: #141418;
+  --et-action-hover: #000000;
+  --et-action-fg: #ffffff;
+
   --et-success: #15803d;
   --et-success-bg: #e8f8ee;
-  --et-success-fg: #ffffff;  /* now clears 5.02:1 against #15803d */
+  --et-success-fg: #ffffff;
   --et-warn: #b45309;
   --et-warn-bg: #fdf1dc;
   --et-warn-fg: #ffffff;
   --et-danger: #e0304a;
   --et-danger-bg: #fdeaed;
-  /* White on light-mode danger clears AA (4.48, just over 4.5 with rounding)
-   * but white on DARK-mode danger (a lightened #ff6b7f, chosen to read on a
-   * dark background, not to host text itself) fails outright at 2.74:1. This
-   * is what bg-danger text-white resolves to on the hold-expired countdown
-   * and two gate-refusal verdicts -- so it gets its own paired foreground,
-   * same as primary/accent. */
   --et-danger-fg: #ffffff;
   --et-info: #2a5cdb;
   --et-info-bg: #e9eefc;
   --et-info-fg: #ffffff;
 
-  --et-surface-sunken: #ececf4;
+  --et-surface-sunken: #efeef2;
   --et-surface-raised: #ffffff;
 
   color-scheme: light;
 }
 
-/* Dark: a true near-black rather than the old deep-navy, so it reads as a
- * different surface language, not the same card with the lights off. */
+/*
+ * Dark: near-black rather than true #000 — "Near-black dark gray" per the
+ * agreed direction. Reads as black at a glance, without the OLED-glow effect
+ * pure black gives large text blocks, and gentler over a long dashboard
+ * session than the reference's literal #0a0a0a.
+ */
 :root[data-theme="dark"] {
-  --et-paper: #09090f;
-  --et-card: #16161f;
-  --et-brume: #211c3d;
-  --et-brume-deep: #2c2552;
-  --et-encre: #f3f3f8;
-  --et-ink: #f3f3f8;
-  --et-muted: #9d9db3;
-  --et-mist: #5f5f76;
-  --et-line: #9d9db3;
-  --et-foam: #09090f;
-  --et-line-alpha: 0.16;
-  --et-shadow-alpha: 0.55;
+  --et-paper: #0d0d10;
+  --et-card: #161619;
+  --et-brume: #3a1226;
+  --et-brume-deep: #4d1831;
+  --et-encre: #f5f5f7;
+  --et-ink: #f5f5f7;
+  --et-muted: #a3a3ad;
+  --et-mist: #5c5c68;
+  --et-line: #a3a3ad;
+  --et-foam: #0d0d10;
+  --et-line-alpha: 0.14;
+  --et-shadow-alpha: 0.6;
 
-  --et-primary: #9b85ff;
-  --et-primary-hover: #b2a1ff;
-  /* Dark text on the lightened dark-mode primary is what clears 4.5:1. */
-  --et-primary-fg: #140e33;
+  /* Full-saturation pink reads correctly as a dark-surface accent; it only
+   * needed darkening to survive as light-mode TEXT, not here. */
+  --et-primary: #f2176a;
+  --et-primary-hover: #ff3d82;
+  --et-primary-fg: #ffffff;
+
+  /* Same value as light mode (#6d28d9), not a lightened dark-mode variant:
+   * `secondary` is only ever used as a FILLED background with white text
+   * (the active sidebar item), never as standalone text on a card, so it
+   * does not need the lighter "pops as text" treatment primary/danger have.
+   * A lighter violet here looked right as text but only cleared 3.17:1
+   * carrying white, well under 4.5. */
+  --et-secondary: #6d28d9;
+  --et-secondary-fg: #ffffff;
+
   --et-accent: #c6f135;
   --et-accent-fg: #0b0b14;
+
+  /* Inverted action pill: near-white pill, near-black text — the mirror of
+   * light mode's near-black pill, so the pattern stays "the pill is the
+   * opposite of the page" in both themes rather than picking one hue. */
+  --et-action: #f5f5f7;
+  --et-action-hover: #ffffff;
+  --et-action-fg: #0d0d10;
+
   --et-success: #34d373;
   --et-success-bg: #123420;
-  /* All three of success/warn/info are light "pop" colours even in dark
-   * mode, chosen to read AS TEXT ON the dark surface -- so none of them
-   * clear 4.5:1 carrying white ON them, the same problem found with danger.
-   * success+white 1.96, warn+white 1.74, info+white 2.56: all fail outright. */
   --et-success-fg: #04190c;
   --et-warn: #ffb648;
   --et-warn-bg: #3a2a0c;
@@ -105,32 +135,46 @@
   --et-info-bg: #16203f;
   --et-info-fg: #0b1433;
 
-  --et-surface-sunken: #060609;
-  --et-surface-raised: #1d1d2c;
+  --et-surface-sunken: #08080a;
+  --et-surface-raised: #1d1d22;
 
   color-scheme: dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --et-paper: #09090f;
-    --et-card: #16161f;
-    --et-brume: #211c3d;
-    --et-brume-deep: #2c2552;
-    --et-encre: #f3f3f8;
-    --et-ink: #f3f3f8;
-    --et-muted: #9d9db3;
-    --et-mist: #5f5f76;
-    --et-line: #9d9db3;
-    --et-foam: #09090f;
-    --et-line-alpha: 0.16;
-    --et-shadow-alpha: 0.55;
+    --et-paper: #0d0d10;
+    --et-card: #161619;
+    --et-brume: #3a1226;
+    --et-brume-deep: #4d1831;
+    --et-encre: #f5f5f7;
+    --et-ink: #f5f5f7;
+    --et-muted: #a3a3ad;
+    --et-mist: #5c5c68;
+    --et-line: #a3a3ad;
+    --et-foam: #0d0d10;
+    --et-line-alpha: 0.14;
+    --et-shadow-alpha: 0.6;
 
-    --et-primary: #9b85ff;
-    --et-primary-hover: #b2a1ff;
-    --et-primary-fg: #140e33;
+    --et-primary: #f2176a;
+    --et-primary-hover: #ff3d82;
+    --et-primary-fg: #ffffff;
+
+    /* Same value as light mode: `secondary` is only ever a FILLED
+     * background with white text (the active sidebar item), never
+     * standalone text, so it doesn't need a lightened dark-mode variant —
+     * a lighter violet read fine as text but only cleared 3.17:1 carrying
+     * white, under the 4.5 floor. */
+    --et-secondary: #6d28d9;
+    --et-secondary-fg: #ffffff;
+
     --et-accent: #c6f135;
     --et-accent-fg: #0b0b14;
+
+    --et-action: #f5f5f7;
+    --et-action-hover: #ffffff;
+    --et-action-fg: #0d0d10;
+
     --et-success: #34d373;
     --et-success-bg: #123420;
     --et-success-fg: #04190c;
@@ -144,18 +188,14 @@
     --et-info-bg: #16203f;
     --et-info-fg: #0b1433;
 
-    --et-surface-sunken: #060609;
-    --et-surface-raised: #1d1d2c;
+    --et-surface-sunken: #08080a;
+    --et-surface-raised: #1d1d22;
 
     color-scheme: dark;
   }
 }
 
 @theme {
-  /* New pairing: Space Grotesk (display) is geometric and distinctive —
-   * nothing like Bricolage Grotesque's warm, rounded forms. Inter (body)
-   * replaces Instrument Sans with the current SaaS-default workhorse.
-   * JetBrains Mono replaces DM Mono for refs and numerals. */
   --font-sans: "Inter", "Noto Sans Arabic", system-ui, sans-serif;
   --font-display: "Space Grotesk", "Noto Sans Arabic", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
@@ -171,13 +211,18 @@
   --color-mist: var(--et-mist);
   --color-line: var(--et-line);
   --color-foam: var(--et-foam);
-  --color-night: #060609;
+  --color-night: #000000;
 
   --color-primary: var(--et-primary);
   --color-primary-hover: var(--et-primary-hover);
   --color-primary-fg: var(--et-primary-fg);
+  --color-secondary: var(--et-secondary);
+  --color-secondary-fg: var(--et-secondary-fg);
   --color-accent: var(--et-accent);
   --color-accent-fg: var(--et-accent-fg);
+  --color-action: var(--et-action);
+  --color-action-hover: var(--et-action-hover);
+  --color-action-fg: var(--et-action-fg);
   --color-success: var(--et-success);
   --color-success-bg: var(--et-success-bg);
   --color-success-fg: var(--et-success-fg);
@@ -193,9 +238,6 @@
   --color-sunken: var(--et-surface-sunken);
   --color-raised: var(--et-surface-raised);
 
-  /* Sharper, less diffuse shadows than the old charte — closer to a hard
-   * offset than a soft glow, part of the new, more geometric surface
-   * language. */
   --shadow-card: 0 1px 2px rgb(5 5 15 / calc(var(--et-shadow-alpha) * 1.4)), 0 1px 1px rgb(5 5 15 / var(--et-shadow-alpha));
   --shadow-pop: 0 8px 24px -4px rgb(5 5 15 / calc(var(--et-shadow-alpha) * 2.2));
   --shadow-modal: 0 24px 64px -12px rgb(5 5 15 / calc(var(--et-shadow-alpha) * 3.5));
@@ -219,12 +261,12 @@
   --size-control-md: 2.75rem;
   --size-control-lg: 3.25rem;
 
-  /* A tighter, more geometric radius scale — fewer full pills, more
-   * deliberately-rounded rectangles. Used by the new .surface/.btn-shape
-   * conventions below rather than ad-hoc rounded-* calls everywhere. */
-  --radius-control: 0.625rem;
-  --radius-card: 1rem;
-  --radius-panel: 1.25rem;
+  /* Sharper than v2: closer to the reference's near-square cards and fully
+   * pill-shaped buttons, with one card radius in between rather than a
+   * three-step scale that was barely distinguishable. */
+  --radius-control: 0.5rem;
+  --radius-card: 0.875rem;
+  --radius-panel: 1.125rem;
 }
 
 @layer base {
@@ -280,8 +322,8 @@
   }
 
   ::selection {
-    background: var(--color-accent);
-    color: var(--color-accent-fg);
+    background: var(--color-primary);
+    color: var(--color-primary-fg);
   }
 }
 
@@ -342,10 +384,10 @@
     --et-paper: #ffffff;
     --et-card: #ffffff;
     --et-foam: #ffffff;
-    --et-encre: #0b0b14;
-    --et-ink: #0b0b14;
-    --et-muted: #5b5b72;
-    --et-primary: #5b3df6;
+    --et-encre: #141418;
+    --et-ink: #141418;
+    --et-muted: #5f5f6b;
+    --et-primary: #d6246e;
     color-scheme: light;
   }
 

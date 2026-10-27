@@ -127,7 +127,7 @@ export function Topbar({ title, onOpenNav, user, onLogout, theme, onToggleTheme,
                     aria-pressed={locale === code}
                     className={cn(
                       "h-9 flex-1 rounded-control text-xs font-bold transition",
-                      locale === code ? "bg-primary text-primary-fg" : "bg-sunken text-muted hover:text-ink",
+                      locale === code ? "bg-action text-action-fg" : "bg-sunken text-muted hover:text-ink",
                     )}
                   >
                     {localeShort[code]}
