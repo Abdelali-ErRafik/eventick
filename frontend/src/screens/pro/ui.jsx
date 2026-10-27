@@ -7,7 +7,8 @@
 //
 // What stays below is genuinely dashboard-only: the data table, the stat card,
 // and the table cell renderers.
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useState } from "react";
+import { ChevronLeft, ChevronRight, Info, Search, X } from "lucide-react";
 import { cn } from "../../utils";
 import { Badge, Button, Card, EmptyState, IconButton, Modal, Skeleton } from "../../ui";
 
@@ -39,6 +40,34 @@ export function SectionTitle({ children, action }) {
   );
 }
 
+
+/** A hover/focus tooltip for a stat label whose meaning is not obvious at a
+ * glance. Positioned with inset-inline + margin:auto rather than
+ * `start-1/2 -translate-x-1/2`: a negative translate-x does not mirror under
+ * RTL, so that approach drifted off-centre in Arabic. */
+export function InfoTip({ text }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-flex">
+      <button
+        type="button"
+        aria-label={text}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        className="inline-flex size-4 items-center justify-center rounded-full text-muted transition hover:text-primary"
+      >
+        <Info className="size-3.5" />
+      </button>
+      {open ? (
+        <span className="absolute bottom-full z-50 mb-1.5 inset-inline-0 mx-auto w-56 rounded-lg bg-encre px-3 py-2 text-xs font-medium normal-case tracking-normal text-foam shadow-pop">
+          {text}
+        </span>
+      ) : null}
+    </span>
+  );
+}
 
 export function StatCard({ icon, label, value, sub, trend, accent, info }) {
   return (
@@ -86,6 +115,37 @@ export function StatCard({ icon, label, value, sub, trend, accent, info }) {
 
 
 /** Filter toolbar: search + labelled controls + active-count reset. */
+/** The search box FilterBar renders when given a `search` prop. Removed
+ * once as a "dead export" because nothing outside this file called it
+ * directly -- missing that FilterBar calls it internally, which would have
+ * thrown the same ReferenceError InfoTip did, on Events and Orders, the
+ * moment either filter bar rendered with a search prop. */
+export function SearchInput({ value, onChange, placeholder, onSubmit }) {
+  return (
+    <form
+      role="search"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit?.();
+      }}
+      className="relative flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-full border border-line/20 bg-card px-4 transition focus-within:border-primary focus-within:ring-[3px] focus-within:ring-primary/15 sm:max-w-sm"
+    >
+      <Search className="size-4 shrink-0 text-primary" aria-hidden />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="min-w-0 flex-1 border-none bg-transparent text-sm outline-none"
+      />
+      {value ? (
+        <button type="button" onClick={() => onChange("")} aria-label="clear" className="shrink-0 rounded text-muted transition hover:text-ink">
+          <X className="size-4" />
+        </button>
+      ) : null}
+    </form>
+  );
+}
+
 export function FilterBar({ search, controls = [], activeCount = 0, onReset, resetLabel, actions }) {
   return (
     <div className="mb-4 rounded-xl border border-line/10 bg-card p-4 shadow-card">
