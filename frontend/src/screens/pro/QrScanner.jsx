@@ -116,7 +116,7 @@ export default function QrScanner({ onScan, paused }) {
 
   return (
     <div>
-      <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-encre">
+      <div className="relative aspect-video w-full overflow-hidden rounded-card bg-encre">
         <video ref={videoRef} playsInline muted className="size-full object-cover" />
         <canvas ref={canvasRef} className="hidden" />
 

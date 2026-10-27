@@ -99,14 +99,14 @@ export function Modal({ open, onClose, title, sub, icon, children, footer, size 
         className={cn(
           "flex max-h-[92vh] w-full flex-col overflow-hidden bg-card shadow-modal outline-none",
           // A bottom sheet on phones, a centred dialog from sm up.
-          "rounded-t-2xl sm:rounded-2xl",
+          "rounded-t-panel sm:rounded-panel",
           widths[size],
         )}
       >
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line/10 px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
             {icon ? (
-              <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-brume text-primary" aria-hidden>
+              <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-control bg-brume text-primary" aria-hidden>
                 {icon}
               </span>
             ) : null}

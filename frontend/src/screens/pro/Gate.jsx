@@ -206,7 +206,7 @@ export default function Gate() {
         </Notice>
       ) : null}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-line/10 bg-card p-3 shadow-card">
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-card border border-line/10 bg-card p-3 shadow-card">
         <Badge tone={online ? "success" : "warn"}>
           {online ? t.online : t.offline}
         </Badge>
@@ -218,7 +218,7 @@ export default function Gate() {
         {queued > 0 ? <Badge tone="warn">{t.queuedScans.replace("{n}", String(queued))}</Badge> : null}
         <div className="ms-auto flex flex-wrap items-center gap-2">
           <select
-            className="h-10 rounded-xl border border-line/20 bg-card px-3 text-sm outline-none focus:border-primary"
+            className="h-10 rounded-control border border-line/20 bg-card px-3 text-sm outline-none focus:border-primary"
             defaultValue=""
             onChange={(e) => { if (e.target.value) downloadManifest(e.target.value); e.target.value = ""; }}
           >
@@ -239,7 +239,7 @@ export default function Gate() {
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr] lg:items-start">
         <Card className="bg-encre text-foam">
           <div className="flex items-center gap-3">
-            <span className="inline-flex size-10 items-center justify-center rounded-xl bg-foam/10 text-accent" aria-hidden>
+            <span className="inline-flex size-10 items-center justify-center rounded-control bg-foam/10 text-accent" aria-hidden>
               <QrCode className="size-5" />
             </span>
             <div>
@@ -258,7 +258,7 @@ export default function Gate() {
                   onChange={(e) => setRef(e.target.value)}
                   placeholder="ET-2027-GA6DAV66RQ"
                   autoFocus
-                  className="h-14 w-full rounded-xl border border-foam/20 bg-foam px-4 font-mono text-lg text-encre outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/30"
+                  className="h-14 w-full rounded-control border border-foam/20 bg-foam px-4 font-mono text-lg text-encre outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/30"
                 />
                 <button
                   type="submit"
@@ -302,7 +302,7 @@ export default function Gate() {
           ) : (
             <ul className="grid gap-2">
               {log.map((entry, i) => (
-                <li key={`${entry.ref}-${i}`} className="flex items-center justify-between gap-3 rounded-lg bg-paper px-3 py-2.5">
+                <li key={`${entry.ref}-${i}`} className="flex items-center justify-between gap-3 rounded-control bg-paper px-3 py-2.5">
                   <PersonCell
                     name={entry.holder || entry.ref}
                     sub={entry.at.toLocaleTimeString(locale === "ar" ? "ar-MA" : "fr-FR", { hour: "2-digit", minute: "2-digit" })}

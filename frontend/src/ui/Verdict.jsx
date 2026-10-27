@@ -18,25 +18,25 @@ import { cn } from "../utils";
 
 const OUTCOMES = {
   ok: {
-    skin: "bg-success text-white",
+    skin: "bg-success text-success-fg",
     icon: CheckCircle2,
   },
   used: {
     // Amber, not red: the ticket was genuine, it has simply been scanned
     // already. Staff need to treat that differently from a forgery.
-    skin: "bg-warn text-white",
+    skin: "bg-warn text-warn-fg",
     icon: RotateCcw,
   },
   cancelled: {
-    skin: "bg-danger text-white",
+    skin: "bg-danger text-danger-fg",
     icon: Ban,
   },
   moved: {
-    skin: "bg-info text-white",
+    skin: "bg-info text-info-fg",
     icon: CircleSlash,
   },
   invalid: {
-    skin: "bg-danger text-white",
+    skin: "bg-danger text-danger-fg",
     icon: ShieldAlert,
   },
   missing: {
@@ -53,7 +53,7 @@ export function Verdict({ code, headline, detail, holder, ticketRef, idleLabel, 
   return (
     <div
       className={cn(
-        "flex items-center gap-4 rounded-2xl px-5 py-6 sm:px-6 sm:py-7",
+        "flex items-center gap-4 rounded-card px-5 py-6 sm:px-6 sm:py-7",
         idle ? "bg-sunken text-muted" : outcome.skin,
         className,
       )}

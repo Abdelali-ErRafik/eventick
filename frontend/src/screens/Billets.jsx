@@ -153,7 +153,7 @@ function BilletsInner() {
         {tab === "active" ? (
           <div className="mt-6 space-y-4">
             {next ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-brume px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-card bg-brume px-4 py-3">
                 <p className="font-semibold text-primary">{nextLabel}</p>
                 <Link to={`/billet/${next.id}`} className="inline-flex h-11 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover">
                   {t("showPass")}
@@ -177,7 +177,7 @@ function BilletsInner() {
         ) : null}
 
         {tab === "past" ? (
-          <div className="mt-6 overflow-x-auto rounded-xl border border-line/10 bg-card">
+          <div className="mt-6 overflow-x-auto rounded-card border border-line/10 bg-card">
             <div className="flex items-center justify-between p-4">
               <h2 className="font-display text-xl font-bold">{t("historyTitle")}</h2>
               <button type="button" className="h-11 rounded-full border border-line/20 bg-card px-4 text-sm font-semibold transition hover:bg-paper" onClick={exportCsv}>
@@ -228,7 +228,7 @@ function BilletsInner() {
         ) : null}
 
         <section className="mt-8 grid gap-4 lg:grid-cols-2">
-          <article className="rounded-xl border border-line/10 bg-card p-4 shadow-card">
+          <article className="rounded-card border border-line/10 bg-card p-4 shadow-card">
             <h2 className="font-display text-xl font-bold">{t("lastTx")}</h2>
             {latest ? (
               <>
@@ -250,7 +250,7 @@ function BilletsInner() {
               <p className="mt-2 text-sm text-muted">{t("noPast")}</p>
             )}
           </article>
-          <article className="rounded-xl border border-line/10 bg-card p-4 shadow-card">
+          <article className="rounded-card border border-line/10 bg-card p-4 shadow-card">
             <h2 className="font-display text-xl font-bold">{t("edit")}</h2>
             {editingName ? (
               <form className="mt-3 grid gap-2" onSubmit={saveName}>
@@ -312,7 +312,7 @@ function BilletsInner() {
 
 function Mini({ value, label }) {
   return (
-    <div className="rounded-xl bg-foam/10 px-3 py-2 text-center">
+    <div className="rounded-card bg-foam/10 px-3 py-2 text-center">
       <p className="font-display text-lg font-extrabold tabular-nums">{value}</p>
       <p className="text-xs text-mist">{label}</p>
     </div>
@@ -321,8 +321,8 @@ function Mini({ value, label }) {
 
 function SmallTicket({ ticket, locale, t, onTransfer }) {
   return (
-    <article className="flex gap-3 rounded-xl border border-line/10 bg-card p-3 shadow-card">
-      <img src={ticket.event.image} alt="" className="size-20 rounded-lg object-cover" />
+    <article className="flex gap-3 rounded-card border border-line/10 bg-card p-3 shadow-card">
+      <img src={ticket.event.image} alt="" className="size-20 rounded-control object-cover" />
       <div className="min-w-0 flex-1">
         <h3 className="font-display font-bold">{locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr}</h3>
         <p className="text-sm text-muted">{ticket.event.city}</p>

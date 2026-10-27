@@ -73,7 +73,7 @@ export default function Finance() {
             onClick={() => setPlan(item.id)}
             className={cn(
               "h-11 rounded-full border px-4 text-sm font-semibold transition",
-              plan === item.id ? "border-primary bg-primary text-white" : "border-line/20 bg-card text-muted hover:border-primary hover:bg-brume hover:text-primary",
+              plan === item.id ? "border-primary bg-primary text-primary-fg" : "border-line/20 bg-card text-muted hover:border-primary hover:bg-brume hover:text-primary",
             )}
           >
             {item.label}

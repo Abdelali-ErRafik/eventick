@@ -182,7 +182,7 @@ export function SiteHeader({ overlay = false }) {
                   onKeyDown={(event) => event.key === "Enter" && submitSearch(close)}
                   placeholder={t("searchPh")}
                   aria-label={t("searchPh")}
-                  className="h-11 w-full rounded-xl border border-line/15 bg-card px-4 text-sm outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/20"
+                  className="h-11 w-full rounded-control border border-line/15 bg-card px-4 text-sm outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/20"
                 />
                 {results.length > 0 ? (
                   <ul className="mt-2 grid gap-0.5">
@@ -191,7 +191,7 @@ export function SiteHeader({ overlay = false }) {
                         <Link
                           to={`/evenements/${event.slug}`}
                           onClick={close}
-                          className="block rounded-lg px-3 py-2 transition hover:bg-paper"
+                          className="block rounded-control px-3 py-2 transition hover:bg-paper"
                         >
                           <span className="block truncate text-sm font-semibold">
                             {locale === "ar" ? event.titleAr : event.titleFr}
@@ -355,7 +355,7 @@ export function SiteHeader({ overlay = false }) {
                     <Link
                       to={item.to}
                       onClick={() => setMenuOpen(false)}
-                      className="block rounded-xl px-3 py-3 text-[15px] font-semibold transition hover:bg-paper"
+                      className="block rounded-control px-3 py-3 text-[15px] font-semibold transition hover:bg-paper"
                     >
                       {t(item.key)}
                     </Link>
@@ -365,7 +365,7 @@ export function SiteHeader({ overlay = false }) {
                   <Link
                     to="/billets"
                     onClick={() => setMenuOpen(false)}
-                    className="block rounded-xl px-3 py-3 text-[15px] font-semibold transition hover:bg-paper"
+                    className="block rounded-control px-3 py-3 text-[15px] font-semibold transition hover:bg-paper"
                   >
                     {t("account")}
                   </Link>
@@ -407,7 +407,7 @@ export function SiteHeader({ overlay = false }) {
                       onClick={() => setLocale(code)}
                       aria-pressed={locale === code}
                       className={cn(
-                        "h-10 flex-1 rounded-xl text-xs font-extrabold transition",
+                        "h-10 flex-1 rounded-control text-xs font-extrabold transition",
                         locale === code ? "bg-primary text-primary-fg" : "bg-paper text-muted",
                       )}
                     >
@@ -461,7 +461,7 @@ function LocaleRow({ locale, setLocale, t }) {
             onClick={() => setLocale(code)}
             aria-pressed={locale === code}
             className={cn(
-              "h-9 flex-1 rounded-lg text-xs font-extrabold transition",
+              "h-9 flex-1 rounded-control text-xs font-extrabold transition",
               locale === code ? "bg-primary text-primary-fg" : "bg-paper text-muted hover:text-ink",
             )}
           >

@@ -66,7 +66,7 @@ export default function ClaimShare() {
       <Shell>
         <div className="mx-auto max-w-xl px-4 py-12 text-center">
           <h1 className="font-display text-2xl font-black">{t("claimDone")}</h1>
-          <div className="mt-6 inline-block rounded-2xl border border-line/10 bg-card p-6">
+          <div className="mt-6 inline-block rounded-card border border-line/10 bg-card p-6">
             <QrMark value={claimed.qrPayload} />
             <p className="mt-3 font-mono text-xs tracking-widest text-muted">{claimed.ref}</p>
           </div>
@@ -96,7 +96,7 @@ export default function ClaimShare() {
         <h1 className="font-display text-2xl font-black">{t("claimTitle")}</h1>
         <p className="mt-1 text-sm text-muted">{t("claimFrom").replace("{n}", offer.senderName)}</p>
 
-        <section className="mt-6 overflow-hidden rounded-2xl border border-line/10 bg-card">
+        <section className="mt-6 overflow-hidden rounded-card border border-line/10 bg-card">
           {offer.eventImage ? (
             <img src={offer.eventImage} alt="" className="h-40 w-full object-cover" />
           ) : null}
@@ -115,7 +115,7 @@ export default function ClaimShare() {
               {offer.seatRow ? ` · ${offer.seatRow}${offer.seatNumber}` : ""}
             </p>
             {offer.message ? (
-              <p className="mt-3 rounded-lg bg-paper px-3 py-2 text-sm italic">“{offer.message}”</p>
+              <p className="mt-3 rounded-control bg-paper px-3 py-2 text-sm italic">“{offer.message}”</p>
             ) : null}
           </div>
         </section>
@@ -130,7 +130,7 @@ export default function ClaimShare() {
             onChange={(event) => setName(event.target.value)}
             required
             minLength={3}
-            className="mt-2 h-12 w-full rounded-xl border border-line/15 bg-card px-4 text-sm outline-none transition focus:border-primary focus:ring-[3px] focus:ring-primary/20"
+            className="mt-2 h-12 w-full rounded-control border border-line/15 bg-card px-4 text-sm outline-none transition focus:border-primary focus:ring-[3px] focus:ring-primary/20"
           />
           <Button type="submit" full size="lg" className="mt-4" loading={busy} disabled={name.trim().length < 3}>
             {t("claimAccept")}

@@ -132,7 +132,7 @@ export default function Placements() {
         actions={
           <>
             <select
-              className="h-11 rounded-xl border border-line/20 bg-card px-3 text-sm outline-none focus:border-primary"
+              className="h-11 rounded-control border border-line/20 bg-card px-3 text-sm outline-none focus:border-primary"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
             >

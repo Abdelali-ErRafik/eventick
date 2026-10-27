@@ -67,7 +67,7 @@ export function Field({
 }
 
 const CONTROL_BASE =
-  "block w-full rounded-xl border bg-card px-4 text-ink outline-none transition " +
+  "block w-full rounded-control border bg-card px-4 text-ink outline-none transition " +
   "duration-150 placeholder:text-mist disabled:cursor-not-allowed disabled:bg-sunken disabled:opacity-60";
 
 function controlClass(invalid, className) {

@@ -18,7 +18,7 @@ export default function Help() {
         <p className="mt-2 text-muted">{t("helpLead")}</p>
         <div className="mt-6 space-y-3">
           {FAQS.map(([q, a]) => (
-            <article key={q} className="rounded-xl border border-line/10 bg-card p-4 shadow-card">
+            <article key={q} className="rounded-card border border-line/10 bg-card p-4 shadow-card">
               <h2 className="font-display text-lg font-bold">{t(q)}</h2>
               <p className="mt-1 text-sm text-muted">{t(a)}</p>
             </article>

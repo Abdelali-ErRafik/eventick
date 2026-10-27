@@ -246,7 +246,7 @@ export default function Orders() {
                     to={`/billet/${ticket.id}`}
                     title={t.open}
                     aria-label={t.open}
-                    className="inline-flex size-9 items-center justify-center rounded-lg border border-line/15 bg-card text-muted transition hover:-translate-y-px hover:border-primary hover:bg-brume hover:text-primary"
+                    className="inline-flex size-9 items-center justify-center rounded-control border border-line/15 bg-card text-muted transition hover:-translate-y-px hover:border-primary hover:bg-brume hover:text-primary"
                   >
                     <ExternalLink className="size-4" />
                   </Link>

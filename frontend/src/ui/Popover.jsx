@@ -59,7 +59,7 @@ export function Popover({ label, trigger, align = "start", width = "w-56", child
         <div
           id={id}
           className={cn(
-            "absolute top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-2xl border border-line/10 bg-card text-ink shadow-modal",
+            "absolute top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-panel border border-line/10 bg-card text-ink shadow-modal",
             align === "end" ? "end-0" : "start-0",
             width,
             panelClassName,

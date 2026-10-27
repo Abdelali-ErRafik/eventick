@@ -38,7 +38,7 @@ export function TicketPass({ ticket, event, tier, priceCents, qrPayload }) {
   const seat = seatLabel(ticket, locale);
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-line/10 bg-card shadow-card">
+    <article className="overflow-hidden rounded-card border border-line/10 bg-card shadow-card">
       <div className="grid lg:grid-cols-[1fr_17rem]">
         {/* Stub */}
         <div className="min-w-0 p-5 md:p-6">
@@ -98,7 +98,7 @@ export function TicketPass({ ticket, event, tier, priceCents, qrPayload }) {
           />
 
           <Badge tone="success">{t("validEntry")}</Badge>
-          <div className="rounded-xl bg-white p-2.5 shadow-card">
+          <div className="rounded-control bg-white p-2.5 shadow-card">
             <QrMark value={qrPayload} />
           </div>
           <p className="max-w-48 text-center text-xs leading-relaxed text-muted">{t("brightness")}</p>
@@ -110,7 +110,7 @@ export function TicketPass({ ticket, event, tier, priceCents, qrPayload }) {
 
 function Meta({ label, value, hint }) {
   return (
-    <div className="min-w-0 rounded-xl bg-paper px-3.5 py-2.5">
+    <div className="min-w-0 rounded-control bg-paper px-3.5 py-2.5">
       <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</dt>
       <dd className="truncate font-semibold">{value}</dd>
       {hint ? <dd className="truncate text-sm text-muted">{hint}</dd> : null}

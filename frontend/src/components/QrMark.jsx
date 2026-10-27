@@ -25,7 +25,7 @@ export function QrMark({ value, className = "size-36" }) {
   }, [value]);
 
   if (!svg) {
-    return <div className={`${className} animate-pulse rounded-lg bg-brume`} />;
+    return <div className={`${className} animate-pulse rounded-control bg-brume`} />;
   }
 
   return <div className={`${className} [&>svg]:h-full [&>svg]:w-full`} dangerouslySetInnerHTML={{ __html: svg }} />;

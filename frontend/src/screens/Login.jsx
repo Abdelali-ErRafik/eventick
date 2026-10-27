@@ -162,7 +162,7 @@ export default function Login() {
                 </span>
               </label>
               {error ? (
-                <p role="alert" className="rounded-xl bg-danger/10 px-4 py-3 text-sm font-semibold text-danger">
+                <p role="alert" className="rounded-card bg-danger/10 px-4 py-3 text-sm font-semibold text-danger">
                   {error}
                 </p>
               ) : null}
@@ -206,7 +206,7 @@ export default function Login() {
                       type="button"
                       disabled={busy}
                       onClick={() => quickLogin(account)}
-                      className="rounded-xl border border-line/15 px-3 py-2.5 text-start transition hover:border-primary/40 hover:bg-paper disabled:opacity-50"
+                      className="rounded-control border border-line/15 px-3 py-2.5 text-start transition hover:border-primary/40 hover:bg-paper disabled:opacity-50"
                     >
                       <span className="block text-sm font-bold text-encre">{locale === "ar" ? account.labelAr : account.labelFr}</span>
                       <span className="block text-xs text-muted">{locale === "ar" ? account.roleAr : account.roleFr}</span>

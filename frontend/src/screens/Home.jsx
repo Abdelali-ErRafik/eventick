@@ -94,7 +94,7 @@ export default function Home() {
             <p className="mt-4 max-w-xl text-base text-mist lg:text-lg">{t("heroSub")}</p>
           </div>
           <form className="mt-8" onSubmit={submitSearch}>
-            <div className="grid gap-2 rounded-2xl bg-card p-3 text-ink shadow-pop md:grid-cols-[1fr_1fr_1fr_auto]">
+            <div className="grid gap-2 rounded-panel bg-card p-3 text-ink shadow-pop md:grid-cols-[1fr_1fr_1fr_auto]">
               <label className="block px-2">
                 <span className="text-xs font-semibold text-muted">{t("fieldType")}</span>
                 <select className="field mt-1 h-11" value={cat} onChange={(e) => setCat(e.target.value)}>
@@ -188,9 +188,9 @@ export default function Home() {
                 key={item.id}
                 type="button"
                 onClick={() => navigate(`/explorer?cat=${item.id}`)}
-                className="rounded-xl border border-line/10 bg-card p-4 text-start shadow-card transition snap-start hover:border-primary/40 hover:shadow-pop"
+                className="rounded-card border border-line/10 bg-card p-4 text-start shadow-card transition snap-start hover:border-primary/40 hover:shadow-pop"
               >
-                <span className="inline-flex size-11 items-center justify-center rounded-2xl bg-brume text-primary">
+                <span className="inline-flex size-11 items-center justify-center rounded-control bg-brume text-primary">
                   <Icon className="size-5" />
                 </span>
                 <p className="mt-3 font-display text-lg font-bold">{categoryLabel(item.id, t)}</p>
@@ -249,7 +249,7 @@ export default function Home() {
       </section>
 
       <section className="mx-auto max-w-7xl px-4 pb-4 md:px-8">
-        <div className="grid items-center gap-8 rounded-2xl bg-encre px-5 py-8 text-foam md:px-8 lg:grid-cols-2">
+        <div className="grid items-center gap-8 rounded-panel bg-encre px-5 py-8 text-foam md:px-8 lg:grid-cols-2">
           <div>
             <p className="text-sm font-semibold text-accent">{t("orgKicker")}</p>
             <h2 className="mt-2 font-display text-3xl font-extrabold md:text-display">{t("orgTitle")}</h2>
@@ -271,12 +271,12 @@ export default function Home() {
               </Button>
             </div>
           </div>
-          <div className="rounded-xl bg-card p-4 text-ink shadow-pop">
+          <div className="rounded-card bg-card p-4 text-ink shadow-pop">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-muted">{t("previewKicker")}</p>
               <span className="rounded-full bg-primary px-2 py-1 text-xs font-bold text-foam">{t("valid")}</span>
             </div>
-            <img src="/events/electro.jpg" alt="" className="mt-3 h-36 w-full rounded-lg object-cover" />
+            <img src="/events/electro.jpg" alt="" className="mt-3 h-36 w-full rounded-control object-cover" />
             <h3 className="mt-3 font-display text-xl font-extrabold">Casablanca Summer Beats</h3>
             <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
               <div>
@@ -301,7 +301,7 @@ export default function Home() {
 
 function Stat({ value, label }) {
   return (
-    <div className="rounded-xl bg-foam/10 p-3">
+    <div className="rounded-control bg-foam/10 p-3">
       <p className="font-display text-2xl font-extrabold text-accent">{value}</p>
       <p className="text-xs text-mist">{label}</p>
     </div>
@@ -311,7 +311,7 @@ function Stat({ value, label }) {
 function Trust({ icon, title, body }) {
   return (
     <article className="flex gap-4 sm:flex-col sm:gap-0 sm:border-s sm:border-line/10 sm:px-8 sm:text-center sm:first:border-s-0 sm:first:ps-0 sm:[&:last-child]:pe-0">
-      <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-2xl bg-brume text-primary sm:mx-auto">
+      <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-control bg-brume text-primary sm:mx-auto">
         {icon}
       </span>
       <div className="sm:mt-3">

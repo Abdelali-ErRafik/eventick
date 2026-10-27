@@ -43,7 +43,7 @@ export function EventCard({ event, variant = "grid" }) {
   const compact = variant === "compact";
 
   return (
-    <article className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-line/10 bg-card shadow-card transition duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-pop">
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-card border border-line/10 bg-card shadow-card transition duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-pop">
       <div className={cn("flex flex-1 flex-col", feature && "md:flex-row")}>
         <div className={cn("relative shrink-0 overflow-hidden", feature && "md:w-[55%]")}>
           <img
@@ -57,7 +57,7 @@ export function EventCard({ event, variant = "grid" }) {
           />
           {/* Date stamp. Readable over any photo because it sits on card, not
               on a translucent wash. */}
-          <span className="absolute start-3 top-3 flex w-14 flex-col items-center rounded-xl bg-card px-2 py-1.5 shadow-card">
+          <span className="absolute start-3 top-3 flex w-14 flex-col items-center rounded-control bg-card px-2 py-1.5 shadow-card">
             <span className="font-mono text-[11px] font-bold tracking-widest text-muted">{stamp.month}</span>
             <span className="font-display text-xl font-extrabold leading-none text-ink">{stamp.day}</span>
           </span>
@@ -137,7 +137,7 @@ export function EventCard({ event, variant = "grid" }) {
       */}
       <Link
         to={`/evenements/${event.slug}`}
-        className="absolute inset-0 rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="absolute inset-0 rounded-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <span className="sr-only">
           {title} — {venue}, {event.city}

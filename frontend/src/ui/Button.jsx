@@ -19,7 +19,7 @@ const VARIANTS = {
   primary: "bg-primary text-primary-fg hover:bg-primary-hover shadow-sm",
   secondary: "border border-line/20 bg-card text-ink hover:bg-paper",
   ghost: "text-primary hover:bg-brume",
-  danger: "bg-danger text-white hover:brightness-110",
+  danger: "bg-danger text-danger-fg hover:brightness-110",
   // Reads as a button on a dark photographic or encre background.
   inverse: "bg-foam/15 text-foam backdrop-blur-sm hover:bg-foam/25 border border-foam/25",
 };
@@ -106,7 +106,7 @@ export const IconButton = forwardRef(function IconButton(
       aria-label={label}
       title={label}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-xl transition duration-150",
+        "inline-flex shrink-0 items-center justify-center rounded-control transition duration-150",
         "active:scale-95 disabled:cursor-not-allowed disabled:opacity-50",
         tones[tone],
         sizes[size],

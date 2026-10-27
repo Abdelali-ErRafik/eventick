@@ -160,7 +160,7 @@ export default function Explorer() {
         <Check label={t("seated")} checked={search.seated === "1"} onChange={(on) => setSearch({ seated: on ? "1" : "" })} />
         <Check label={t("vipAccess")} checked={search.vip === "1"} onChange={(on) => setSearch({ vip: on ? "1" : "" })} />
       </div>
-      <div className="rounded-xl bg-brume p-3.5 text-sm text-primary">
+      <div className="rounded-card bg-brume p-3.5 text-sm text-primary">
         <p className="font-bold">{t("guarantee")}</p>
         <p className="mt-0.5 leading-relaxed opacity-90">{t("guaranteeBody")}</p>
       </div>
@@ -204,7 +204,7 @@ export default function Explorer() {
             </h1>
             <p className="mt-2 max-w-xl text-muted">{t("exploreSub")}</p>
           </div>
-          <dl className="grid grid-cols-3 gap-2 rounded-xl bg-card p-3 text-center shadow-card">
+          <dl className="grid grid-cols-3 gap-2 rounded-card bg-card p-3 text-center shadow-card">
             <Stat value={String(live.length)} label={t("eventsWord")} />
             <Stat value={String(new Set(live.map((event) => event.city)).size)} label={t("activeCities")} />
             <Stat value={String(almost)} label={t("almost")} accent />
@@ -224,7 +224,7 @@ export default function Explorer() {
           ))}
         </div>
         <div className="mt-6 grid gap-6 lg:grid-cols-[16rem_1fr]">
-          <aside className="hidden rounded-xl border border-line/10 bg-card p-4 shadow-card lg:block">{filters}</aside>
+          <aside className="hidden rounded-card border border-line/10 bg-card p-4 shadow-card lg:block">{filters}</aside>
           <div>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-muted">{tf("showing", { n: slice.length, total: filtered.length })}</p>

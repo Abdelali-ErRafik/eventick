@@ -55,14 +55,14 @@ export function Countdown({ until, label, expiredLabel, onExpire, className }) {
     calm: "bg-brume text-primary",
     warn: "bg-warn-bg text-warn",
     alarm: "bg-danger-bg text-danger",
-    expired: "bg-danger text-white",
+    expired: "bg-danger text-danger-fg",
   };
 
   const { m, s } = parts(left);
 
   return (
     <div
-      className={cn("flex items-center gap-3 rounded-2xl px-4 py-3.5", skins[level], className)}
+      className={cn("flex items-center gap-3 rounded-card px-4 py-3.5", skins[level], className)}
       // Polite, not assertive: a per-second assertive region would interrupt
       // a screen-reader user continuously while they fill the form.
       role="timer"

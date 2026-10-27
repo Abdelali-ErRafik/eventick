@@ -45,9 +45,9 @@ export function ConfirmProvider({ children }) {
             role="alertdialog"
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[400px] rounded-2xl bg-card px-6 pb-6 pt-7 text-center shadow-modal"
+            className="w-full max-w-[400px] rounded-panel bg-card px-6 pb-6 pt-7 text-center shadow-modal"
           >
-            <div className={cn("mx-auto mb-3.5 flex size-14 items-center justify-center rounded-2xl", iconTone[tone])} aria-hidden>
+            <div className={cn("mx-auto mb-3.5 flex size-14 items-center justify-center rounded-control", iconTone[tone])} aria-hidden>
               <Icon className="size-6" />
             </div>
             <h3 className="mb-2 font-display text-[19px] font-extrabold tracking-tight">{state.title}</h3>

@@ -317,7 +317,7 @@ export default function Checkout() {
                       onChange={(e) => setPromo(e.target.value)}
                       placeholder={t("promo")}
                       aria-label={t("promo")}
-                      className="h-11 min-w-0 flex-1 rounded-xl border border-foam/20 bg-foam/10 px-4 font-mono text-sm uppercase text-foam outline-none placeholder:text-mist focus:border-accent"
+                      className="h-11 min-w-0 flex-1 rounded-control border border-foam/20 bg-foam/10 px-4 font-mono text-sm uppercase text-foam outline-none placeholder:text-mist focus:border-accent"
                     />
                     <Button variant="inverse" type="submit">
                       {t("promoApply")}

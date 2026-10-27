@@ -36,7 +36,7 @@ export default function Confirmation() {
     return (
       <Shell>
         <div className="mx-auto max-w-3xl px-4 py-10 md:px-8">
-          <div className="h-64 animate-pulse rounded-xl bg-card" />
+          <div className="h-64 animate-pulse rounded-card bg-card" />
         </div>
       </Shell>
     );
@@ -46,7 +46,7 @@ export default function Confirmation() {
     <Shell>
       <div className="mx-auto max-w-3xl px-4 py-10 md:px-8">
         <div className="text-center">
-          <span className="mx-auto inline-flex size-16 items-center justify-center rounded-full bg-success text-white">
+          <span className="mx-auto inline-flex size-16 items-center justify-center rounded-full bg-success text-success-fg">
             <Check className="size-8" />
           </span>
           <h1 className="mt-4 font-display text-4xl font-extrabold">{t("paid")}</h1>

@@ -177,7 +177,7 @@ export default function TicketDetail() {
             </button>
           </div>
         </div>
-        <article className="mt-4 overflow-hidden rounded-2xl bg-card shadow-pop">
+        <article className="mt-4 overflow-hidden rounded-card bg-card shadow-pop">
           {event.image ? <img src={event.image} alt="" className="h-44 w-full object-cover" /> : null}
           <div className="p-5">
             <p className="font-mono text-xs text-primary">{ticket.ref}</p>
@@ -191,7 +191,7 @@ export default function TicketDetail() {
             <p className="mt-2 text-sm">
               {t("holderOf")} · {ticket.holderName}
             </p>
-            <div className="mt-4 flex justify-center rounded-xl bg-paper p-4">
+            <div className="mt-4 flex justify-center rounded-control bg-paper p-4">
               <QrMark value={data.qrPayload} className="size-52" />
             </div>
             <p className="mt-2 text-center text-xs text-muted">{t("brightness")}</p>
@@ -204,7 +204,7 @@ export default function TicketDetail() {
             )}
           </div>
         </article>
-        <section className="mt-4 rounded-xl border border-line/10 bg-card p-4">
+        <section className="mt-4 rounded-card border border-line/10 bg-card p-4">
           <h2 className="font-display text-lg font-bold">{t("invoice")}</h2>
           <p className="mt-2 flex justify-between text-sm">
             <span>{t("subtotal")}</span>
@@ -229,7 +229,7 @@ export default function TicketDetail() {
 
         {/* Only offered while the ticket is still a live entitlement. */}
         {options && ticket.status === "VALID" ? (
-          <section className="no-print mt-4 rounded-xl border border-line/10 bg-card p-4">
+          <section className="no-print mt-4 rounded-card border border-line/10 bg-card p-4">
             <h2 className="font-display text-lg font-bold">{t("manageTicket")}</h2>
 
             <div className="mt-3 flex flex-wrap gap-2">
@@ -244,7 +244,7 @@ export default function TicketDetail() {
               {options.cancel?.allowed ? (
                 <button
                   type="button"
-                  className="h-11 rounded-full bg-danger px-4 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
+                  className="h-11 rounded-full bg-danger px-4 text-sm font-semibold text-danger-fg transition hover:brightness-110 disabled:opacity-50"
                   onClick={() => setConfirmCancel(true)}
                   disabled={busy}
                 >
@@ -266,7 +266,7 @@ export default function TicketDetail() {
                 <h3 className="mt-4 text-sm font-bold">{t("changeZone")}</h3>
                 <ul className="mt-2 grid gap-2">
                   {options.exchange.map((zone) => (
-                    <li key={zone.tierId} className="flex items-center justify-between gap-3 rounded-lg bg-paper px-3 py-2">
+                    <li key={zone.tierId} className="flex items-center justify-between gap-3 rounded-control bg-paper px-3 py-2">
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold">
                           {locale === "ar" ? zone.nameAr : zone.nameFr}
@@ -326,7 +326,7 @@ export default function TicketDetail() {
                   maxLength={280}
                   placeholder={t("shareMessagePlaceholder")}
                   aria-label={t("shareMessage")}
-                  className="mt-2 h-11 w-full rounded-xl border border-line/20 bg-paper px-3 text-sm"
+                  className="mt-2 h-11 w-full rounded-control border border-line/20 bg-paper px-3 text-sm"
                 />
                 <button
                   type="button"

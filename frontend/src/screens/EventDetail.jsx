@@ -305,7 +305,7 @@ export default function EventDetail() {
               <p className="text-sm text-muted">{t("programming")}</p>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 {event.lineup.map((item) => (
-                  <article key={item.name} className="overflow-hidden rounded-xl border border-line/10 bg-card shadow-card">
+                  <article key={item.name} className="overflow-hidden rounded-card border border-line/10 bg-card shadow-card">
                     <img src={item.image} alt="" className="h-32 w-full object-cover" />
                     <div className="p-3">
                       <p className="font-mono text-xs text-primary">
@@ -320,10 +320,10 @@ export default function EventDetail() {
             </section>
           ) : null}
 
-          <section className="rounded-xl border border-line/10 bg-card p-4 shadow-card md:p-6">
+          <section className="rounded-card border border-line/10 bg-card p-4 shadow-card md:p-6">
             <h2 className="font-display text-2xl font-extrabold">{t("plan")}</h2>
             <p className="text-sm text-muted">{venue}</p>
-            <div className="mx-auto mt-4 max-w-lg rounded-xl bg-paper p-4">
+            <div className="mx-auto mt-4 max-w-lg rounded-card bg-paper p-4">
               <div className="mx-auto flex h-14 max-w-xs items-center justify-center rounded-t-xl bg-primary text-sm font-bold text-foam">{t("stage")}</div>
               <div className="mx-auto mt-2 flex h-16 max-w-sm items-center justify-center bg-accent/80 text-sm font-bold text-accent-fg">{t("vipZone")}</div>
               <div className="mx-auto mt-2 flex h-24 max-w-lg items-center justify-center bg-brume-deep text-sm font-bold text-primary">{t("lawn")}</div>
@@ -398,7 +398,7 @@ export default function EventDetail() {
                   <p className="text-sm font-bold">{t("waitTitle")}</p>
                   <p className="text-xs leading-relaxed text-mist">{t("waitBody")}</p>
                   <input
-                    className="h-11 w-full rounded-xl border border-foam/20 bg-foam/10 px-4 text-sm text-foam outline-none placeholder:text-mist focus:border-accent"
+                    className="h-11 w-full rounded-control border border-foam/20 bg-foam/10 px-4 text-sm text-foam outline-none placeholder:text-mist focus:border-accent"
                     type="email"
                     required
                     value={waitEmail}
@@ -467,7 +467,7 @@ function Row({ label, value }) {
 
 function Info({ title, body }) {
   return (
-    <article className="rounded-xl border border-line/10 bg-card p-4 shadow-card">
+    <article className="rounded-card border border-line/10 bg-card p-4 shadow-card">
       <h3 className="font-display font-bold">{title}</h3>
       <p className="mt-1 text-sm text-muted">{body}</p>
     </article>

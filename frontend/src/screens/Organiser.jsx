@@ -246,7 +246,7 @@ function OrganiserInner() {
         </div>
         <p className="mt-2 max-w-2xl text-sm text-muted">{t("payout")}</p>
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <form className="rounded-xl border border-line/10 bg-card p-4 shadow-card md:p-6" onSubmit={publish}>
+          <form className="rounded-card border border-line/10 bg-card p-4 shadow-card md:p-6" onSubmit={publish}>
             <div className="flex items-center justify-between">
               <h2 className="font-display text-2xl font-bold">{t("formTitle")}</h2>
               <button type="button" className="text-sm font-semibold text-primary" onClick={fillDemo}>
@@ -366,17 +366,17 @@ function OrganiserInner() {
             <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6">
               {/* An uploaded poster appears first, already selected. */}
               {!COVERS.includes(cover) ? (
-                <span className="overflow-hidden rounded-lg border-2 border-primary">
+                <span className="overflow-hidden rounded-control border-2 border-primary">
                   <img src={cover} alt="" className="h-16 w-full object-cover" />
                 </span>
               ) : null}
               {COVERS.map((src) => (
-                <button key={src} type="button" className={`overflow-hidden rounded-lg border-2 ${cover === src ? "border-primary" : "border-transparent"}`} onClick={() => setCover(src)}>
+                <button key={src} type="button" className={`overflow-hidden rounded-control border-2 ${cover === src ? "border-primary" : "border-transparent"}`} onClick={() => setCover(src)}>
                   <img src={src} alt="" className="h-16 w-full object-cover" />
                 </button>
               ))}
             </div>
-            {error ? <p className="mt-4 rounded-lg bg-danger/10 px-4 py-3 text-sm text-danger">{error}</p> : null}
+            {error ? <p className="mt-4 rounded-control bg-danger/10 px-4 py-3 text-sm text-danger">{error}</p> : null}
             <button type="submit" disabled={busy} className="mt-5 h-12 w-full rounded-full bg-primary text-sm font-semibold text-primary-fg transition hover:bg-primary-hover disabled:opacity-50">
               {busy ? "..." : t("publish")}
             </button>
@@ -390,9 +390,9 @@ function OrganiserInner() {
                 const soldCount = eventOrders.reduce((sum, order) => sum + order.ticketCount, 0);
                 const revenue = eventOrders.reduce((sum, order) => sum + order.totalCents, 0);
                 return (
-                  <article key={event.slug} className="rounded-xl border border-line/10 bg-card p-4 shadow-card">
+                  <article key={event.slug} className="rounded-card border border-line/10 bg-card p-4 shadow-card">
                     <div className="flex gap-3">
-                      <img src={event.image} alt="" className="size-16 rounded-lg object-cover" />
+                      <img src={event.image} alt="" className="size-16 rounded-control object-cover" />
                       <div>
                         <Link to={`/evenements/${event.slug}`} className="font-display text-lg font-bold">
                           {locale === "ar" ? event.titleAr : event.titleFr}

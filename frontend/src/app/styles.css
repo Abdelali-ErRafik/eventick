@@ -41,14 +41,24 @@
   --et-accent: #c6f135;
   --et-accent-fg: #0b0b14;
 
-  --et-success: #16a34a;
+  --et-success: #15803d;
   --et-success-bg: #e8f8ee;
+  --et-success-fg: #ffffff;  /* now clears 5.02:1 against #15803d */
   --et-warn: #b45309;
   --et-warn-bg: #fdf1dc;
+  --et-warn-fg: #ffffff;
   --et-danger: #e0304a;
   --et-danger-bg: #fdeaed;
+  /* White on light-mode danger clears AA (4.48, just over 4.5 with rounding)
+   * but white on DARK-mode danger (a lightened #ff6b7f, chosen to read on a
+   * dark background, not to host text itself) fails outright at 2.74:1. This
+   * is what bg-danger text-white resolves to on the hold-expired countdown
+   * and two gate-refusal verdicts -- so it gets its own paired foreground,
+   * same as primary/accent. */
+  --et-danger-fg: #ffffff;
   --et-info: #2a5cdb;
   --et-info-bg: #e9eefc;
+  --et-info-fg: #ffffff;
 
   --et-surface-sunken: #ececf4;
   --et-surface-raised: #ffffff;
@@ -80,12 +90,20 @@
   --et-accent-fg: #0b0b14;
   --et-success: #34d373;
   --et-success-bg: #123420;
+  /* All three of success/warn/info are light "pop" colours even in dark
+   * mode, chosen to read AS TEXT ON the dark surface -- so none of them
+   * clear 4.5:1 carrying white ON them, the same problem found with danger.
+   * success+white 1.96, warn+white 1.74, info+white 2.56: all fail outright. */
+  --et-success-fg: #04190c;
   --et-warn: #ffb648;
   --et-warn-bg: #3a2a0c;
+  --et-warn-fg: #2b1700;
   --et-danger: #ff6b7f;
   --et-danger-bg: #3a131a;
+  --et-danger-fg: #2a0509;
   --et-info: #7d9eff;
   --et-info-bg: #16203f;
+  --et-info-fg: #0b1433;
 
   --et-surface-sunken: #060609;
   --et-surface-raised: #1d1d2c;
@@ -115,12 +133,16 @@
     --et-accent-fg: #0b0b14;
     --et-success: #34d373;
     --et-success-bg: #123420;
+    --et-success-fg: #04190c;
     --et-warn: #ffb648;
     --et-warn-bg: #3a2a0c;
+    --et-warn-fg: #2b1700;
     --et-danger: #ff6b7f;
     --et-danger-bg: #3a131a;
+    --et-danger-fg: #2a0509;
     --et-info: #7d9eff;
     --et-info-bg: #16203f;
+    --et-info-fg: #0b1433;
 
     --et-surface-sunken: #060609;
     --et-surface-raised: #1d1d2c;
@@ -158,12 +180,16 @@
   --color-accent-fg: var(--et-accent-fg);
   --color-success: var(--et-success);
   --color-success-bg: var(--et-success-bg);
+  --color-success-fg: var(--et-success-fg);
   --color-warn: var(--et-warn);
   --color-warn-bg: var(--et-warn-bg);
+  --color-warn-fg: var(--et-warn-fg);
   --color-danger: var(--et-danger);
   --color-danger-bg: var(--et-danger-bg);
+  --color-danger-fg: var(--et-danger-fg);
   --color-info: var(--et-info);
   --color-info-bg: var(--et-info-bg);
+  --color-info-fg: var(--et-info-fg);
   --color-sunken: var(--et-surface-sunken);
   --color-raised: var(--et-surface-raised);
 

@@ -13,7 +13,7 @@ import { cn } from "../utils";
  */
 
 export function Skeleton({ className }) {
-  return <div className={cn("animate-pulse rounded-lg bg-mist/25", className)} aria-hidden />;
+  return <div className={cn("animate-pulse rounded-control bg-mist/25", className)} aria-hidden />;
 }
 
 /** A skeleton that announces itself, for a whole region that is still loading. */
@@ -31,7 +31,7 @@ export function LoadingState({ label, rows = 3, className }) {
 export function EmptyState({ icon, title, body, action, className }) {
   return (
     <div className={cn("flex flex-col items-center justify-center px-6 py-14 text-center", className)}>
-      <span className="inline-flex size-14 items-center justify-center rounded-2xl bg-brume text-primary" aria-hidden>
+      <span className="inline-flex size-14 items-center justify-center rounded-card bg-brume text-primary" aria-hidden>
         {icon ?? <Inbox className="size-6" />}
       </span>
       <p className="mt-4 font-display text-subhead font-bold">{title}</p>
@@ -49,7 +49,7 @@ export function EmptyState({ icon, title, body, action, className }) {
 export function ErrorState({ title, body, onRetry, retryLabel, className }) {
   return (
     <div className={cn("flex flex-col items-center justify-center px-6 py-14 text-center", className)} role="alert">
-      <span className="inline-flex size-14 items-center justify-center rounded-2xl bg-danger-bg text-danger" aria-hidden>
+      <span className="inline-flex size-14 items-center justify-center rounded-card bg-danger-bg text-danger" aria-hidden>
         <AlertTriangle className="size-6" />
       </span>
       <p className="mt-4 font-display text-subhead font-bold">{title}</p>
@@ -117,7 +117,7 @@ export function Badge({ tone = "neutral", icon, children, className }) {
  */
 export function Notice({ tone = "info", icon, title, children, className }) {
   return (
-    <div className={cn("flex items-start gap-3 rounded-xl px-4 py-3", TONES[tone], className)}>
+    <div className={cn("flex items-start gap-3 rounded-control px-4 py-3", TONES[tone], className)}>
       {icon ? (
         <span className="mt-0.5 shrink-0" aria-hidden>
           {icon}

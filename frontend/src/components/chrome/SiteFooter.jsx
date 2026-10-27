@@ -102,7 +102,7 @@ export function SiteFooter() {
 function Trust({ icon, title, body }) {
   return (
     <div className="flex gap-3.5">
-      <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-foam/10 text-accent" aria-hidden>
+      <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-control bg-foam/10 text-accent" aria-hidden>
         {icon}
       </span>
       <div className="min-w-0">
