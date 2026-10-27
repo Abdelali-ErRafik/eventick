@@ -24,9 +24,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap"
         />
         <script
-          // Applies the stored theme before first paint so dark mode doesn't flash light.
+          // Applies the resolved theme before first paint. Dark is the
+          // product default (see ThemeContext) — this must agree with it, or
+          // a first-time visitor sees a flash of light before JS swaps it to
+          // dark. "auto" is the one case this script defers on: it removes
+          // any data-theme attribute and lets styles.css's own
+          // prefers-color-scheme media query decide, same as ThemeContext
+          // does once it mounts.
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("eventick-theme");if(t==="dark"||t==="light"){document.documentElement.dataset.theme=t;}}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem("eventick-theme");if(t==="light"){document.documentElement.dataset.theme="light";}else if(t!=="auto"){document.documentElement.dataset.theme="dark";}}catch(e){document.documentElement.dataset.theme="dark";}})();`,
           }}
         />
       </head>
