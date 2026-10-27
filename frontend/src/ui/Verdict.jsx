@@ -40,7 +40,10 @@ const OUTCOMES = {
     icon: ShieldAlert,
   },
   missing: {
-    skin: "bg-encre text-foam",
+    // Fixed dark regardless of theme, so this reads as a distinct 4th state
+    // at the gate rather than blending into whichever colour dark mode's
+    // "ink" happens to be that day.
+    skin: "bg-stage text-stage-fg",
     icon: HelpCircle,
   },
 };

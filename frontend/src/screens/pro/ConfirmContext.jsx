@@ -37,7 +37,7 @@ export function ConfirmProvider({ children }) {
       {children}
       {state ? (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-encre/50 p-5 backdrop-blur-[2px]"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-stage/50 p-5 backdrop-blur-[2px]"
           onClick={() => close(false)}
           role="presentation"
         >

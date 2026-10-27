@@ -114,12 +114,13 @@ function BilletsInner() {
 
   return (
     <Shell>
-      <section className="bg-encre text-foam">
+      {/* Deliberately always dark — see the note on --et-stage in styles.css. */}
+      <section className="bg-stage text-stage-fg">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-8 md:px-8">
           <span className="inline-flex size-16 items-center justify-center rounded-full bg-primary font-display text-xl font-extrabold text-primary-fg">{initials}</span>
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-3xl font-extrabold">{user?.name}</h1>
-            <p className="text-sm text-mist">{user?.email}</p>
+            <p className="text-sm text-stage-muted">{user?.email}</p>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <Mini value={String(active.length)} label={t("ready")} />
@@ -312,9 +313,9 @@ function BilletsInner() {
 
 function Mini({ value, label }) {
   return (
-    <div className="rounded-card bg-foam/10 px-3 py-2 text-center">
+    <div className="rounded-card bg-stage-fg/10 px-3 py-2 text-center">
       <p className="font-display text-lg font-extrabold tabular-nums">{value}</p>
-      <p className="text-xs text-mist">{label}</p>
+      <p className="text-xs text-stage-muted">{label}</p>
     </div>
   );
 }

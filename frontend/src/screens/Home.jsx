@@ -78,12 +78,14 @@ export default function Home() {
 
   return (
     <Shell overlay>
-      <section className="relative -mt-16 overflow-hidden bg-encre pt-16 text-foam">
+      {/* Deliberately always dark, like the reference's hero band — see the
+          note on --et-stage in styles.css. */}
+      <section className="relative -mt-16 overflow-hidden bg-stage pt-16 text-stage-fg">
         <img src="/events/mawazine.jpg" alt="" className="absolute inset-0 h-full w-full object-cover opacity-40" />
-        <div className="absolute inset-0 bg-gradient-to-b from-encre/80 via-encre/88 to-encre" />
+        <div className="absolute inset-0 bg-gradient-to-b from-stage/80 via-stage/88 to-stage" />
         <div className="relative mx-auto max-w-7xl px-4 pb-12 pt-14 md:px-8 lg:pt-20">
           <div className="max-w-3xl">
-            <p className="inline-flex items-center gap-2 rounded-full bg-foam/10 px-3 py-1 text-xs font-semibold">
+            <p className="inline-flex items-center gap-2 rounded-full bg-stage-fg/10 px-3 py-1 text-xs font-semibold">
               <span className="size-2 rounded-full bg-accent" />
               {t("kicker")}
             </p>
@@ -91,7 +93,7 @@ export default function Home() {
             <h1 className="mt-3 font-display text-4xl font-extrabold leading-none tracking-tight md:text-hero">
               {t("heroA")} <span className="text-accent">{t("heroB")}</span> {t("heroC")}
             </h1>
-            <p className="mt-4 max-w-xl text-base text-mist lg:text-lg">{t("heroSub")}</p>
+            <p className="mt-4 max-w-xl text-base text-stage-muted lg:text-lg">{t("heroSub")}</p>
           </div>
           <form className="mt-8" onSubmit={submitSearch}>
             <div className="grid gap-2 rounded-panel bg-card p-3 text-ink shadow-pop md:grid-cols-[1fr_1fr_1fr_auto]">
@@ -129,13 +131,13 @@ export default function Home() {
               </Button>
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-semibold text-mist">{t("trends")} :</span>
+              <span className="font-semibold text-stage-muted">{t("trends")} :</span>
               {TRENDS.map((trend) => (
                 <button
                   key={trend.label}
                   type="button"
                   onClick={() => navigate(`/explorer?q=${encodeURIComponent(trend.query)}`)}
-                  className="rounded-full border border-foam/20 bg-foam/10 px-3 py-1.5 text-xs font-bold text-foam transition hover:border-accent hover:text-accent"
+                  className="rounded-full border border-stage-fg/20 bg-stage-fg/10 px-3 py-1.5 text-xs font-bold text-stage-fg transition hover:border-accent hover:text-accent"
                 >
                   {trend.label}
                 </button>
@@ -249,11 +251,13 @@ export default function Home() {
       </section>
 
       <section className="mx-auto max-w-7xl px-4 pb-4 md:px-8">
-        <div className="grid items-center gap-8 rounded-panel bg-encre px-5 py-8 text-foam md:px-8 lg:grid-cols-2">
+        {/* Deliberately always dark, to set off the light ticket-preview
+            card beside it regardless of app theme. */}
+        <div className="grid items-center gap-8 rounded-panel bg-stage px-5 py-8 text-stage-fg md:px-8 lg:grid-cols-2">
           <div>
             <p className="text-sm font-semibold text-accent">{t("orgKicker")}</p>
             <h2 className="mt-2 font-display text-3xl font-extrabold md:text-display">{t("orgTitle")}</h2>
-            <p className="mt-3 max-w-xl text-mist">{t("orgBody")}</p>
+            <p className="mt-3 max-w-xl text-stage-muted">{t("orgBody")}</p>
             <div className="mt-6 grid grid-cols-3 gap-3">
               {/* Three invented numbers (+250K / 99.8% / 48H) stood here with
                   nothing behind them. These are real capabilities instead of
@@ -274,7 +278,7 @@ export default function Home() {
           <div className="rounded-card bg-card p-4 text-ink shadow-pop">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-muted">{t("previewKicker")}</p>
-              <span className="rounded-full bg-primary px-2 py-1 text-xs font-bold text-foam">{t("valid")}</span>
+              <span className="rounded-full bg-primary px-2 py-1 text-xs font-bold text-primary-fg">{t("valid")}</span>
             </div>
             <img src="/events/electro.jpg" alt="" className="mt-3 h-36 w-full rounded-control object-cover" />
             <h3 className="mt-3 font-display text-xl font-extrabold">Casablanca Summer Beats</h3>
@@ -300,10 +304,11 @@ export default function Home() {
 }
 
 function Stat({ value, label }) {
+  // Rendered inside the always-dark organiser promo band (bg-stage).
   return (
-    <div className="rounded-control bg-foam/10 p-3">
+    <div className="rounded-control bg-stage-fg/10 p-3">
       <p className="font-display text-2xl font-extrabold text-accent">{value}</p>
-      <p className="text-xs text-mist">{label}</p>
+      <p className="text-xs text-stage-muted">{label}</p>
     </div>
   );
 }

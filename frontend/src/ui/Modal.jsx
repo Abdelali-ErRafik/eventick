@@ -81,7 +81,10 @@ export function Modal({ open, onClose, title, sub, icon, children, footer, size 
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[120] flex items-end justify-center bg-encre/50 p-0 backdrop-blur-[3px] sm:items-center sm:p-5"
+      // A scrim must always dim the page toward black, in either theme —
+      // bg-encre (the ink/text colour) is near-white in dark mode, which
+      // would wash a dark page toward light instead of dimming it.
+      className="fixed inset-0 z-[120] flex items-end justify-center bg-stage/50 p-0 backdrop-blur-[3px] sm:items-center sm:p-5"
       onMouseDown={(event) => {
         // Only a press that starts on the backdrop dismisses — otherwise a
         // text selection that ends outside closes the dialog mid-edit.

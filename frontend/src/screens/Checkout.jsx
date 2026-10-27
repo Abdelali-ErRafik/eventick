@@ -292,13 +292,19 @@ export default function Checkout() {
           {/* Order summary. The total is the largest thing on the page after
               the countdown, because those are the two facts that matter. */}
           <aside className="lg:sticky lg:top-24">
-            <Card pad={false} className="overflow-hidden bg-encre text-foam">
+            {/* Deliberately always dark, regardless of app theme — stage,
+                not card/paper. Was bg-encre/text-foam, which coincidentally
+                worked in the old charte because light-mode encre and
+                dark-mode foam were both near-black; both are theme-reactive
+                now, so in dark mode this rendered as a near-white card with
+                dark text sitting inside an otherwise-dark page. */}
+            <Card pad={false} className="overflow-hidden bg-stage text-stage-fg">
               <img src={event.image} alt="" className="h-28 w-full object-cover" />
               <div className="p-5">
                 <h2 className="font-display text-subhead font-extrabold">{locale === "ar" ? event.titleAr : event.titleFr}</h2>
-                <p className="mt-0.5 text-sm text-mist">{event.city}</p>
+                <p className="mt-0.5 text-sm text-stage-muted">{event.city}</p>
 
-                <ul className="mt-4 grid gap-2 border-t border-foam/15 pt-4 text-sm">
+                <ul className="mt-4 grid gap-2 border-t border-stage-fg/15 pt-4 text-sm">
                   {lines.map((line) => (
                     <li key={line.tier.id} className="flex justify-between gap-3">
                       <span className="min-w-0">
@@ -311,13 +317,13 @@ export default function Checkout() {
                 </ul>
 
                 {!payment ? (
-                  <form className="mt-4 flex gap-2 border-t border-foam/15 pt-4" onSubmit={applyPromo}>
+                  <form className="mt-4 flex gap-2 border-t border-stage-fg/15 pt-4" onSubmit={applyPromo}>
                     <input
                       value={promo}
                       onChange={(e) => setPromo(e.target.value)}
                       placeholder={t("promo")}
                       aria-label={t("promo")}
-                      className="h-11 min-w-0 flex-1 rounded-control border border-foam/20 bg-foam/10 px-4 font-mono text-sm uppercase text-foam outline-none placeholder:text-mist focus:border-accent"
+                      className="h-11 min-w-0 flex-1 rounded-control border border-stage-fg/20 bg-stage-fg/10 px-4 font-mono text-sm uppercase text-stage-fg outline-none placeholder:text-stage-muted focus:border-accent"
                     />
                     <Button variant="inverse" type="submit">
                       {t("promoApply")}
@@ -334,10 +340,10 @@ export default function Checkout() {
                   </p>
                 ) : null}
 
-                <div className="mt-4 border-t border-foam/15 pt-4">
-                  <p className="text-sm text-mist">{t("total")}</p>
+                <div className="mt-4 border-t border-stage-fg/15 pt-4">
+                  <p className="text-sm text-stage-muted">{t("total")}</p>
                   <p className="font-display text-display font-extrabold leading-none tabular-nums">
-                    {money(due)} <span className="text-heading font-bold text-mist">MAD</span>
+                    {money(due)} <span className="text-heading font-bold text-stage-muted">MAD</span>
                   </p>
                 </div>
               </div>

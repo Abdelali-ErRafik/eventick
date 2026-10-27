@@ -88,15 +88,17 @@ export default function Login() {
     <Shell>
       <div className="mx-auto w-full max-w-5xl px-4 py-10 md:px-8 md:py-14">
         <div className="grid overflow-hidden rounded-3xl border border-line/10 bg-card shadow-pop md:grid-cols-[1fr_1.1fr]">
-          <aside className="hidden flex-col justify-between gap-8 bg-encre p-10 text-foam md:flex">
+          {/* Deliberately always dark, to split visually from the form panel
+              beside it regardless of app theme. */}
+          <aside className="hidden flex-col justify-between gap-8 bg-stage p-10 text-stage-fg md:flex">
             <Link to="/" className="font-display text-xl font-extrabold tracking-tight">
               Eventick<span className="text-accent">.ma</span>
             </Link>
             <div>
               <p className="font-display text-display font-extrabold">{mode === "in" ? t("loginTitle") : t("signupTitle")}</p>
-              <p className="mt-3 max-w-sm text-sm leading-relaxed text-mist">{mode === "in" ? t("loginSub") : t("signupSub")}</p>
+              <p className="mt-3 max-w-sm text-sm leading-relaxed text-stage-muted">{mode === "in" ? t("loginSub") : t("signupSub")}</p>
             </div>
-            <p className="flex items-center gap-2 text-xs font-semibold text-mist">
+            <p className="flex items-center gap-2 text-xs font-semibold text-stage-muted">
               <ShieldCheck className="size-4 shrink-0 text-accent" />
               {t("loginTrust")}
             </p>

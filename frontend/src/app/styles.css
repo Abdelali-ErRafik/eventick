@@ -30,6 +30,30 @@
   --et-line-alpha: 0.1;
   --et-shadow-alpha: 0.08;
 
+  /*
+   * Fixed-dark "stage" surface — identical in both themes, unlike --et-encre
+   * (ink, flips with theme) and --et-foam (inverse surface, also flips).
+   *
+   * Several deliberately-dark panels (the marketing hero band, the Gate
+   * scanner card, Checkout's order summary, Login's split panel) used
+   * bg-encre/text-foam on the assumption those were fixed near-black/white.
+   * They were, in the old charte, by coincidence — light-mode encre and
+   * dark-mode foam both happened to be near-black. Making both tokens
+   * properly theme-reactive for v3 broke that: in dark mode, encre
+   * (now near-white, since it is the INK colour) flipped those panels to a
+   * light card with dark text sitting inside an otherwise-dark page.
+   *
+   * --et-stage/--et-stage-fg never flip. Use them for a surface that must
+   * always read as a dark "stage" moment regardless of the app theme.
+   */
+  --et-stage: #141418;
+  --et-stage-fg: #ffffff;
+  /* Muted text ON the stage surface. --et-mist flips with theme (it is
+   * dark-gray in dark mode, for contrast against a dark-mode CARD), so used
+   * inside a stage block it read as dark-gray-on-near-black -- the same
+   * failure class as encre/foam, just for secondary text. */
+  --et-stage-muted: #a8a8b3;
+
   /* Brand — hot pink/magenta. Logo, active states, links, small badges.
    * Darker than the dark-mode value on purpose: it has to clear 4.5:1 as
    * TEXT on a near-white card, which the vivid dark-mode shade cannot. */
@@ -97,6 +121,11 @@
   --et-line-alpha: 0.14;
   --et-shadow-alpha: 0.6;
 
+  /* Fixed regardless of theme — see the :root definition for why. */
+  --et-stage: #141418;
+  --et-stage-fg: #ffffff;
+  --et-stage-muted: #a8a8b3;
+
   /* Full-saturation pink reads correctly as a dark-surface accent; it only
    * needed darkening to survive as light-mode TEXT, not here. */
   --et-primary: #f2176a;
@@ -156,6 +185,10 @@
     --et-line-alpha: 0.14;
     --et-shadow-alpha: 0.6;
 
+    --et-stage: #141418;
+    --et-stage-fg: #ffffff;
+    --et-stage-muted: #a8a8b3;
+
     --et-primary: #f2176a;
     --et-primary-hover: #ff3d82;
     --et-primary-fg: #ffffff;
@@ -211,6 +244,9 @@
   --color-mist: var(--et-mist);
   --color-line: var(--et-line);
   --color-foam: var(--et-foam);
+  --color-stage: var(--et-stage);
+  --color-stage-fg: var(--et-stage-fg);
+  --color-stage-muted: var(--et-stage-muted);
   --color-night: #000000;
 
   --color-primary: var(--et-primary);

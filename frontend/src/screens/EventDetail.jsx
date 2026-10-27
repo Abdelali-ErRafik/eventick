@@ -156,18 +156,20 @@ export default function EventDetail() {
 
   return (
     <Shell overlay>
-      <section className="relative -mt-16 overflow-hidden bg-encre pt-16 text-foam">
+      {/* Deliberately always dark, so the photo stays legible regardless of
+          app theme — see the note on --et-stage in styles.css. */}
+      <section className="relative -mt-16 overflow-hidden bg-stage pt-16 text-stage-fg">
         <img src={event.image} alt="" className="absolute inset-0 h-full w-full object-cover opacity-50" />
-        <div className="absolute inset-0 bg-gradient-to-t from-encre via-encre/80 to-encre/40" />
+        <div className="absolute inset-0 bg-gradient-to-t from-stage via-stage/80 to-stage/40" />
         <div className="relative mx-auto max-w-7xl px-4 py-12 md:px-8 md:py-16">
           <div className="flex flex-wrap gap-2">
-            <span className="rounded-full bg-foam/15 px-3 py-1 text-xs font-bold">{t("official")}</span>
+            <span className="rounded-full bg-stage-fg/15 px-3 py-1 text-xs font-bold">{t("official")}</span>
             {event.badge === "last" || event.badge === "hot" ? (
               <span className="rounded-full bg-danger px-3 py-1 text-xs font-bold">{t("limited")}</span>
             ) : null}
           </div>
           <h1 className="mt-4 max-w-4xl font-display text-4xl font-extrabold leading-none md:text-hero">{title}</h1>
-          <p className="mt-4 max-w-2xl text-mist">{locale === "ar" ? event.aboutAr : event.aboutFr}</p>
+          <p className="mt-4 max-w-2xl text-stage-muted">{locale === "ar" ? event.aboutAr : event.aboutFr}</p>
           <div className="mt-6 flex flex-wrap gap-4 text-sm">
             <span className="inline-flex items-center gap-2">
               <Calendar className="size-4 text-accent" />
@@ -186,12 +188,12 @@ export default function EventDetail() {
             <a href="#billets" className="inline-flex h-12 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover">
               {t("choose")}
             </a>
-            <a href={mapsUrl(event)} target="_blank" rel="noreferrer" className="inline-flex h-12 items-center rounded-full border border-foam/30 px-5 text-sm font-semibold">
+            <a href={mapsUrl(event)} target="_blank" rel="noreferrer" className="inline-flex h-12 items-center rounded-full border border-stage-fg/30 px-5 text-sm font-semibold">
               {t("directions")}
             </a>
             <button
               type="button"
-              className="inline-flex size-12 items-center justify-center rounded-full border border-foam/30"
+              className="inline-flex size-12 items-center justify-center rounded-full border border-stage-fg/30"
               aria-label={t("saved")}
               onClick={() => {
                 toggle(event.slug);
@@ -324,7 +326,7 @@ export default function EventDetail() {
             <h2 className="font-display text-2xl font-extrabold">{t("plan")}</h2>
             <p className="text-sm text-muted">{venue}</p>
             <div className="mx-auto mt-4 max-w-lg rounded-card bg-paper p-4">
-              <div className="mx-auto flex h-14 max-w-xs items-center justify-center rounded-t-xl bg-primary text-sm font-bold text-foam">{t("stage")}</div>
+              <div className="mx-auto flex h-14 max-w-xs items-center justify-center rounded-t-xl bg-primary text-sm font-bold text-primary-fg">{t("stage")}</div>
               <div className="mx-auto mt-2 flex h-16 max-w-sm items-center justify-center bg-accent/80 text-sm font-bold text-accent-fg">{t("vipZone")}</div>
               <div className="mx-auto mt-2 flex h-24 max-w-lg items-center justify-center bg-brume-deep text-sm font-bold text-primary">{t("lawn")}</div>
               <p className="mt-3 text-center text-xs text-muted">
@@ -345,15 +347,16 @@ export default function EventDetail() {
         </div>
 
         <aside className="h-fit lg:sticky lg:top-24">
-          <Card className="bg-encre text-foam" pad={false}>
-            <div className="border-b border-foam/10 p-5">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-mist">{t("recap")}</p>
+          {/* Deliberately always dark — see the note on --et-stage. */}
+          <Card className="bg-stage text-stage-fg" pad={false}>
+            <div className="border-b border-stage-fg/10 p-5">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-stage-muted">{t("recap")}</p>
               <h2 className="mt-0.5 font-display text-subhead font-extrabold">{t("cart")}</h2>
             </div>
 
             <div className="p-5">
               {lines.length === 0 ? (
-                <p className="text-sm text-mist">{t("emptyCart")}</p>
+                <p className="text-sm text-stage-muted">{t("emptyCart")}</p>
               ) : (
                 <ul className="grid gap-2 text-sm">
                   {lines.map((line) => (
@@ -368,17 +371,17 @@ export default function EventDetail() {
                 </ul>
               )}
 
-              <dl className="mt-4 grid gap-1.5 border-t border-foam/15 pt-4 text-sm">
+              <dl className="mt-4 grid gap-1.5 border-t border-stage-fg/15 pt-4 text-sm">
                 <Row label={t("fees")} value={t("feesFree")} />
                 <Row label={t("vat")} value={t("included")} />
               </dl>
 
               {/* The total is the biggest thing in the panel — it is what the
                   buyer is deciding about. */}
-              <div className="mt-4 border-t border-foam/15 pt-4">
-                <p className="text-sm text-mist">{t("total")}</p>
+              <div className="mt-4 border-t border-stage-fg/15 pt-4">
+                <p className="text-sm text-stage-muted">{t("total")}</p>
                 <p className="font-display text-display font-extrabold leading-none tabular-nums">
-                  {money(total)} <span className="text-heading font-bold text-mist">MAD</span>
+                  {money(total)} <span className="text-heading font-bold text-stage-muted">MAD</span>
                 </p>
               </div>
 
@@ -394,11 +397,11 @@ export default function EventDetail() {
               </Button>
 
               {soldOut ? (
-                <form className="mt-5 grid gap-2 border-t border-foam/15 pt-5" onSubmit={joinWaitlist}>
+                <form className="mt-5 grid gap-2 border-t border-stage-fg/15 pt-5" onSubmit={joinWaitlist}>
                   <p className="text-sm font-bold">{t("waitTitle")}</p>
-                  <p className="text-xs leading-relaxed text-mist">{t("waitBody")}</p>
+                  <p className="text-xs leading-relaxed text-stage-muted">{t("waitBody")}</p>
                   <input
-                    className="h-11 w-full rounded-control border border-foam/20 bg-foam/10 px-4 text-sm text-foam outline-none placeholder:text-mist focus:border-accent"
+                    className="h-11 w-full rounded-control border border-stage-fg/20 bg-stage-fg/10 px-4 text-sm text-stage-fg outline-none placeholder:text-stage-muted focus:border-accent"
                     type="email"
                     required
                     value={waitEmail}
@@ -412,8 +415,8 @@ export default function EventDetail() {
                 </form>
               ) : null}
 
-              <div className="mt-5 border-t border-foam/15 pt-4">
-                <p className="text-xs text-mist">{t("helpBook")}</p>
+              <div className="mt-5 border-t border-stage-fg/15 pt-4">
+                <p className="text-xs text-stage-muted">{t("helpBook")}</p>
                 <a
                   className="mt-1 inline-block text-sm font-semibold text-accent underline-offset-2 hover:underline"
                   href="https://wa.me/212537001122"
@@ -457,9 +460,10 @@ export default function EventDetail() {
 }
 
 function Row({ label, value }) {
+  // Used only inside the always-dark checkout summary card (bg-stage).
   return (
     <div className="flex justify-between gap-3">
-      <dt className="text-mist">{label}</dt>
+      <dt className="text-stage-muted">{label}</dt>
       <dd>{value}</dd>
     </div>
   );

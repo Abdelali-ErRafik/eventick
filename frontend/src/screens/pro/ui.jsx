@@ -61,7 +61,7 @@ export function InfoTip({ text }) {
         <Info className="size-3.5" />
       </button>
       {open ? (
-        <span className="absolute bottom-full z-50 mb-1.5 inset-inline-0 mx-auto w-56 rounded-control bg-encre px-3 py-2 text-xs font-medium normal-case tracking-normal text-foam shadow-pop">
+        <span className="absolute bottom-full z-50 mb-1.5 inset-inline-0 mx-auto w-56 rounded-control bg-stage px-3 py-2 text-xs font-medium normal-case tracking-normal text-stage-fg shadow-pop">
           {text}
         </span>
       ) : null}

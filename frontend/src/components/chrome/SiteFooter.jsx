@@ -21,9 +21,12 @@ export function SiteFooter() {
   const { t } = useI18n();
 
   return (
-    <footer className="mt-20 bg-encre text-foam">
+    // The entire footer is deliberately always dark, matching the reference
+    // (webook.com's own footer stays black in every theme) -- see the note
+    // on --et-stage in styles.css.
+    <footer className="mt-20 bg-stage text-stage-fg">
       {/* Trust */}
-      <div className="border-b border-foam/10">
+      <div className="border-b border-stage-fg/10">
         <div className="mx-auto grid max-w-7xl gap-6 px-4 py-10 md:grid-cols-3 md:px-8">
           <Trust icon={<ShieldCheck className="size-5" />} title={t("trustPay")} body={t("trustPayBody")} />
           <Trust icon={<QrCode className="size-5" />} title={t("trustQr")} body={t("trustQrBody")} />
@@ -37,7 +40,7 @@ export function SiteFooter() {
           <p className="font-display text-heading font-extrabold">
             Eventick<span className="text-accent">.ma</span>
           </p>
-          <p className="mt-3 max-w-xs text-sm leading-relaxed text-mist">{t("footerBlurb")}</p>
+          <p className="mt-3 max-w-xs text-sm leading-relaxed text-stage-muted">{t("footerBlurb")}</p>
         </div>
 
         <FooterColumn title={t("categories")}>
@@ -58,18 +61,18 @@ export function SiteFooter() {
 
         <div>
           <p className="text-sm font-bold">{t("stay")}</p>
-          <p className="mt-2 text-sm leading-relaxed text-mist">{t("stayBody")}</p>
+          <p className="mt-2 text-sm leading-relaxed text-stage-muted">{t("stayBody")}</p>
           {/* Disabled on purpose. There is no subscribe endpoint, and the old
               version showed a success tick while discarding the address —
               a confirmation for something that did not happen. */}
-          <label className="mt-4 flex items-center gap-2 rounded-full bg-foam/10 ps-3.5 pe-1 opacity-60">
-            <Mail className="size-4 shrink-0 text-mist" aria-hidden />
+          <label className="mt-4 flex items-center gap-2 rounded-full bg-stage-fg/10 ps-3.5 pe-1 opacity-60">
+            <Mail className="size-4 shrink-0 text-stage-muted" aria-hidden />
             <input
               type="email"
               disabled
               placeholder={t("emailPh")}
               aria-label={t("emailPh")}
-              className="h-11 w-full min-w-0 bg-transparent text-sm text-foam outline-none placeholder:text-mist"
+              className="h-11 w-full min-w-0 bg-transparent text-sm text-stage-fg outline-none placeholder:text-stage-muted"
             />
           </label>
           <Button variant="inverse" full className="mt-3" disabled>
@@ -79,17 +82,17 @@ export function SiteFooter() {
       </div>
 
       {/* Legal */}
-      <div className="border-t border-foam/10">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-5 text-xs text-mist md:flex-row md:items-center md:justify-between md:px-8">
+      <div className="border-t border-stage-fg/10">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-5 text-xs text-stage-muted md:flex-row md:items-center md:justify-between md:px-8">
           <p>{t("rights")}</p>
           <nav className="flex flex-wrap gap-5" aria-label={t("cgu")}>
-            <Link to="/legal" className="transition hover:text-foam">
+            <Link to="/legal" className="transition hover:text-stage-fg">
               {t("cgu")}
             </Link>
-            <Link to="/legal" className="transition hover:text-foam">
+            <Link to="/legal" className="transition hover:text-stage-fg">
               {t("privacy")}
             </Link>
-            <Link to="/aide" className="transition hover:text-foam">
+            <Link to="/aide" className="transition hover:text-stage-fg">
               {t("support")}
             </Link>
           </nav>
@@ -102,12 +105,12 @@ export function SiteFooter() {
 function Trust({ icon, title, body }) {
   return (
     <div className="flex gap-3.5">
-      <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-control bg-foam/10 text-accent" aria-hidden>
+      <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-control bg-stage-fg/10 text-accent" aria-hidden>
         {icon}
       </span>
       <div className="min-w-0">
         <p className="font-display text-subhead font-bold">{title}</p>
-        <p className="mt-1 text-sm leading-relaxed text-mist">{body}</p>
+        <p className="mt-1 text-sm leading-relaxed text-stage-muted">{body}</p>
       </div>
     </div>
   );
@@ -125,7 +128,7 @@ function FooterColumn({ title, children }) {
 function FooterLink({ to, children }) {
   return (
     <li>
-      <Link to={to} className="text-mist transition hover:text-foam">
+      <Link to={to} className="text-stage-muted transition hover:text-stage-fg">
         {children}
       </Link>
     </li>

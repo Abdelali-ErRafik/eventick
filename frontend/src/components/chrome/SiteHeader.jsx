@@ -93,7 +93,9 @@ export function SiteHeader({ overlay = false }) {
     <header
       className={cn(
         "sticky top-0 z-40 border-b transition-colors duration-200",
-        onImage ? "border-transparent bg-encre/30 text-foam backdrop-blur-md" : "border-line/10 bg-card/95 text-ink backdrop-blur",
+        // onImage is deliberately always-dark, matching the dark hero it
+        // floats over regardless of app theme -- stage, not encre/foam.
+        onImage ? "border-transparent bg-stage/30 text-stage-fg backdrop-blur-md" : "border-line/10 bg-card/95 text-ink backdrop-blur",
       )}
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-2 px-4 md:px-8">
@@ -120,7 +122,7 @@ export function SiteHeader({ overlay = false }) {
             <span
               className={cn(
                 "inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-sm font-semibold transition",
-                onImage ? "bg-foam/15 hover:bg-foam/25" : "bg-paper hover:bg-brume",
+                onImage ? "bg-stage-fg/15 hover:bg-stage-fg/25" : "bg-paper hover:bg-brume",
               )}
             >
               <MapPin className={cn("size-4", onImage ? "text-accent" : "text-primary")} aria-hidden />
@@ -148,7 +150,7 @@ export function SiteHeader({ overlay = false }) {
               to={item.to}
               className={cn(
                 "rounded-full px-3 py-2 text-sm font-semibold transition",
-                onImage ? "hover:bg-foam/15" : "hover:bg-paper",
+                onImage ? "hover:bg-stage-fg/15" : "hover:bg-paper",
               )}
             >
               {t(item.key)}
@@ -166,7 +168,7 @@ export function SiteHeader({ overlay = false }) {
               <span
                 className={cn(
                   "inline-flex size-10 items-center justify-center rounded-full transition",
-                  onImage ? "bg-foam/15 hover:bg-foam/25" : "bg-paper hover:bg-brume",
+                  onImage ? "bg-stage-fg/15 hover:bg-stage-fg/25" : "bg-paper hover:bg-brume",
                 )}
               >
                 <Search className="size-4" aria-hidden />
@@ -212,7 +214,7 @@ export function SiteHeader({ overlay = false }) {
             aria-label={cartCount > 0 ? `${t("cart")} (${cartCount})` : t("cart")}
             className={cn(
               "relative inline-flex size-10 items-center justify-center rounded-full transition",
-              onImage ? "bg-foam/15 hover:bg-foam/25" : "bg-paper hover:bg-brume",
+              onImage ? "bg-stage-fg/15 hover:bg-stage-fg/25" : "bg-paper hover:bg-brume",
             )}
           >
             <Ticket className="size-4" aria-hidden />
@@ -239,7 +241,7 @@ export function SiteHeader({ overlay = false }) {
               align="end"
               width="w-60"
               trigger={({ open }) => (
-                <span className="flex items-center gap-1.5 rounded-full p-0.5 transition hover:bg-foam/10">
+                <span className={cn("flex items-center gap-1.5 rounded-full p-0.5 transition", onImage ? "hover:bg-stage-fg/10" : "hover:bg-paper")}>
                   <span
                     className="inline-flex size-9 items-center justify-center rounded-full bg-primary font-display text-sm font-extrabold text-primary-fg"
                     aria-hidden
@@ -299,7 +301,7 @@ export function SiteHeader({ overlay = false }) {
                   <span
                     className={cn(
                       "inline-flex size-10 items-center justify-center rounded-full transition",
-                      onImage ? "bg-foam/15 hover:bg-foam/25" : "bg-paper hover:bg-brume",
+                      onImage ? "bg-stage-fg/15 hover:bg-stage-fg/25" : "bg-paper hover:bg-brume",
                     )}
                   >
                     {resolved === "dark" ? <Sun className="size-4" aria-hidden /> : <Moon className="size-4" aria-hidden />}
@@ -332,7 +334,7 @@ export function SiteHeader({ overlay = false }) {
       {/* Mobile sheet */}
       {menuOpen ? (
         <>
-          <div className="fixed inset-0 z-[55] bg-encre/50 backdrop-blur-[2px] lg:hidden" onClick={() => setMenuOpen(false)} role="presentation" />
+          <div className="fixed inset-0 z-[55] bg-stage/50 backdrop-blur-[2px] lg:hidden" onClick={() => setMenuOpen(false)} role="presentation" />
           <div
             className="fixed inset-y-0 start-0 z-[60] flex w-[min(20rem,86vw)] flex-col bg-card text-ink lg:hidden"
             role="dialog"

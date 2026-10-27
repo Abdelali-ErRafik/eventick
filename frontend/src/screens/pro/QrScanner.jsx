@@ -116,7 +116,8 @@ export default function QrScanner({ onScan, paused }) {
 
   return (
     <div>
-      <div className="relative aspect-video w-full overflow-hidden rounded-card bg-encre">
+      {/* Deliberately always dark -- a camera viewport, not a themed surface. */}
+      <div className="relative aspect-video w-full overflow-hidden rounded-card bg-stage">
         <video ref={videoRef} playsInline muted className="size-full object-cover" />
         <canvas ref={canvasRef} className="hidden" />
 
@@ -131,7 +132,7 @@ export default function QrScanner({ onScan, paused }) {
               onClick={() => setFacing((f) => (f === "environment" ? "user" : "environment"))}
               aria-label={t.flipCam}
               title={t.flipCam}
-              className="absolute end-3 top-3 inline-flex size-10 items-center justify-center rounded-full bg-encre/70 text-foam backdrop-blur"
+              className="absolute end-3 top-3 inline-flex size-10 items-center justify-center rounded-full bg-stage/70 text-stage-fg backdrop-blur"
             >
               <SwitchCamera className="size-5" />
             </button>
@@ -139,7 +140,7 @@ export default function QrScanner({ onScan, paused }) {
         ) : null}
 
         {state === "starting" ? (
-          <div className="absolute inset-0 flex items-center justify-center gap-2 text-mist">
+          <div className="absolute inset-0 flex items-center justify-center gap-2 text-stage-muted">
             <Loader2 className="size-5 animate-spin" />
             {t.camStarting}
           </div>
@@ -147,7 +148,7 @@ export default function QrScanner({ onScan, paused }) {
 
         {state === "idle" ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
-            <p className="text-sm text-mist">{t.camIdle}</p>
+            <p className="text-sm text-stage-muted">{t.camIdle}</p>
             <Btn onClick={start}>{t.camStart}</Btn>
           </div>
         ) : null}
@@ -155,7 +156,7 @@ export default function QrScanner({ onScan, paused }) {
         {state === "error" ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
             <CameraOff className="size-8 text-danger" />
-            <p className="max-w-sm text-sm text-mist">{error}</p>
+            <p className="max-w-sm text-sm text-stage-muted">{error}</p>
             <Btn variant="secondary" onClick={start}>
               {t.camRetry}
             </Btn>

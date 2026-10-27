@@ -239,7 +239,9 @@ function OrganiserInner() {
         <p className="text-sm font-semibold text-primary">{t("proPage")}</p>
         <h1 className="mt-1 font-display text-4xl font-extrabold">{t("orgTitle")}</h1>
         <div className="mt-4 flex flex-wrap gap-3">
-          <Link to="/pro" className="inline-flex h-12 items-center rounded-full bg-encre px-5 text-sm font-semibold text-foam">
+          {/* A deliberately dark pill regardless of app theme, same as the
+              --et-stage surfaces elsewhere. */}
+          <Link to="/pro" className="inline-flex h-12 items-center rounded-full bg-stage px-5 text-sm font-semibold text-stage-fg">
             {locale === "ar" ? "المنصة" : "Espace Pro"}
           </Link>
           <p className="max-w-xl self-center text-sm text-muted">{t("proLead")}</p>

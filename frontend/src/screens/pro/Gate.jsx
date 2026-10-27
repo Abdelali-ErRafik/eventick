@@ -237,14 +237,19 @@ export default function Gate() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr] lg:items-start">
-        <Card className="bg-encre text-foam">
+        {/* Deliberately always dark, like a device/camera stage — see the
+            note on --et-stage in styles.css. Was bg-encre/text-foam, which
+            in dark mode flipped this to a near-white card with dark text
+            sitting inside an otherwise-dark dashboard, as seen in the Gate
+            screenshot. */}
+        <Card className="bg-stage text-stage-fg">
           <div className="flex items-center gap-3">
-            <span className="inline-flex size-10 items-center justify-center rounded-control bg-foam/10 text-accent" aria-hidden>
+            <span className="inline-flex size-10 items-center justify-center rounded-control bg-stage-fg/10 text-accent" aria-hidden>
               <QrCode className="size-5" />
             </span>
             <div>
               <h2 className="font-display text-lg font-extrabold">{mode === "scan" ? t.scanMode : t.scan}</h2>
-              <p className="text-xs text-mist">{t.gateLead}</p>
+              <p className="text-xs text-stage-muted">{t.gateLead}</p>
             </div>
           </div>
 
@@ -253,12 +258,19 @@ export default function Gate() {
               <QrScanner onScan={(code) => checkIn(code, "camera")} paused={busy} />
             ) : (
               <form className="grid gap-2 sm:grid-cols-[1fr_auto]" onSubmit={submitManual}>
+                {/* The manual-entry field is intentionally a bright, light
+                    input even inside the dark stage card -- it is what staff
+                    actually read at arm's length, so it gets maximum
+                    contrast rather than matching the stage. Kept as
+                    card/encre (theme's own light surface + ink) rather than
+                    a fixed white, so it is still legible if dark mode's
+                    "ink" text colour is ever revisited. */}
                 <input
                   value={ref}
                   onChange={(e) => setRef(e.target.value)}
                   placeholder="ET-2027-GA6DAV66RQ"
                   autoFocus
-                  className="h-14 w-full rounded-control border border-foam/20 bg-foam px-4 font-mono text-lg text-encre outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/30"
+                  className="h-14 w-full rounded-control border border-stage-fg/20 bg-stage-fg px-4 font-mono text-lg text-stage outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/30"
                 />
                 <button
                   type="submit"

@@ -25,8 +25,10 @@ const VARIANTS = {
   ghost: "text-primary hover:bg-brume",
   danger: "bg-danger text-danger-fg hover:brightness-110",
   brand: "bg-primary text-primary-fg hover:bg-primary-hover shadow-sm",
-  // Reads as a button on a dark photographic or encre background.
-  inverse: "bg-foam/15 text-foam backdrop-blur-sm hover:bg-foam/25 border border-foam/25",
+  // For a button sitting on a deliberately-dark surface (a bg-stage panel,
+  // a photographic hero) regardless of app theme — stage-fg, not foam, which
+  // flips with the theme and would turn this invisible-on-dark in dark mode.
+  inverse: "bg-stage-fg/15 text-stage-fg backdrop-blur-sm hover:bg-stage-fg/25 border border-stage-fg/25",
 };
 
 const SIZES = {
@@ -100,7 +102,9 @@ export const IconButton = forwardRef(function IconButton(
   const tones = {
     neutral: "text-muted hover:bg-brume hover:text-primary",
     danger: "text-muted hover:bg-danger-bg hover:text-danger",
-    inverse: "text-foam/80 hover:bg-foam/15 hover:text-foam",
+    // Same reasoning as Button's inverse variant: for a fixed-dark surface,
+    // not the theme-reactive foam/encre.
+    inverse: "text-stage-fg/80 hover:bg-stage-fg/15 hover:text-stage-fg",
   };
   const sizes = { sm: "size-9", md: "size-11", lg: "size-12" };
 

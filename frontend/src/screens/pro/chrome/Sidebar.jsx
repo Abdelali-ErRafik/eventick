@@ -54,7 +54,7 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
     <>
       {open ? (
         <div
-          className="fixed inset-0 z-[55] bg-encre/50 backdrop-blur-[2px] lg:hidden"
+          className="fixed inset-0 z-[55] bg-stage/50 backdrop-blur-[2px] lg:hidden"
           onClick={onClose}
           role="presentation"
         />
