@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Lock } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "../components/Shell";
@@ -8,6 +8,7 @@ import { api, money } from "../api";
 import { useCart } from "../CartContext";
 import { useAuth } from "../AuthContext";
 import { useI18n } from "../i18n";
+import { Button, Card, Container, Countdown, Field, Input, LoadingState, Notice } from "../ui";
 import { emailOk, phoneOk } from "../payment";
 
 export default function Checkout() {
@@ -22,7 +23,6 @@ export default function Checkout() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [errors, setErrors] = useState({});
-  const [now, setNow] = useState(0);
   const [promo, setPromo] = useState("");
   const [promoOn, setPromoOn] = useState("");
   const [discountCents, setDiscountCents] = useState(0);
@@ -45,22 +45,17 @@ export default function Checkout() {
     setEmail(user.email ?? "");
   }, [user]);
 
-  useEffect(() => {
-    setNow(Date.now());
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
-
   // The countdown is the server hold created when they pressed Book.
   const holdUntil = cart?.holdUntil ?? null;
 
-  useEffect(() => {
-    if (!holdUntil || !now) return;
-    if (Date.parse(holdUntil) > now) return;
+  /** The hold lapsed while they were on this page: the seats are gone, so
+   * send them back to pick again rather than leaving a dead form. Fired once
+   * by <Countdown>, which owns the clock. */
+  const onHoldExpired = useCallback(() => {
     clear();
     toast.error(t("holdExpired"));
     navigate("/explorer");
-  }, [holdUntil, now, clear, navigate, t]);
+  }, [clear, navigate, t]);
 
   // A buyer who leaves before paying shouldn't sit on seats for 15 minutes.
   const heldId = cart?.orderId ?? null;
@@ -88,7 +83,9 @@ export default function Checkout() {
   if (!cart || !event) {
     return (
       <Shell>
-        <div className="mx-auto h-80 max-w-3xl animate-pulse px-4 py-10" />
+        <Container size="form" className="py-10">
+          <LoadingState label={t("loadingEvents")} rows={2} />
+        </Container>
       </Shell>
     );
   }
@@ -105,12 +102,12 @@ export default function Checkout() {
   if (lines.length === 0) {
     return (
       <Shell>
-        <div className="mx-auto max-w-xl px-4 py-20 text-center">
-          <h1 className="font-display text-3xl font-extrabold">{t("emptyPay")}</h1>
-          <Link to="/explorer" className="mt-6 inline-flex h-12 items-center rounded-full bg-lagon px-5 font-semibold text-foam">
+        <Container size="narrow" className="py-20 text-center">
+          <h1 className="font-display text-title font-extrabold">{t("emptyPay")}</h1>
+          <Button className="mt-6" onClick={() => navigate("/explorer")}>
             {t("backEvents")}
-          </Link>
-        </div>
+          </Button>
+        </Container>
       </Shell>
     );
   }
@@ -183,114 +180,171 @@ export default function Checkout() {
     }
   };
 
-  const holdLeft = holdUntil && now ? Math.max(0, Date.parse(holdUntil) - now) : null;
   const stripeReady = payment?.mode === "stripe" && payment.clientSecret && payment.publishableKey;
 
   return (
     <Shell>
-      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 md:px-8 lg:grid-cols-[1fr_20rem]">
-        <div>
-          <h1 className="font-display text-3xl font-extrabold">{t("payTitle")}</h1>
-          <ol className="mt-4 flex gap-2 text-xs font-bold">
-            <li className={`rounded-full px-3 py-1 ${payment ? "bg-paper text-muted" : "bg-lagon text-foam"}`}>1 · {t("stepInfo")}</li>
-            <li className={`rounded-full px-3 py-1 ${payment ? "bg-lagon text-foam" : "bg-paper text-muted"}`}>2 · {t("stepPay")}</li>
-            <li className="rounded-full bg-paper px-3 py-1 text-muted">3 · {t("stepDone")}</li>
-          </ol>
+      <Container className="py-8">
+        {/*
+          The countdown comes FIRST, full width, above both columns.
+          It used to sit mid-column between a stepper and a form, styled the
+          same as the mock-mode notice beside it - equal weight for the one
+          thing on this page that is actually running out.
+        */}
+        <Countdown
+          until={holdUntil}
+          label={t("holdNote")}
+          expiredLabel={t("holdExpired")}
+          onExpire={onHoldExpired}
+          className="mb-6"
+        />
 
-          {payment?.mode === "mock" ? (
-            <p className="mt-4 rounded-xl bg-brume px-4 py-3 text-sm text-lagon-deep">{t("mockMode")}</p>
-          ) : null}
+        <div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
+          <div className="min-w-0">
+            <h1 className="font-display text-title font-extrabold">{t("payTitle")}</h1>
 
-          {holdLeft !== null ? (
-            <p className="mt-3 rounded-xl bg-safran px-4 py-3 text-sm font-semibold text-encre">
-              {tf("holdLeft", {
-                m: String(Math.floor(holdLeft / 60000)).padStart(2, "0"),
-                s: String(Math.floor((holdLeft % 60000) / 1000)).padStart(2, "0"),
-              })}
-            </p>
-          ) : (
-            <p className="mt-4 rounded-xl bg-brume px-4 py-3 text-sm text-lagon-deep">{t("holdNote")}</p>
-          )}
+            {/* Progress. aria-current marks the live step for a screen reader
+                rather than relying on the colour change alone. */}
+            <ol className="mt-4 flex flex-wrap gap-2 text-xs font-bold">
+              {[
+                { n: 1, label: t("stepInfo"), done: Boolean(payment), active: !payment },
+                { n: 2, label: t("stepPay"), done: false, active: Boolean(payment) },
+                { n: 3, label: t("stepDone"), done: false, active: false },
+              ].map((step) => (
+                <li
+                  key={step.n}
+                  aria-current={step.active ? "step" : undefined}
+                  className={
+                    step.active
+                      ? "rounded-full bg-primary px-3 py-1.5 text-primary-fg"
+                      : step.done
+                        ? "rounded-full bg-brume px-3 py-1.5 text-primary"
+                        : "rounded-full bg-paper px-3 py-1.5 text-muted"
+                  }
+                >
+                  {step.n} - {step.label}
+                </li>
+              ))}
+            </ol>
 
-          {!payment ? (
-            <form className="mt-4 space-y-4" onSubmit={reserve}>
-              <section className="rounded-xl border border-line/10 bg-card p-4 shadow-card md:p-6">
-                <h2 className="font-display text-xl font-bold">{t("buyer")}</h2>
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  <label className="block text-sm">
-                    {t("fullName")}
-                    <input className="field mt-1" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
-                    {errors.name ? <span className="text-corail">{errors.name}</span> : null}
-                  </label>
-                  <label className="block text-sm">
-                    {t("email")}
-                    <input className="field mt-1" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-                    {errors.email ? <span className="text-corail">{errors.email}</span> : null}
-                  </label>
-                  <label className="block text-sm md:col-span-2">
-                    {t("phone")}
-                    <input className="field mt-1" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" placeholder="06 12 34 56 78" />
-                    {errors.phone ? <span className="text-corail">{errors.phone}</span> : null}
-                  </label>
+            {payment?.mode === "mock" ? (
+              <Notice tone="info" className="mt-4">
+                {t("mockMode")}
+              </Notice>
+            ) : null}
+
+            {!payment ? (
+              <Card className="mt-5">
+                <h2 className="font-display text-heading font-extrabold">{t("buyer")}</h2>
+                <form className="mt-4 grid gap-4 md:grid-cols-2" onSubmit={reserve} noValidate>
+                  <Field label={t("fullName")} error={errors.name} required>
+                    {(props) => <Input {...props} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />}
+                  </Field>
+                  <Field label={t("email")} error={errors.email} required>
+                    {(props) => (
+                      <Input {...props} type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+                    )}
+                  </Field>
+                  <Field label={t("phone")} error={errors.phone} required className="md:col-span-2">
+                    {(props) => (
+                      <Input
+                        {...props}
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        autoComplete="tel"
+                        placeholder="06 12 34 56 78"
+                      />
+                    )}
+                  </Field>
+
+                  <div className="md:col-span-2">
+                    <Button type="submit" full size="lg" loading={busy}>
+                      {busy ? t("reserving") : t("stepPay")}
+                    </Button>
+                    <p className="mt-3 flex items-center justify-center gap-2 text-center text-xs text-muted">
+                      <Lock className="size-3.5 shrink-0" aria-hidden />
+                      {t("cardSecure")}
+                    </p>
+                  </div>
+                </form>
+              </Card>
+            ) : (
+              <Card className="mt-5">
+                <h2 className="font-display text-heading font-extrabold">{t("payMethod")}</h2>
+                <div className="mt-4">
+                  {stripeReady ? (
+                    <StripeForm
+                      publishableKey={payment.publishableKey}
+                      clientSecret={payment.clientSecret}
+                      dueCents={due}
+                      returnUrl={`${window.location.origin}/confirmation/${cart.orderId}`}
+                      onError={onPayError}
+                    />
+                  ) : (
+                    <p className="text-sm text-muted">{t("processing")}</p>
+                  )}
                 </div>
-                <button type="submit" disabled={busy} className="mt-5 h-14 w-full rounded-full bg-safran text-sm font-semibold text-encre disabled:opacity-60">
-                  {busy ? t("reserving") : t("stepPay")}
-                </button>
-                <p className="mt-3 flex items-center justify-center gap-2 text-center text-xs text-muted">
-                  <Lock className="size-3 shrink-0" />
-                  {t("cardSecure")}
-                </p>
-              </section>
-            </form>
-          ) : (
-            <section className="mt-4 rounded-xl border border-line/10 bg-card p-4 shadow-card md:p-6">
-              <h2 className="font-display text-xl font-bold">{t("payMethod")}</h2>
-              <div className="mt-4">
-                {stripeReady ? (
-                  <StripeForm
-                    publishableKey={payment.publishableKey}
-                    clientSecret={payment.clientSecret}
-                    dueCents={due}
-                    returnUrl={`${window.location.origin}/confirmation/${cart.orderId}`}
-                    onError={onPayError}
-                  />
-                ) : (
-                  <p className="text-sm text-muted">{t("processing")}</p>
-                )}
-              </div>
-            </section>
-          )}
-        </div>
-
-        <aside className="h-fit rounded-xl bg-encre p-4 text-foam">
-          <img src={event.image} alt="" className="h-32 w-full rounded-lg object-cover" />
-          <h2 className="mt-3 font-display text-xl font-bold">{locale === "ar" ? event.titleAr : event.titleFr}</h2>
-          <p className="text-sm text-mist">{event.city}</p>
-          <div className="mt-4 space-y-2 text-sm">
-            {lines.map((line) => (
-              <p key={line.tier.id} className="flex justify-between gap-2">
-                <span>
-                  {line.qty} × {locale === "ar" ? line.tier.nameAr : line.tier.nameFr}
-                </span>
-                <span className="tabular-nums">{money(line.qty * line.tier.priceCents)} MAD</span>
-              </p>
-            ))}
+              </Card>
+            )}
           </div>
-          {!payment ? (
-            <form className="mt-4 flex gap-2" onSubmit={applyPromo}>
-              <input className="field h-11 flex-1 font-mono" value={promo} onChange={(e) => setPromo(e.target.value)} placeholder={t("promo")} />
-              <button className="h-11 rounded-full bg-safran px-4 text-sm font-semibold text-encre" type="submit">
-                {t("promoApply")}
-              </button>
-            </form>
-          ) : null}
-          {discountCents > 0 ? <p className="mt-2 text-sm text-safran">{t("discount")} −{money(discountCents)} MAD</p> : null}
-          <p className="mt-4 border-t border-foam/15 pt-3">
-            <span className="block text-sm text-mist">{t("total")}</span>
-            <span className="font-display text-3xl font-extrabold tabular-nums">{money(due)} MAD</span>
-          </p>
-        </aside>
-      </div>
+
+          {/* Order summary. The total is the largest thing on the page after
+              the countdown, because those are the two facts that matter. */}
+          <aside className="lg:sticky lg:top-24">
+            <Card pad={false} className="overflow-hidden bg-encre text-foam">
+              <img src={event.image} alt="" className="h-28 w-full object-cover" />
+              <div className="p-5">
+                <h2 className="font-display text-subhead font-extrabold">{locale === "ar" ? event.titleAr : event.titleFr}</h2>
+                <p className="mt-0.5 text-sm text-mist">{event.city}</p>
+
+                <ul className="mt-4 grid gap-2 border-t border-foam/15 pt-4 text-sm">
+                  {lines.map((line) => (
+                    <li key={line.tier.id} className="flex justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="font-semibold tabular-nums">{line.qty}x</span>{" "}
+                        {locale === "ar" ? line.tier.nameAr : line.tier.nameFr}
+                      </span>
+                      <span className="shrink-0 tabular-nums">{money(line.qty * line.tier.priceCents)}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {!payment ? (
+                  <form className="mt-4 flex gap-2 border-t border-foam/15 pt-4" onSubmit={applyPromo}>
+                    <input
+                      value={promo}
+                      onChange={(e) => setPromo(e.target.value)}
+                      placeholder={t("promo")}
+                      aria-label={t("promo")}
+                      className="h-11 min-w-0 flex-1 rounded-xl border border-foam/20 bg-foam/10 px-4 font-mono text-sm uppercase text-foam outline-none placeholder:text-mist focus:border-accent"
+                    />
+                    <Button variant="inverse" type="submit">
+                      {t("promoApply")}
+                    </Button>
+                  </form>
+                ) : null}
+
+                {discountCents > 0 ? (
+                  <p className="mt-3 flex justify-between gap-3 text-sm font-semibold text-accent">
+                    <span>
+                      {t("discount")} {promoOn ? `- ${promoOn}` : ""}
+                    </span>
+                    <span className="tabular-nums">-{money(discountCents)}</span>
+                  </p>
+                ) : null}
+
+                <div className="mt-4 border-t border-foam/15 pt-4">
+                  <p className="text-sm text-mist">{t("total")}</p>
+                  <p className="font-display text-display font-extrabold leading-none tabular-nums">
+                    {money(due)} <span className="text-heading font-bold text-mist">MAD</span>
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </aside>
+        </div>
+      </Container>
     </Shell>
   );
 }

@@ -75,7 +75,8 @@ export default function Orders() {
 
   const label = (value) =>
     value === "VALID" ? t.valid : value === "USED" ? t.used : value === "CANCELLED" ? t.cancelled : t.transferred;
-  const tone = (value) => (value === "USED" ? "blue" : value === "CANCELLED" ? "red" : value === "TRANSFERRED" ? "amber" : "green");
+  const tone = (value) =>
+    value === "USED" ? "info" : value === "CANCELLED" ? "danger" : value === "TRANSFERRED" ? "warn" : "success";
 
   const cancelOrder = async (order) => {
     const ok = await confirm({
@@ -226,7 +227,7 @@ export default function Orders() {
                 />
               </Td>
               <Td className="text-center">
-                <span className="font-mono text-xs font-bold text-lagon">{ticket.ref}</span>
+                <span className="font-mono text-xs font-bold text-primary">{ticket.ref}</span>
               </Td>
               <Td className="text-center">
                 <MoneyCell unit="MAD">{money(ticket.priceCents)}</MoneyCell>
@@ -245,7 +246,7 @@ export default function Orders() {
                     to={`/billet/${ticket.id}`}
                     title={t.open}
                     aria-label={t.open}
-                    className="inline-flex size-9 items-center justify-center rounded-lg border border-line/15 bg-card text-muted transition hover:-translate-y-px hover:border-lagon hover:bg-brume hover:text-lagon-deep"
+                    className="inline-flex size-9 items-center justify-center rounded-lg border border-line/15 bg-card text-muted transition hover:-translate-y-px hover:border-primary hover:bg-brume hover:text-primary"
                   >
                     <ExternalLink className="size-4" />
                   </Link>

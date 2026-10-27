@@ -7,7 +7,7 @@ import { useConfirm } from "./ConfirmContext";
 import { Badge, Btn, DataTable, EmptyState, IconBtn, Modal, PageHead, PersonCell, SectionTitle, Td, Th } from "./ui";
 import { text } from "./copy";
 
-const WAITLIST_TONE = { WAITING: "gray", OFFERED: "amber", CLAIMED: "green", EXPIRED: "red" };
+const WAITLIST_TONE = { WAITING: "neutral", OFFERED: "warn", CLAIMED: "success", EXPIRED: "danger" };
 
 function waitlistLabel(t, status) {
   if (status === "OFFERED") return t.wlOffered;
@@ -127,10 +127,10 @@ export default function Offers() {
                   <span className="font-mono text-sm font-extrabold">{promo.code}</span>
                 </Td>
                 <Td className="text-center">
-                  <Badge tone="blue">{promo.kind === "PERCENT" ? `${promo.value}%` : `${money(promo.value)} MAD`}</Badge>
+                  <Badge tone="info">{promo.kind === "PERCENT" ? `${promo.value}%` : `${money(promo.value)} MAD`}</Badge>
                 </Td>
                 <Td className="text-center">
-                  <Badge tone={exhausted ? "red" : "gray"}>
+                  <Badge tone={exhausted ? "danger" : "neutral"}>
                     {promo.uses}/{promo.maxUses}
                   </Badge>
                 </Td>
@@ -176,7 +176,7 @@ export default function Offers() {
               </Td>
               <Td className="text-sm">{item.title}</Td>
               <Td className="text-center">
-                <Badge tone={WAITLIST_TONE[item.status] ?? "gray"}>{waitlistLabel(t, item.status)}</Badge>
+                <Badge tone={WAITLIST_TONE[item.status] ?? "neutral"}>{waitlistLabel(t, item.status)}</Badge>
                 {/* An outstanding offer is the only state with a deadline. */}
                 {item.status === "OFFERED" && item.claimExpiresAt ? (
                   <span className="mt-0.5 block text-[11px] text-muted">

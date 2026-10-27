@@ -236,7 +236,7 @@ function OrganiserInner() {
   return (
     <Shell>
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-        <p className="text-sm font-semibold text-lagon">{t("proPage")}</p>
+        <p className="text-sm font-semibold text-primary">{t("proPage")}</p>
         <h1 className="mt-1 font-display text-4xl font-extrabold">{t("orgTitle")}</h1>
         <div className="mt-4 flex flex-wrap gap-3">
           <Link to="/pro" className="inline-flex h-12 items-center rounded-full bg-encre px-5 text-sm font-semibold text-foam">
@@ -249,7 +249,7 @@ function OrganiserInner() {
           <form className="rounded-xl border border-line/10 bg-card p-4 shadow-card md:p-6" onSubmit={publish}>
             <div className="flex items-center justify-between">
               <h2 className="font-display text-2xl font-bold">{t("formTitle")}</h2>
-              <button type="button" className="text-sm font-semibold text-lagon" onClick={fillDemo}>
+              <button type="button" className="text-sm font-semibold text-primary" onClick={fillDemo}>
                 {t("fillDemo")}
               </button>
             </div>
@@ -258,7 +258,7 @@ function OrganiserInner() {
                 {t("briefLabel")}
                 <textarea className="field field-area mt-1" value={instruction} placeholder={t("briefHint")} onChange={(e) => setInstruction(e.target.value)} />
               </label>
-              <button type="button" className="h-11 rounded-full bg-lagon px-4 text-sm font-semibold text-foam md:col-span-2" onClick={applyInstruction}>
+              <button type="button" className="h-11 rounded-full bg-primary px-4 text-sm font-semibold text-foam md:col-span-2" onClick={applyInstruction}>
                 {t("briefApply")}
               </button>
               <label className="text-sm md:col-span-2">
@@ -350,7 +350,7 @@ function OrganiserInner() {
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold">{t("cover")}</p>
-              <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-line/20 px-3 text-sm font-semibold hover:border-lagon hover:bg-brume hover:text-lagon-deep">
+              <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-line/20 px-3 text-sm font-semibold hover:border-primary hover:bg-brume hover:text-primary">
                 <Upload className="size-4" />
                 {uploading ? t("posterUploading") : t("posterUpload")}
                 <input
@@ -366,18 +366,18 @@ function OrganiserInner() {
             <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6">
               {/* An uploaded poster appears first, already selected. */}
               {!COVERS.includes(cover) ? (
-                <span className="overflow-hidden rounded-lg border-2 border-lagon">
+                <span className="overflow-hidden rounded-lg border-2 border-primary">
                   <img src={cover} alt="" className="h-16 w-full object-cover" />
                 </span>
               ) : null}
               {COVERS.map((src) => (
-                <button key={src} type="button" className={`overflow-hidden rounded-lg border-2 ${cover === src ? "border-lagon" : "border-transparent"}`} onClick={() => setCover(src)}>
+                <button key={src} type="button" className={`overflow-hidden rounded-lg border-2 ${cover === src ? "border-primary" : "border-transparent"}`} onClick={() => setCover(src)}>
                   <img src={src} alt="" className="h-16 w-full object-cover" />
                 </button>
               ))}
             </div>
-            {error ? <p className="mt-4 rounded-lg bg-corail/10 px-4 py-3 text-sm text-corail">{error}</p> : null}
-            <button type="submit" disabled={busy} className="mt-5 h-12 w-full rounded-full bg-safran text-sm font-semibold text-encre disabled:opacity-50">
+            {error ? <p className="mt-4 rounded-lg bg-danger/10 px-4 py-3 text-sm text-danger">{error}</p> : null}
+            <button type="submit" disabled={busy} className="mt-5 h-12 w-full rounded-full bg-primary text-sm font-semibold text-primary-fg transition hover:bg-primary-hover disabled:opacity-50">
               {busy ? "..." : t("publish")}
             </button>
           </form>

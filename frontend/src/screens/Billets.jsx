@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { Send } from "lucide-react";
 import { toast } from "sonner";
 import { TicketPass, toTicketPassProps } from "../components/TicketPass";
 import { EventCard } from "../components/EventCard";
@@ -9,6 +10,7 @@ import { api, money } from "../api";
 import { useAuth } from "../AuthContext";
 import { useFavorites } from "../FavoritesContext";
 import { useCatalog } from "../useCatalog";
+import { Button, Field, Input, Modal } from "../ui";
 import { useI18n } from "../i18n";
 import { daysUntil, longDate, todayKey } from "../utils";
 
@@ -114,7 +116,7 @@ function BilletsInner() {
     <Shell>
       <section className="bg-encre text-foam">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-8 md:px-8">
-          <span className="inline-flex size-16 items-center justify-center rounded-full bg-lagon font-display text-xl font-extrabold">{initials}</span>
+          <span className="inline-flex size-16 items-center justify-center rounded-full bg-primary font-display text-xl font-extrabold text-primary-fg">{initials}</span>
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-3xl font-extrabold">{user?.name}</h1>
             <p className="text-sm text-mist">{user?.email}</p>
@@ -132,7 +134,15 @@ function BilletsInner() {
             ["past", t("tabPast")],
             ["saved", t("tabSaved")],
           ].map(([id, label]) => (
-            <button key={id} type="button" className={`h-11 shrink-0 rounded-full px-4 text-sm font-semibold ${tab === id ? "bg-lagon text-foam" : "bg-card text-ink"}`} onClick={() => setTab(id)}>
+            <button
+              key={id}
+              type="button"
+              aria-current={tab === id ? "true" : undefined}
+              className={`h-11 shrink-0 rounded-full px-4 text-sm font-semibold transition ${
+                tab === id ? "bg-primary text-primary-fg" : "bg-card text-ink hover:bg-brume"
+              }`}
+              onClick={() => setTab(id)}
+            >
               {label}
               {id === "active" ? ` (${active.length})` : ""}
               {id === "saved" ? ` (${savedEvents.length})` : ""}
@@ -144,8 +154,8 @@ function BilletsInner() {
           <div className="mt-6 space-y-4">
             {next ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-brume px-4 py-3">
-                <p className="font-semibold text-lagon-deep">{nextLabel}</p>
-                <Link to={`/billet/${next.id}`} className="inline-flex h-11 items-center rounded-full bg-encre px-4 text-sm font-semibold text-foam">
+                <p className="font-semibold text-primary">{nextLabel}</p>
+                <Link to={`/billet/${next.id}`} className="inline-flex h-11 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover">
                   {t("showPass")}
                 </Link>
               </div>
@@ -170,7 +180,7 @@ function BilletsInner() {
           <div className="mt-6 overflow-x-auto rounded-xl border border-line/10 bg-card">
             <div className="flex items-center justify-between p-4">
               <h2 className="font-display text-xl font-bold">{t("historyTitle")}</h2>
-              <button type="button" className="h-11 rounded-full bg-paper px-4 text-sm font-semibold" onClick={exportCsv}>
+              <button type="button" className="h-11 rounded-full border border-line/20 bg-card px-4 text-sm font-semibold transition hover:bg-paper" onClick={exportCsv}>
                 {t("exportCsv")}
               </button>
             </div>
@@ -244,12 +254,16 @@ function BilletsInner() {
             <h2 className="font-display text-xl font-bold">{t("edit")}</h2>
             {editingName ? (
               <form className="mt-3 grid gap-2" onSubmit={saveName}>
-                <input className="field" value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} />
+                {/* Was unlabelled: a screen reader announced only "edit text",
+                    with no indication of what it edits. */}
+                <Field label={t("fullName")} required>
+                  {(props) => <Input {...props} value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} autoComplete="name" />}
+                </Field>
                 <div className="flex gap-2">
-                  <button type="submit" disabled={busy} className="h-11 flex-1 rounded-full bg-lagon text-sm font-semibold text-foam disabled:opacity-50">
+                  <button type="submit" disabled={busy} className="h-11 flex-1 rounded-full bg-primary text-sm font-semibold text-primary-fg transition hover:bg-primary-hover disabled:opacity-50">
                     {t("saveProfile")}
                   </button>
-                  <button type="button" className="h-11 rounded-full border border-line/15 px-4 text-sm" onClick={() => setEditingName(false)}>
+                  <button type="button" className="h-11 rounded-full border border-line/20 bg-card px-4 text-sm font-semibold transition hover:bg-paper" onClick={() => setEditingName(false)}>
                     {t("cancel")}
                   </button>
                 </div>
@@ -257,7 +271,7 @@ function BilletsInner() {
             ) : (
               <button
                 type="button"
-                className="mt-3 text-sm font-semibold text-lagon"
+                className="mt-3 text-sm font-semibold text-primary"
                 onClick={() => {
                   setNameDraft(user?.name ?? "");
                   setEditingName(true);
@@ -270,25 +284,28 @@ function BilletsInner() {
         </section>
       </div>
 
-      {transferId ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-encre/60 p-4 sm:items-center">
-          <form className="w-full max-w-md rounded-2xl bg-card p-5" onSubmit={submitTransfer}>
-            <h2 className="font-display text-2xl font-extrabold">{t("transferTitle")}</h2>
-            <label className="mt-3 block text-sm">
-              {t("friendName")}
-              <input className="field mt-1" value={friend} onChange={(e) => setFriend(e.target.value)} />
-            </label>
-            <div className="mt-4 flex gap-2">
-              <button type="button" className="h-12 flex-1 rounded-full border border-line/15" onClick={() => setTransferId(null)}>
-                {t("cancel")}
-              </button>
-              <button type="submit" disabled={busy} className="h-12 flex-1 rounded-full bg-lagon font-semibold text-foam disabled:opacity-50">
-                {t("sendTicket")}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
+      <Modal
+        open={Boolean(transferId)}
+        onClose={() => setTransferId(null)}
+        title={t("transferTitle")}
+        icon={<Send className="size-5" />}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setTransferId(null)}>
+              {t("cancel")}
+            </Button>
+            <Button type="submit" form="transfer-form" loading={busy}>
+              {t("sendTicket")}
+            </Button>
+          </>
+        }
+      >
+        <form id="transfer-form" onSubmit={submitTransfer}>
+          <Field label={t("friendName")} required>
+            {(props) => <Input {...props} value={friend} onChange={(e) => setFriend(e.target.value)} autoComplete="name" />}
+          </Field>
+        </form>
+      </Modal>
     </Shell>
   );
 }
@@ -310,10 +327,10 @@ function SmallTicket({ ticket, locale, t, onTransfer }) {
         <h3 className="font-display font-bold">{locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr}</h3>
         <p className="text-sm text-muted">{ticket.event.city}</p>
         <div className="mt-2 flex gap-2">
-          <Link to={`/billet/${ticket.id}`} className="inline-flex h-10 items-center rounded-full bg-lagon px-3 text-sm font-semibold text-foam">
+          <Link to={`/billet/${ticket.id}`} className="inline-flex h-10 items-center rounded-full bg-primary px-3.5 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover">
             {t("seeQr")}
           </Link>
-          <button type="button" className="h-10 rounded-full border border-line/15 px-3 text-sm" onClick={onTransfer}>
+          <button type="button" className="h-10 rounded-full border border-line/20 bg-card px-3.5 text-sm font-semibold transition hover:bg-paper" onClick={onTransfer}>
             {t("transfer")}
           </button>
         </div>

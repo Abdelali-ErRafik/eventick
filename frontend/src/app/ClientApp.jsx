@@ -6,6 +6,7 @@ import { I18nProvider } from "../i18n";
 import { ThemeProvider } from "../ThemeContext";
 import { AuthProvider } from "../AuthContext";
 import { CartProvider } from "../CartContext";
+import { CatalogProvider } from "../CatalogContext";
 import { FavoritesProvider } from "../FavoritesContext";
 import App from "../App";
 
@@ -15,12 +16,14 @@ export default function ClientApp() {
       <ThemeProvider>
         <I18nProvider>
           <AuthProvider>
-            <CartProvider>
-              <FavoritesProvider>
-                <App />
-                <Toaster position="top-center" />
-              </FavoritesProvider>
-            </CartProvider>
+            <CatalogProvider>
+              <CartProvider>
+                <FavoritesProvider>
+                  <App />
+                  <Toaster position="top-center" />
+                </FavoritesProvider>
+              </CartProvider>
+            </CatalogProvider>
           </AuthProvider>
         </I18nProvider>
       </ThemeProvider>

@@ -9,7 +9,7 @@ export default function Legal() {
       <div className="mx-auto max-w-3xl px-4 py-10 md:px-8">
         <h1 className="font-display text-4xl font-extrabold">{t("legalTitle")}</h1>
         <p className="mt-4 text-base leading-relaxed text-muted">{t("legalBody")}</p>
-        <Link to="/aide" className="mt-6 inline-flex text-sm font-semibold text-lagon">
+        <Link to="/aide" className="mt-6 inline-flex text-sm font-semibold text-primary">
           {t("support")}
         </Link>
       </div>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Calendar, Clock, Heart, MapPin, Minus, Plus, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "../components/Shell";
@@ -9,7 +9,8 @@ import { useCart } from "../CartContext";
 import { useFavorites } from "../FavoritesContext";
 import { useCatalog } from "../useCatalog";
 import { useI18n } from "../i18n";
-import { dateRange, groupNumber, mapsUrl, totalRemaining } from "../utils";
+import { Badge, Button, Card, Container, ErrorState, LoadingState } from "../ui";
+import { cn, dateRange, groupNumber, mapsUrl, totalRemaining } from "../utils";
 
 const MAX_QTY_PER_TIER = 8;
 
@@ -19,7 +20,7 @@ export default function EventDetail() {
   const navigate = useNavigate();
   const { setCart } = useCart();
   const { favorites, toggle } = useFavorites();
-  const { events, bySlug } = useCatalog();
+  const { events, bySlug, loading, error, reload } = useCatalog();
   const event = bySlug(slug);
   const [qty, setQty] = useState({});
   const [waitEmail, setWaitEmail] = useState("");
@@ -40,18 +41,44 @@ export default function EventDetail() {
       .filter((line) => line.qty > 0);
   }, [event, qty, remaining]);
 
-  if (!events.length) return <Shell><div className="h-80" /></Shell>;
+  // Three distinct states. The old code rendered an empty 320px box while
+  // loading and the same box on failure, so a dead backend looked like a slow
+  // one and neither offered a way out.
+  if (loading) {
+    return (
+      <Shell>
+        <Container className="py-10">
+          <LoadingState label={t("loadingEvents")} rows={3} />
+        </Container>
+      </Shell>
+    );
+  }
+
+  if (error) {
+    return (
+      <Shell>
+        <Container className="py-10">
+          <ErrorState
+            title={t("catalogErrorTitle")}
+            body={t("catalogErrorBody")}
+            onRetry={reload}
+            retryLabel={t("retry")}
+          />
+        </Container>
+      </Shell>
+    );
+  }
 
   if (!event) {
     return (
       <Shell>
-        <div className="mx-auto max-w-xl px-4 py-20 text-center">
-          <h1 className="font-display text-3xl font-extrabold">{t("notFound")}</h1>
+        <Container size="narrow" className="py-20 text-center">
+          <h1 className="font-display text-title font-extrabold">{t("notFound")}</h1>
           <p className="mt-2 text-muted">{t("notFoundBody")}</p>
-          <Link to="/explorer" className="mt-6 inline-flex h-12 items-center rounded-full bg-lagon px-5 font-semibold text-foam">
+          <Button className="mt-6" onClick={() => navigate("/explorer")}>
             {t("backEvents")}
-          </Link>
-        </div>
+          </Button>
+        </Container>
       </Shell>
     );
   }
@@ -136,27 +163,27 @@ export default function EventDetail() {
           <div className="flex flex-wrap gap-2">
             <span className="rounded-full bg-foam/15 px-3 py-1 text-xs font-bold">{t("official")}</span>
             {event.badge === "last" || event.badge === "hot" ? (
-              <span className="rounded-full bg-corail px-3 py-1 text-xs font-bold">{t("limited")}</span>
+              <span className="rounded-full bg-danger px-3 py-1 text-xs font-bold">{t("limited")}</span>
             ) : null}
           </div>
           <h1 className="mt-4 max-w-4xl font-display text-4xl font-extrabold leading-none md:text-hero">{title}</h1>
           <p className="mt-4 max-w-2xl text-mist">{locale === "ar" ? event.aboutAr : event.aboutFr}</p>
           <div className="mt-6 flex flex-wrap gap-4 text-sm">
             <span className="inline-flex items-center gap-2">
-              <Calendar className="size-4 text-safran" />
+              <Calendar className="size-4 text-accent" />
               {dateRange(event.start, event.end, locale)}
             </span>
             <span className="inline-flex items-center gap-2">
-              <Clock className="size-4 text-safran" />
+              <Clock className="size-4 text-accent" />
               {t("doors")} {new Date(event.doors).toLocaleTimeString(locale === "ar" ? "ar-MA" : "fr-FR", { hour: "2-digit", minute: "2-digit" })}
             </span>
             <span className="inline-flex items-center gap-2">
-              <MapPin className="size-4 text-safran" />
+              <MapPin className="size-4 text-accent" />
               {venue}, {event.city}
             </span>
           </div>
           <div className="mt-6 flex flex-wrap gap-3">
-            <a href="#billets" className="inline-flex h-12 items-center rounded-full bg-safran px-5 text-sm font-semibold text-encre">
+            <a href="#billets" className="inline-flex h-12 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover">
               {t("choose")}
             </a>
             <a href={mapsUrl(event)} target="_blank" rel="noreferrer" className="inline-flex h-12 items-center rounded-full border border-foam/30 px-5 text-sm font-semibold">
@@ -171,7 +198,7 @@ export default function EventDetail() {
                 toast.success(isSaved ? t("savedOk") : t("savedAdd"));
               }}
             >
-              <Heart className={isSaved ? "size-5 fill-safran text-safran" : "size-5"} />
+              <Heart className={isSaved ? "size-5 fill-safran text-accent" : "size-5"} />
             </button>
           </div>
         </div>
@@ -179,64 +206,98 @@ export default function EventDetail() {
 
       <div id="billets" className="mx-auto grid max-w-7xl gap-6 px-4 py-10 md:px-8 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-8">
-          <section className="rounded-xl border border-line/10 bg-card p-4 shadow-card md:p-6">
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <h2 className="font-display text-2xl font-extrabold">{t("select")}</h2>
-                <p className="text-sm text-muted">{t("officialSale")}</p>
+          <Card pad={false} className="overflow-hidden">
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line/10 p-5">
+              <div className="min-w-0">
+                <h2 className="font-display text-heading font-extrabold">{t("select")}</h2>
+                <p className="mt-0.5 text-sm text-muted">{t("officialSale")}</p>
               </div>
-              <span className="inline-flex items-center gap-1 text-sm font-semibold text-lagon">
-                <ShieldCheck className="size-4" />
+              <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
+                <ShieldCheck className="size-4 shrink-0" aria-hidden />
                 {t("accessOk")}
               </span>
             </div>
-            <div className="mt-4 space-y-3">
+
+            <ul className="divide-y divide-line/10">
               {event.tiers.map((tier) => {
                 const left = leftFor(tier);
                 const value = qty[tier.id] ?? 0;
+                const gone = left === 0;
+                // "Only n left" is only true when it IS few. The old card
+                // showed it under 80 seats, which on a 20 000-seat festival
+                // was manufactured urgency.
+                const scarce = !gone && left <= 10;
+
                 return (
-                  <article key={tier.id} className={`rounded-xl border p-4 ${tier.recommended ? "border-lagon bg-brume/40" : "border-line/10"}`}>
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="flex flex-wrap gap-2">
-                          {tier.recommended ? <span className="rounded-md bg-safran px-2 py-0.5 text-xs font-bold text-encre">{t("recommended")}</span> : null}
+                  <li
+                    key={tier.id}
+                    className={cn(
+                      "p-5 transition",
+                      tier.recommended && "bg-brume/30",
+                      value > 0 && "bg-brume/50",
+                      gone && "opacity-55",
+                    )}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap gap-1.5">
+                          {tier.recommended ? <Badge tone="primary">{t("recommended")}</Badge> : null}
                           {tier.saveCents ? (
-                            <span className="rounded-md bg-corail px-2 py-0.5 text-xs font-bold text-foam">
-                              {tf("savePct", { n: Math.round((tier.saveCents / tier.priceCents) * 100) })}
-                            </span>
+                            <Badge tone="accent">{tf("savePct", { n: Math.round((tier.saveCents / tier.priceCents) * 100) })}</Badge>
                           ) : null}
-                          {left < 80 ? <span className="rounded-md bg-corail/10 px-2 py-0.5 text-xs font-bold text-corail">{tf("seatsLeft", { n: left })}</span> : null}
+                          {scarce ? <Badge tone="danger">{tf("seatsLeft", { n: left })}</Badge> : null}
+                          {gone ? <Badge tone="neutral">{t("soldOut")}</Badge> : null}
                         </div>
-                        <h3 className="mt-2 font-display text-lg font-bold">{locale === "ar" ? tier.nameAr : tier.nameFr}</h3>
-                        <p className="mt-1 max-w-xl text-sm text-muted">{locale === "ar" ? tier.blurbAr : tier.blurbFr}</p>
-                        <p className="mt-2 text-xs text-lagon">
+
+                        <h3 className="mt-2 font-display text-subhead font-bold">
+                          {locale === "ar" ? tier.nameAr : tier.nameFr}
+                        </h3>
+                        <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted">
+                          {locale === "ar" ? tier.blurbAr : tier.blurbFr}
+                        </p>
+                        <p className="mt-2 font-mono text-xs text-primary">
                           {locale === "ar" ? tier.zoneAr : tier.zoneFr} · {locale === "ar" ? tier.gateAr : tier.gateFr}
                         </p>
                       </div>
-                      <div className="text-end">
-                        <p className="font-display text-2xl font-extrabold tabular-nums">{money(tier.priceCents)} MAD</p>
-                        <div className="mt-2 inline-flex items-center rounded-full border border-line/15 bg-card">
-                          <button type="button" className="inline-flex size-11 items-center justify-center" aria-label={t("remove")} disabled={value === 0} onClick={() => change(tier.id, left, -1)}>
-                            <Minus className="size-4" />
-                          </button>
-                          <span className="w-6 text-center font-bold tabular-nums">{value}</span>
+
+                      <div className="flex shrink-0 flex-col items-end gap-2.5">
+                        <p className="font-display text-heading font-extrabold tabular-nums">
+                          {money(tier.priceCents)} <span className="text-sm font-bold text-muted">MAD</span>
+                        </p>
+                        <div className="inline-flex items-center rounded-full border border-line/15 bg-card">
                           <button
                             type="button"
-                            className="inline-flex size-11 items-center justify-center"
+                            className="inline-flex size-11 items-center justify-center rounded-s-full text-muted transition hover:bg-paper hover:text-ink disabled:opacity-35"
+                            aria-label={t("remove")}
+                            disabled={value === 0}
+                            onClick={() => change(tier.id, left, -1)}
+                          >
+                            <Minus className="size-4" aria-hidden />
+                          </button>
+                          <span
+                            className="w-8 text-center font-display font-extrabold tabular-nums"
+                            aria-live="polite"
+                            aria-label={tf("ticketsChosen", { n: value })}
+                          >
+                            {value}
+                          </span>
+                          <button
+                            type="button"
+                            className="inline-flex size-11 items-center justify-center rounded-e-full text-muted transition hover:bg-paper hover:text-ink disabled:opacity-35"
                             aria-label={t("add")}
-                            disabled={value >= Math.min(8, left)}
+                            disabled={value >= Math.min(MAX_QTY_PER_TIER, left)}
                             onClick={() => change(tier.id, left, 1)}
                           >
-                            <Plus className="size-4" />
+                            <Plus className="size-4" aria-hidden />
                           </button>
                         </div>
                       </div>
                     </div>
-                  </article>
+                  </li>
                 );
               })}
-            </div>
-          </section>
+            </ul>
+          </Card>
 
           {event.lineup?.length ? (
             <section>
@@ -247,7 +308,7 @@ export default function EventDetail() {
                   <article key={item.name} className="overflow-hidden rounded-xl border border-line/10 bg-card shadow-card">
                     <img src={item.image} alt="" className="h-32 w-full object-cover" />
                     <div className="p-3">
-                      <p className="font-mono text-xs text-lagon">
+                      <p className="font-mono text-xs text-primary">
                         {new Date(item.day).getUTCDate()} · {item.time}
                       </p>
                       <h3 className="font-display font-bold">{item.name}</h3>
@@ -263,9 +324,9 @@ export default function EventDetail() {
             <h2 className="font-display text-2xl font-extrabold">{t("plan")}</h2>
             <p className="text-sm text-muted">{venue}</p>
             <div className="mx-auto mt-4 max-w-lg rounded-xl bg-paper p-4">
-              <div className="mx-auto flex h-14 max-w-xs items-center justify-center rounded-t-xl bg-lagon text-sm font-bold text-foam">{t("stage")}</div>
-              <div className="mx-auto mt-2 flex h-16 max-w-sm items-center justify-center bg-safran/80 text-sm font-bold text-encre">{t("vipZone")}</div>
-              <div className="mx-auto mt-2 flex h-24 max-w-lg items-center justify-center bg-brume-deep text-sm font-bold text-lagon-deep">{t("lawn")}</div>
+              <div className="mx-auto flex h-14 max-w-xs items-center justify-center rounded-t-xl bg-primary text-sm font-bold text-foam">{t("stage")}</div>
+              <div className="mx-auto mt-2 flex h-16 max-w-sm items-center justify-center bg-accent/80 text-sm font-bold text-accent-fg">{t("vipZone")}</div>
+              <div className="mx-auto mt-2 flex h-24 max-w-lg items-center justify-center bg-brume-deep text-sm font-bold text-primary">{t("lawn")}</div>
               <p className="mt-3 text-center text-xs text-muted">
                 {t("capacity")} · {groupNumber(event.tiers.reduce((sum, tier) => sum + tier.capacity, 0))}
               </p>
@@ -283,62 +344,102 @@ export default function EventDetail() {
           </section>
         </div>
 
-        <aside className="h-fit rounded-xl bg-lagon p-4 text-foam shadow-pop lg:sticky lg:top-24">
-          <p className="text-sm font-semibold text-brume">{t("recap")}</p>
-          <h2 className="font-display text-xl font-extrabold">{t("cart")}</h2>
-          <div className="mt-4 space-y-2 text-sm">
-            {lines.length === 0 ? <p className="text-brume">{t("emptyCart")}</p> : null}
-            {lines.map((line) => (
-              <p key={line.tier.id} className="flex justify-between gap-3">
-                <span>
-                  {line.qty} × {locale === "ar" ? line.tier.nameAr : line.tier.nameFr}
-                </span>
-                <span className="tabular-nums">{money(line.qty * line.tier.priceCents)} MAD</span>
-              </p>
-            ))}
-          </div>
-          <div className="mt-4 space-y-1 border-t border-foam/20 pt-3 text-sm">
-            <Row label={t("subtotal")} value={`${money(total)} MAD`} />
-            <Row label={t("fees")} value={t("feesFree")} />
-            <Row label={t("vat")} value={t("included")} />
-          </div>
-          <p className="mt-3 border-t border-foam/20 pt-3">
-            <span className="block text-sm text-brume">{t("total")}</span>
-            <span className="font-display text-3xl font-extrabold tabular-nums">{money(total)} MAD</span>
-          </p>
-          <button type="button" className="mt-4 h-12 w-full rounded-full bg-safran text-sm font-semibold text-encre disabled:opacity-50" disabled={!count} onClick={checkout}>
-            {t("pay")}
-          </button>
-          {soldOut ? (
-            <form className="mt-4 grid gap-2" onSubmit={joinWaitlist}>
-              <p className="text-sm font-semibold">{t("waitTitle")}</p>
-              <p className="text-xs text-brume">{t("waitBody")}</p>
-              <input className="field h-11 text-encre" type="email" required value={waitEmail} onChange={(e) => setWaitEmail(e.target.value)} placeholder={t("email")} />
-              <button className="h-11 rounded-full bg-foam text-sm font-semibold text-encre disabled:opacity-50" type="submit" disabled={waitBusy}>
-                {t("waitJoin")}
-              </button>
-            </form>
-          ) : null}
-          <p className="mt-4 text-xs text-brume">
-            {t("helpBook")} · {t("whatsapp")}
-          </p>
-          <a className="mt-1 inline-block text-sm font-semibold underline" href="https://wa.me/212537001122" target="_blank" rel="noreferrer">
-            +212 5 37 00 11 22
-          </a>
-          <p className="mt-3 font-mono text-xs text-brume">RÉF. {event.slug.toUpperCase()}</p>
+        <aside className="h-fit lg:sticky lg:top-24">
+          <Card className="bg-encre text-foam" pad={false}>
+            <div className="border-b border-foam/10 p-5">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-mist">{t("recap")}</p>
+              <h2 className="mt-0.5 font-display text-subhead font-extrabold">{t("cart")}</h2>
+            </div>
+
+            <div className="p-5">
+              {lines.length === 0 ? (
+                <p className="text-sm text-mist">{t("emptyCart")}</p>
+              ) : (
+                <ul className="grid gap-2 text-sm">
+                  {lines.map((line) => (
+                    <li key={line.tier.id} className="flex justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="font-semibold tabular-nums">{line.qty}×</span>{" "}
+                        {locale === "ar" ? line.tier.nameAr : line.tier.nameFr}
+                      </span>
+                      <span className="shrink-0 tabular-nums">{money(line.qty * line.tier.priceCents)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <dl className="mt-4 grid gap-1.5 border-t border-foam/15 pt-4 text-sm">
+                <Row label={t("fees")} value={t("feesFree")} />
+                <Row label={t("vat")} value={t("included")} />
+              </dl>
+
+              {/* The total is the biggest thing in the panel — it is what the
+                  buyer is deciding about. */}
+              <div className="mt-4 border-t border-foam/15 pt-4">
+                <p className="text-sm text-mist">{t("total")}</p>
+                <p className="font-display text-display font-extrabold leading-none tabular-nums">
+                  {money(total)} <span className="text-heading font-bold text-mist">MAD</span>
+                </p>
+              </div>
+
+              <Button
+                full
+                size="lg"
+                className="mt-4"
+                disabled={!count}
+                loading={booking}
+                onClick={checkout}
+              >
+                {t("pay")}
+              </Button>
+
+              {soldOut ? (
+                <form className="mt-5 grid gap-2 border-t border-foam/15 pt-5" onSubmit={joinWaitlist}>
+                  <p className="text-sm font-bold">{t("waitTitle")}</p>
+                  <p className="text-xs leading-relaxed text-mist">{t("waitBody")}</p>
+                  <input
+                    className="h-11 w-full rounded-xl border border-foam/20 bg-foam/10 px-4 text-sm text-foam outline-none placeholder:text-mist focus:border-accent"
+                    type="email"
+                    required
+                    value={waitEmail}
+                    onChange={(e) => setWaitEmail(e.target.value)}
+                    placeholder={t("email")}
+                    aria-label={t("email")}
+                  />
+                  <Button variant="inverse" full type="submit" loading={waitBusy}>
+                    {t("waitJoin")}
+                  </Button>
+                </form>
+              ) : null}
+
+              <div className="mt-5 border-t border-foam/15 pt-4">
+                <p className="text-xs text-mist">{t("helpBook")}</p>
+                <a
+                  className="mt-1 inline-block text-sm font-semibold text-accent underline-offset-2 hover:underline"
+                  href="https://wa.me/212537001122"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  +212 5 37 00 11 22
+                </a>
+              </div>
+            </div>
+          </Card>
         </aside>
       </div>
 
+      {/* Phone action bar. The count used to render as a bare number under
+          the price — just "3", with no unit — so it read as a stray figure. */}
       {count > 0 ? (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line/10 bg-card p-3 lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line/10 bg-card/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md lg:hidden">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-            <div>
-              <p className="font-display text-xl font-extrabold tabular-nums">{money(total)} MAD</p>
-              <p className="text-xs text-muted">{count}</p>
+            <div className="min-w-0">
+              <p className="font-display text-subhead font-extrabold tabular-nums">{money(total)} MAD</p>
+              <p className="text-xs text-muted">{tf("ticketsChosen", { n: count })}</p>
             </div>
-            <button type="button" className="h-12 rounded-full bg-safran px-5 text-sm font-semibold text-encre" onClick={checkout}>
+            <Button size="lg" loading={booking} onClick={checkout}>
               {t("pay")}
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
@@ -357,10 +458,10 @@ export default function EventDetail() {
 
 function Row({ label, value }) {
   return (
-    <p className="flex justify-between gap-3">
-      <span className="text-brume">{label}</span>
-      <span>{value}</span>
-    </p>
+    <div className="flex justify-between gap-3">
+      <dt className="text-mist">{label}</dt>
+      <dd>{value}</dd>
+    </div>
   );
 }
 

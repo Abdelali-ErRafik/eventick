@@ -27,9 +27,9 @@ export function ConfirmProvider({ children }) {
   const tone = state?.tone ?? "default";
   const Icon = tone === "danger" ? Trash2 : tone === "warn" ? AlertTriangle : HelpCircle;
   const iconTone = {
-    default: "bg-brume text-lagon-deep",
-    warn: "bg-safran/20 text-safran-deep",
-    danger: "bg-corail/12 text-corail",
+    default: "bg-brume text-primary",
+    warn: "bg-accent/20 text-accent",
+    danger: "bg-danger/12 text-danger",
   };
 
   return (

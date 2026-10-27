@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { seatLabel } from "../components/TicketPass";
 import { api, downloadFile, money } from "../api";
 import { useI18n } from "../i18n";
+import { Badge, Button, Card, Field, Input, Modal } from "../ui";
 
 export default function TicketDetail() {
   const { ticketId } = useParams();
@@ -15,6 +16,8 @@ export default function TicketDetail() {
   const [options, setOptions] = useState(null);
   const [busy, setBusy] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [renaming, setRenaming] = useState(null);
 
   const load = useCallback(() => {
     api
@@ -33,7 +36,7 @@ export default function TicketDetail() {
 
   const cancelTicket = async () => {
     if (busy) return;
-    if (!window.confirm(t("confirmCancelTicket"))) return;
+    setConfirmCancel(false);
     setBusy(true);
     try {
       await api.post(`/tickets/${ticketId}/cancel`, {});
@@ -60,13 +63,15 @@ export default function TicketDetail() {
     }
   };
 
-  const fixName = async () => {
-    const next = window.prompt(t("fixName"), data?.ticket?.holderName ?? "");
-    if (!next || next.trim().length < 2) return;
+  const submitName = async (event) => {
+    event.preventDefault();
+    const next = (renaming ?? "").trim();
+    if (next.length < 2 || busy) return;
     setBusy(true);
     try {
-      await api.patch(`/tickets/${ticketId}/holder`, { holderName: next.trim() });
+      await api.patch(`/tickets/${ticketId}/holder`, { holderName: next });
       toast.success(t("nameFixed"));
+      setRenaming(null);
       load();
     } catch (err) {
       toast.error(err.message);
@@ -129,7 +134,7 @@ export default function TicketDetail() {
       <Shell>
         <div className="mx-auto max-w-xl px-4 py-16 text-center">
           <h1 className="font-display text-3xl font-extrabold">{t("notFound")}</h1>
-          <Link to="/billets" className="mt-4 inline-flex h-12 items-center rounded-full bg-lagon px-5 font-semibold text-foam">
+          <Link to="/billets" className="mt-4 inline-flex h-12 items-center rounded-full bg-primary px-5 font-semibold text-primary-fg transition hover:bg-primary-hover">
             {t("seeTickets")}
           </Link>
         </div>
@@ -156,18 +161,18 @@ export default function TicketDetail() {
     <Shell>
       <div className="mx-auto max-w-xl px-4 py-8">
         <div className="flex items-center justify-between no-print">
-          <Link to="/billets" className="text-sm font-semibold text-lagon">
+          <Link to="/billets" className="text-sm font-semibold text-primary">
             {t("back")}
           </Link>
           <div className="flex gap-2">
             <button
               type="button"
-              className="h-11 rounded-full bg-lagon px-4 text-sm font-semibold text-foam"
+              className="h-11 rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover"
               onClick={() => downloadFile(`/tickets/${ticketId}/pdf`, `${ticket.ref}.pdf`).catch((err) => toast.error(err.message))}
             >
               {t("download")}
             </button>
-            <button type="button" className="h-11 rounded-full bg-encre px-4 text-sm font-semibold text-foam" onClick={() => window.print()}>
+            <button type="button" className="h-11 rounded-full border border-line/20 bg-card px-4 text-sm font-semibold transition hover:bg-paper" onClick={() => window.print()}>
               {t("print")}
             </button>
           </div>
@@ -175,7 +180,7 @@ export default function TicketDetail() {
         <article className="mt-4 overflow-hidden rounded-2xl bg-card shadow-pop">
           {event.image ? <img src={event.image} alt="" className="h-44 w-full object-cover" /> : null}
           <div className="p-5">
-            <p className="font-mono text-xs text-lagon">{ticket.ref}</p>
+            <p className="font-mono text-xs text-primary">{ticket.ref}</p>
             <h1 className="mt-1 font-display text-3xl font-extrabold">{title}</h1>
             <p className="mt-2 text-sm text-muted">{new Date(event.start).toLocaleDateString(locale === "ar" ? "ar-MA" : "fr-FR")}</p>
             <p className="font-semibold">{venue}</p>
@@ -191,11 +196,11 @@ export default function TicketDetail() {
             </div>
             <p className="mt-2 text-center text-xs text-muted">{t("brightness")}</p>
             {ticket.status !== "VALID" ? (
-              <p className="mt-3 text-center font-bold text-corail">
+              <p className="mt-3 text-center font-bold text-danger">
                 {ticket.status === "TRANSFERRED" ? t("transferred") : ticket.status === "CANCELLED" ? t("cancelled") : t("used")}
               </p>
             ) : (
-              <p className="mt-3 text-center font-bold text-lagon">{t("validEntry")}</p>
+              <p className="mt-3 text-center font-bold text-primary">{t("validEntry")}</p>
             )}
           </div>
         </article>
@@ -230,8 +235,8 @@ export default function TicketDetail() {
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
-                className="h-11 rounded-full border border-line/20 px-4 text-sm font-semibold hover:bg-paper disabled:opacity-50"
-                onClick={fixName}
+                className="h-11 rounded-full border border-line/20 bg-card px-4 text-sm font-semibold transition hover:bg-paper disabled:opacity-50"
+                onClick={() => setRenaming(data?.ticket?.holderName ?? "")}
                 disabled={busy}
               >
                 {t("fixName")}
@@ -239,8 +244,8 @@ export default function TicketDetail() {
               {options.cancel?.allowed ? (
                 <button
                   type="button"
-                  className="h-11 rounded-full bg-corail px-4 text-sm font-semibold text-white disabled:opacity-50"
-                  onClick={cancelTicket}
+                  className="h-11 rounded-full bg-danger px-4 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
+                  onClick={() => setConfirmCancel(true)}
                   disabled={busy}
                 >
                   {t("cancelTicket")}
@@ -272,7 +277,7 @@ export default function TicketDetail() {
                       </span>
                       <button
                         type="button"
-                        className="h-10 shrink-0 rounded-full bg-lagon px-3 text-xs font-semibold text-foam disabled:opacity-40"
+                        className="h-10 shrink-0 rounded-full bg-primary px-3.5 text-xs font-semibold text-primary-fg transition hover:bg-primary-hover disabled:opacity-40"
                         onClick={() => changeZone(zone.tierId)}
                         // An upgrade owes money, which this page cannot yet
                         // collect — the server refuses it, so don't offer it.
@@ -295,7 +300,7 @@ export default function TicketDetail() {
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    className="h-11 rounded-full bg-lagon px-4 text-sm font-semibold text-foam disabled:opacity-50"
+                    className="h-11 rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover disabled:opacity-50"
                     onClick={() => copyShare(options.share.token)}
                     disabled={busy}
                   >
@@ -303,7 +308,7 @@ export default function TicketDetail() {
                   </button>
                   <button
                     type="button"
-                    className="h-11 rounded-full border border-line/20 px-4 text-sm font-semibold hover:bg-paper disabled:opacity-50"
+                    className="h-11 rounded-full border border-line/20 bg-card px-4 text-sm font-semibold transition hover:bg-paper disabled:opacity-50"
                     onClick={() => revokeShare(options.share.id)}
                     disabled={busy}
                   >
@@ -325,7 +330,7 @@ export default function TicketDetail() {
                 />
                 <button
                   type="button"
-                  className="mt-2 h-11 rounded-full bg-lagon px-4 text-sm font-semibold text-foam disabled:opacity-50"
+                  className="mt-2 h-11 rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover disabled:opacity-50"
                   onClick={createShare}
                   disabled={busy}
                 >
@@ -337,6 +342,54 @@ export default function TicketDetail() {
           </section>
         ) : null}
       </div>
+
+      {/* Cancelling refunds money and cannot be undone, so it gets a real
+          dialog. window.confirm could not be styled or fully translated, and
+          some mobile browsers suppress it outright - which would have
+          cancelled the ticket with no prompt shown at all. */}
+      <Modal
+        open={confirmCancel}
+        onClose={() => setConfirmCancel(false)}
+        title={t("cancelTicket")}
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmCancel(false)}>
+              {t("cancel")}
+            </Button>
+            <Button variant="danger" loading={busy} onClick={cancelTicket}>
+              {t("cancelTicket")}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm leading-relaxed text-muted">{t("confirmCancelTicket")}</p>
+      </Modal>
+
+      <Modal
+        open={renaming !== null}
+        onClose={() => setRenaming(null)}
+        title={t("fixName")}
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setRenaming(null)}>
+              {t("cancel")}
+            </Button>
+            <Button type="submit" form="rename-form" loading={busy} disabled={(renaming ?? "").trim().length < 2}>
+              {t("saveProfile")}
+            </Button>
+          </>
+        }
+      >
+        <form id="rename-form" onSubmit={submitName}>
+          <Field label={t("holderOf")} required>
+            {(props) => (
+              <Input {...props} value={renaming ?? ""} onChange={(e) => setRenaming(e.target.value)} autoComplete="name" />
+            )}
+          </Field>
+        </form>
+      </Modal>
     </Shell>
   );
 }

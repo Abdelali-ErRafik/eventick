@@ -124,7 +124,7 @@ export default function QrScanner({ onScan, paused }) {
           <>
             {/* Reticle: shows the staff where to hold the ticket. */}
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="size-48 rounded-2xl border-4 border-safran/80 shadow-[0_0_0_9999px_rgba(20,23,47,0.45)]" />
+              <div className="size-48 rounded-2xl border-4 border-accent/80 shadow-[0_0_0_9999px_rgba(20,23,47,0.45)]" />
             </div>
             <button
               type="button"
@@ -154,7 +154,7 @@ export default function QrScanner({ onScan, paused }) {
 
         {state === "error" ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
-            <CameraOff className="size-8 text-corail" />
+            <CameraOff className="size-8 text-danger" />
             <p className="max-w-sm text-sm text-mist">{error}</p>
             <Btn variant="secondary" onClick={start}>
               {t.camRetry}

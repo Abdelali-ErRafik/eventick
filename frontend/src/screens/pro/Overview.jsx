@@ -58,7 +58,7 @@ export default function Overview() {
           <>
             {stats ? (
               <span className="flex items-center gap-2 text-xs text-muted">
-                <RefreshCw className={cn("size-3.5", pulse && "animate-spin text-lagon")} aria-hidden />
+                <RefreshCw className={cn("size-3.5", pulse && "animate-spin text-primary")} aria-hidden />
                 {t.updatedAt.replace(
                   "{t}",
                   new Date(stats.generatedAt).toLocaleTimeString(locale === "ar" ? "ar-MA" : "fr-FR", {
@@ -68,10 +68,10 @@ export default function Overview() {
                 )}
               </span>
             ) : null}
-            <Badge tone={pulse ? "green" : "gray"}>{t.live}</Badge>
+            <Badge tone={pulse ? "success" : "neutral"}>{t.live}</Badge>
             <Link
               to="/organiser"
-              className="inline-flex h-11 items-center rounded-full bg-safran px-4 text-sm font-semibold text-encre transition hover:bg-safran-deep active:scale-[0.97]"
+              className="inline-flex h-11 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover active:scale-[0.97]"
             >
               {t.create}
             </Link>
@@ -113,7 +113,7 @@ export default function Overview() {
       <ol className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {t.loop.map((step, index) => (
           <li key={step} className="rounded-xl border border-line/10 bg-card px-4 py-3 shadow-card">
-            <span className="font-mono text-xs font-bold text-lagon">0{index + 1}</span>
+            <span className="font-mono text-xs font-bold text-primary">0{index + 1}</span>
             <p className="text-sm font-semibold">{step}</p>
           </li>
         ))}
@@ -123,7 +123,7 @@ export default function Overview() {
         <Card className="flex flex-col">
           <SectionTitle
             action={
-              <Link to="/pro/events" className="text-sm font-semibold text-lagon">
+              <Link to="/pro/events" className="text-sm font-semibold text-primary">
                 {t.open}
               </Link>
             }
@@ -142,7 +142,7 @@ export default function Overview() {
                     </p>
                   </div>
                 </div>
-                <Link to={`/evenements/${event.slug}`} className="shrink-0 text-sm font-semibold text-lagon">
+                <Link to={`/evenements/${event.slug}`} className="shrink-0 text-sm font-semibold text-primary">
                   {t.public}
                 </Link>
               </li>
@@ -158,7 +158,7 @@ export default function Overview() {
         <Card className="flex flex-col">
           <SectionTitle
             action={
-              <Link to="/pro/orders" className="text-sm font-semibold text-lagon">
+              <Link to="/pro/orders" className="text-sm font-semibold text-primary">
                 {t.open}
               </Link>
             }
@@ -169,7 +169,7 @@ export default function Overview() {
             {recent.map((order) => (
               <li key={order.id} className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-brume text-[13px] font-extrabold text-lagon-deep" aria-hidden>
+                  <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-brume text-[13px] font-extrabold text-primary" aria-hidden>
                     {(order.holderName || "?").slice(0, 1).toUpperCase()}
                   </span>
                   <div className="min-w-0">

@@ -132,7 +132,7 @@ export default function Placements() {
         actions={
           <>
             <select
-              className="h-11 rounded-xl border border-line/20 bg-card px-3 text-sm outline-none focus:border-lagon"
+              className="h-11 rounded-xl border border-line/20 bg-card px-3 text-sm outline-none focus:border-primary"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
             >
@@ -192,11 +192,11 @@ export default function Placements() {
                 <Td className="text-center tabular-nums">{tier.sold}</Td>
                 <Td className="text-center">
                   {tier.numbered ? (
-                    <Badge tone="blue">
+                    <Badge tone="info">
                       {t.numbered} · {tier.seatsPerRow ?? 12}/{t.seatsPerRow.toLowerCase()}
                     </Badge>
                   ) : (
-                    <Badge tone="gray">{t.freeSeating}</Badge>
+                    <Badge tone="neutral">{t.freeSeating}</Badge>
                   )}
                 </Td>
                 <Td className="w-px whitespace-nowrap pe-4">

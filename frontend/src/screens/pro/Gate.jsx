@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, Keyboard, QrCode, ScanLine, XCircle } from "lucide-react";
+import { Download, Keyboard, QrCode, ScanLine, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
+import { Notice, Verdict } from "../../ui";
 import { useI18n } from "../../i18n";
 import QrScanner from "./QrScanner";
 import { Badge, Btn, Card, EmptyState, PageHead, PersonCell } from "./ui";
@@ -16,6 +17,17 @@ import {
   saveManifest,
 } from "./offlineGate";
 import { text } from "./copy";
+
+/** The headline word for each outcome. The full sentence goes underneath as
+ * the detail — at a door you read the word first and the reason second. */
+const VERDICT_WORD = (t) => ({
+  ok: t.vOk,
+  used: t.vUsed,
+  cancelled: t.vCancelled,
+  moved: t.vMoved,
+  invalid: t.vInvalid,
+  missing: t.vMissing,
+});
 
 export default function Gate() {
   const { locale } = useI18n();
@@ -93,11 +105,11 @@ export default function Gate() {
         const known = manifestHas(manifest, bare);
         if (known) {
           setQueued(queueScan({ payload: { ref: scanned, source }, at: Date.now() }));
-          setResult({ ok: true, ref: bare, holder: "", message: t.admittedOffline });
+          setResult({ ok: true, code: "ok", ref: bare, holder: "", message: t.admittedOffline });
           setLog((prev) => [{ ref: bare, code: "ok", holder: "", at: new Date() }, ...prev].slice(0, 10));
           toast.success(t.admittedOffline);
         } else {
-          setResult({ ok: false, ref: bare, holder: "", message: t.missing });
+          setResult({ ok: false, code: "missing", ref: bare, holder: "", message: t.missing });
           setLog((prev) => [{ ref: bare, code: "missing", holder: "", at: new Date() }, ...prev].slice(0, 10));
           toast.error(t.missing);
         }
@@ -111,7 +123,7 @@ export default function Gate() {
       try {
         const res = await api.post("/gate/check-in", { ref: scanned, source });
         const holder = res.ticket?.holderName ?? "";
-        setResult({ ok: true, ref: res.ticket?.ref ?? scanned, holder, message: t.admitted });
+        setResult({ ok: true, code: "ok", ref: res.ticket?.ref ?? scanned, holder, message: t.admitted });
         setLog((prev) => [{ ref: res.ticket?.ref ?? scanned, code: "ok", holder, at: new Date() }, ...prev].slice(0, 10));
         toast.success(t.admitted);
         setRef("");
@@ -128,7 +140,7 @@ export default function Gate() {
                   ? t.invalidCode
                   : t.missing;
         const shown = err.data?.ticket?.ref ?? scanned;
-        setResult({ ok: false, ref: shown, holder: "", message });
+        setResult({ ok: false, code: code2, ref: shown, holder: "", message });
         setLog((prev) => [{ ref: shown, code: code2, holder: "", at: new Date() }, ...prev].slice(0, 10));
         toast.error(message);
       } finally {
@@ -176,8 +188,26 @@ export default function Gate() {
         }
       />
 
+      {/*
+        Losing the network at a door changes what the gate can promise: it is
+        now deciding from a downloaded manifest, which was accurate when it
+        was fetched and cannot see a refund since. That was previously a small
+        amber badge in a quiet strip — easy to miss mid-queue, which is
+        exactly when it matters.
+      */}
+      {!online ? (
+        <Notice
+          tone="warn"
+          icon={<WifiOff className="size-5" />}
+          title={t.offline}
+          className="mb-4"
+        >
+          {manifest ? t.manifestFor.replace("{e}", manifest.eventSlug).replace("{n}", String(manifest.refs.length)) : t.noManifest}
+        </Notice>
+      ) : null}
+
       <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-line/10 bg-card p-3 shadow-card">
-        <Badge tone={online ? "green" : "amber"}>
+        <Badge tone={online ? "success" : "warn"}>
           {online ? t.online : t.offline}
         </Badge>
         {manifest ? (
@@ -185,10 +215,10 @@ export default function Gate() {
         ) : (
           <span className="text-xs text-muted">{t.noManifest}</span>
         )}
-        {queued > 0 ? <Badge tone="amber">{t.queuedScans.replace("{n}", String(queued))}</Badge> : null}
+        {queued > 0 ? <Badge tone="warn">{t.queuedScans.replace("{n}", String(queued))}</Badge> : null}
         <div className="ms-auto flex flex-wrap items-center gap-2">
           <select
-            className="h-10 rounded-xl border border-line/20 bg-card px-3 text-sm outline-none focus:border-lagon"
+            className="h-10 rounded-xl border border-line/20 bg-card px-3 text-sm outline-none focus:border-primary"
             defaultValue=""
             onChange={(e) => { if (e.target.value) downloadManifest(e.target.value); e.target.value = ""; }}
           >
@@ -209,7 +239,7 @@ export default function Gate() {
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr] lg:items-start">
         <Card className="bg-encre text-foam">
           <div className="flex items-center gap-3">
-            <span className="inline-flex size-10 items-center justify-center rounded-xl bg-foam/10 text-safran" aria-hidden>
+            <span className="inline-flex size-10 items-center justify-center rounded-xl bg-foam/10 text-accent" aria-hidden>
               <QrCode className="size-5" />
             </span>
             <div>
@@ -228,12 +258,12 @@ export default function Gate() {
                   onChange={(e) => setRef(e.target.value)}
                   placeholder="ET-2027-GA6DAV66RQ"
                   autoFocus
-                  className="h-14 w-full rounded-xl border border-foam/20 bg-foam px-4 font-mono text-lg text-encre outline-none focus:border-safran focus:ring-[3px] focus:ring-safran/30"
+                  className="h-14 w-full rounded-xl border border-foam/20 bg-foam px-4 font-mono text-lg text-encre outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/30"
                 />
                 <button
                   type="submit"
                   disabled={busy}
-                  className="h-14 shrink-0 rounded-full bg-safran px-6 text-sm font-semibold text-encre transition hover:brightness-105 active:scale-[0.97] disabled:opacity-50"
+                  className="h-14 shrink-0 rounded-full bg-primary px-6 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover active:scale-[0.97] disabled:opacity-50"
                 >
                   {t.check}
                 </button>
@@ -241,39 +271,28 @@ export default function Gate() {
             )}
           </div>
 
-          <div
-            className={cn(
-              "mt-5 flex items-center gap-3 rounded-xl px-4 py-4",
-              !result && "bg-foam/5 text-mist",
-              result?.ok && "bg-lagon/25 text-foam",
-              result && !result.ok && "bg-corail/25 text-foam",
-            )}
-            aria-live="polite"
-          >
-            {result ? (
-              result.ok ? (
-                <CheckCircle2 className="size-6 shrink-0 text-lagon" />
-              ) : (
-                <XCircle className="size-6 shrink-0 text-corail" />
-              )
-            ) : null}
-            <div className="min-w-0">
-              <p className="font-display text-base font-extrabold">{result ? result.message : t.waiting}</p>
-              {result ? (
-                <p className="truncate font-mono text-xs opacity-80">
-                  {result.holder ? `${result.holder} · ` : ""}
-                  {result.ref}
-                </p>
-              ) : null}
-            </div>
-          </div>
+          {/*
+            The verdict. Read standing up, one-handed, at a venue door, often
+            in the dark, with a queue waiting - so it is the largest thing on
+            the screen, one icon and one word per outcome, and it never relies
+            on colour alone.
+          */}
+          <Verdict
+            code={result?.code}
+            headline={result ? VERDICT_WORD(t)[result.code] ?? t.vMissing : undefined}
+            detail={result?.message}
+            holder={result?.holder}
+            ticketRef={result?.ref}
+            idleLabel={t.waiting}
+            className="mt-5"
+          />
         </Card>
 
         <Card>
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="font-display text-lg font-extrabold">{t.recent}</h2>
             {log.length > 0 ? (
-              <Badge tone="green">
+              <Badge tone="success">
                 {admitted}/{log.length}
               </Badge>
             ) : null}
@@ -288,7 +307,7 @@ export default function Gate() {
                     name={entry.holder || entry.ref}
                     sub={entry.at.toLocaleTimeString(locale === "ar" ? "ar-MA" : "fr-FR", { hour: "2-digit", minute: "2-digit" })}
                   />
-                  <Badge tone={entry.code === "ok" ? "green" : entry.code === "used" ? "amber" : "red"}>
+                  <Badge tone={entry.code === "ok" ? "success" : entry.code === "used" ? "warn" : "danger"}>
                     {entry.code === "ok"
                       ? t.valid
                       : entry.code === "used"

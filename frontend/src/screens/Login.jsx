@@ -90,14 +90,14 @@ export default function Login() {
         <div className="grid overflow-hidden rounded-3xl border border-line/10 bg-card shadow-pop md:grid-cols-[1fr_1.1fr]">
           <aside className="hidden flex-col justify-between gap-8 bg-encre p-10 text-foam md:flex">
             <Link to="/" className="font-display text-xl font-extrabold tracking-tight">
-              Eventick<span className="text-safran">.ma</span>
+              Eventick<span className="text-accent">.ma</span>
             </Link>
             <div>
               <p className="font-display text-display font-extrabold">{mode === "in" ? t("loginTitle") : t("signupTitle")}</p>
               <p className="mt-3 max-w-sm text-sm leading-relaxed text-mist">{mode === "in" ? t("loginSub") : t("signupSub")}</p>
             </div>
             <p className="flex items-center gap-2 text-xs font-semibold text-mist">
-              <ShieldCheck className="size-4 shrink-0 text-safran" />
+              <ShieldCheck className="size-4 shrink-0 text-accent" />
               {t("loginTrust")}
             </p>
           </aside>
@@ -121,7 +121,7 @@ export default function Login() {
                     setMode(value);
                     setError(null);
                   }}
-                  className={cn("h-11 rounded-full transition disabled:opacity-50", mode === value ? "bg-card text-encre shadow-card" : "text-muted")}
+                  className={cn("h-11 rounded-full transition disabled:opacity-50", mode === value ? "bg-card text-ink shadow-card" : "text-muted hover:text-ink")}
                 >
                   {value === "in" ? t("signIn") : t("signUp")}
                 </button>
@@ -162,11 +162,11 @@ export default function Login() {
                 </span>
               </label>
               {error ? (
-                <p role="alert" className="rounded-xl bg-corail/10 px-4 py-3 text-sm font-semibold text-corail">
+                <p role="alert" className="rounded-xl bg-danger/10 px-4 py-3 text-sm font-semibold text-danger">
                   {error}
                 </p>
               ) : null}
-              <button type="submit" disabled={busy} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-safran text-sm font-semibold text-encre disabled:opacity-50">
+              <button type="submit" disabled={busy} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary text-sm font-semibold text-primary-fg transition hover:bg-primary-hover disabled:opacity-50">
                 {busy ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
@@ -187,7 +187,7 @@ export default function Login() {
                   setMode(mode === "in" ? "up" : "in");
                   setError(null);
                 }}
-                className="font-bold text-lagon-deep underline-offset-4 hover:underline"
+                className="font-bold text-primary underline-offset-4 hover:underline"
               >
                 {mode === "in" ? t("signUp") : t("signIn")}
               </button>
@@ -206,7 +206,7 @@ export default function Login() {
                       type="button"
                       disabled={busy}
                       onClick={() => quickLogin(account)}
-                      className="rounded-xl border border-line/15 px-3 py-2.5 text-start transition hover:border-lagon/40 hover:bg-paper disabled:opacity-50"
+                      className="rounded-xl border border-line/15 px-3 py-2.5 text-start transition hover:border-primary/40 hover:bg-paper disabled:opacity-50"
                     >
                       <span className="block text-sm font-bold text-encre">{locale === "ar" ? account.labelAr : account.labelFr}</span>
                       <span className="block text-xs text-muted">{locale === "ar" ? account.roleAr : account.roleFr}</span>
@@ -216,7 +216,7 @@ export default function Login() {
               </div>
             ) : null}
             <p className="mt-6 flex items-center justify-center gap-2 text-center text-xs text-muted md:hidden">
-              <ShieldCheck className="size-4 shrink-0 text-lagon" />
+              <ShieldCheck className="size-4 shrink-0 text-primary" />
               {t("loginTrust")}
             </p>
           </div>

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { QrMark } from "./QrMark";
 import { money } from "../api";
 import { useI18n } from "../i18n";
+import { Badge } from "../ui";
 
 export function seatLabel(ticket, locale) {
   if (!ticket.seatRow || !ticket.seatNumber) return null;
@@ -37,37 +38,70 @@ export function TicketPass({ ticket, event, tier, priceCents, qrPayload }) {
   const seat = seatLabel(ticket, locale);
 
   return (
-    <article className="overflow-hidden rounded-xl border border-line/10 bg-card shadow-card">
-      <div className="grid lg:grid-cols-[1fr_16rem]">
-        <div className="p-5 md:p-6">
+    <article className="overflow-hidden rounded-2xl border border-line/10 bg-card shadow-card">
+      <div className="grid lg:grid-cols-[1fr_17rem]">
+        {/* Stub */}
+        <div className="min-w-0 p-5 md:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="rounded-full bg-lagon px-3 py-1 text-xs font-bold text-foam">{tierName}</span>
+            <Badge tone="primary">{tierName}</Badge>
             <span className="font-mono text-xs text-muted">
               {t("ref")} {ticket.ref}
             </span>
           </div>
-          <p className="mt-4 text-sm font-semibold text-lagon">
-            {new Date(event.start).toLocaleDateString(locale === "ar" ? "ar-MA" : "fr-FR")}
+
+          <p className="mt-5 text-sm font-semibold text-primary">
+            {new Date(event.start).toLocaleDateString(locale === "ar" ? "ar-MA" : "fr-MA", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })}
           </p>
-          <h2 className="mt-1 font-display text-2xl font-extrabold text-encre md:text-3xl">{title}</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <h2 className="mt-1 font-display text-title font-extrabold">{title}</h2>
+
+          <dl className="mt-5 grid gap-2.5 sm:grid-cols-2">
             <Meta label={t("venue")} value={venue} hint={gate} />
             <Meta label={t("zone")} value={zone} hint={seat ?? t("freeSeat")} />
             <Meta label={t("holderOf")} value={ticket.holderName} />
             {priceCents != null ? <Meta label={t("paidPrice")} value={`${money(priceCents)} MAD`} /> : null}
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2 no-print">
-            <Link to={`/billet/${ticket.id}`} className="inline-flex h-11 items-center rounded-full bg-encre px-4 text-sm font-semibold text-foam">
+          </dl>
+
+          <div className="no-print mt-5">
+            <Link
+              to={`/billet/${ticket.id}`}
+              className="inline-flex h-11 items-center rounded-full border border-line/20 bg-card px-5 text-sm font-semibold text-ink transition hover:bg-paper"
+            >
               {t("showPass")}
             </Link>
           </div>
         </div>
-        <div className="flex flex-col items-center justify-center gap-2 border-t border-dashed border-line/20 bg-brume/40 p-5 lg:border-s lg:border-t-0">
-          <span className="rounded-full bg-lagon px-3 py-1 text-xs font-bold text-foam">{t("validEntry")}</span>
-          <div className="rounded-xl bg-card p-2 shadow-card">
+
+        {/*
+          The QR panel, separated by a perforation. The notches and the dashed
+          rule are what make this read as a ticket rather than as another card
+          — the only place in the app where that is the point.
+        */}
+        <div className="relative flex flex-col items-center justify-center gap-3 border-t border-dashed border-line/25 bg-brume/40 p-5 lg:border-s lg:border-t-0">
+          {/*
+            Perforation notches. Centred with inset-inline + margin:auto rather
+            than `start-1/2 -translate-x-1/2`, because a negative translate-x
+            does NOT mirror under RTL — the notch drifted off-centre in Arabic.
+            This approach has no horizontal transform to mirror.
+          */}
+          <span
+            className="absolute -top-2.5 inset-inline-0 mx-auto size-5 rounded-full bg-paper lg:inset-inline-auto lg:top-0 lg:-mt-2.5 lg:-ms-2.5 lg:start-0"
+            aria-hidden
+          />
+          <span
+            className="absolute -bottom-2.5 inset-inline-0 mx-auto size-5 rounded-full bg-paper lg:inset-inline-auto lg:bottom-0 lg:-mb-2.5 lg:-ms-2.5 lg:start-0"
+            aria-hidden
+          />
+
+          <Badge tone="success">{t("validEntry")}</Badge>
+          <div className="rounded-xl bg-white p-2.5 shadow-card">
             <QrMark value={qrPayload} />
           </div>
-          <p className="max-w-48 text-center font-mono text-xs text-muted">{t("brightness")}</p>
+          <p className="max-w-48 text-center text-xs leading-relaxed text-muted">{t("brightness")}</p>
         </div>
       </div>
     </article>
@@ -76,10 +110,10 @@ export function TicketPass({ ticket, event, tier, priceCents, qrPayload }) {
 
 function Meta({ label, value, hint }) {
   return (
-    <div className="rounded-xl bg-paper px-3 py-2">
-      <p className="font-mono text-xs tracking-wide text-muted">{label}</p>
-      <p className="font-semibold text-encre">{value}</p>
-      {hint ? <p className="text-sm text-muted">{hint}</p> : null}
+    <div className="min-w-0 rounded-xl bg-paper px-3.5 py-2.5">
+      <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</dt>
+      <dd className="truncate font-semibold">{value}</dd>
+      {hint ? <dd className="truncate text-sm text-muted">{hint}</dd> : null}
     </div>
   );
 }

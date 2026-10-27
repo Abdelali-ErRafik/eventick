@@ -73,7 +73,7 @@ export default function Finance() {
             onClick={() => setPlan(item.id)}
             className={cn(
               "h-11 rounded-full border px-4 text-sm font-semibold transition",
-              plan === item.id ? "border-lagon bg-lagon text-white" : "border-line/20 bg-card text-muted hover:border-lagon hover:bg-brume hover:text-lagon-deep",
+              plan === item.id ? "border-primary bg-primary text-white" : "border-line/20 bg-card text-muted hover:border-primary hover:bg-brume hover:text-primary",
             )}
           >
             {item.label}
@@ -114,7 +114,7 @@ export default function Finance() {
 
       <Card className="mt-4">
         <p className="text-sm text-muted">{t.payout}</p>
-        <p className="mt-1 font-mono text-sm text-lagon">{t.account}</p>
+        <p className="mt-1 font-mono text-sm text-primary">{t.account}</p>
       </Card>
     </div>
   );

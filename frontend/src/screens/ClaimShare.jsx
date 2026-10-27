@@ -4,6 +4,7 @@ import { Shell } from "../components/Shell";
 import { QrMark } from "../components/QrMark";
 import { toast } from "sonner";
 import { api } from "../api";
+import { Button } from "../ui";
 import { useI18n } from "../i18n";
 
 /**
@@ -52,7 +53,7 @@ export default function ClaimShare() {
       <Shell>
         <div className="mx-auto max-w-xl px-4 py-16 text-center">
           <p className="text-sm text-muted">{error}</p>
-          <Link to="/explorer" className="mt-4 inline-block text-sm font-semibold text-lagon underline">
+          <Link to="/explorer" className="mt-4 inline-block text-sm font-semibold text-primary underline">
             {t("explore")}
           </Link>
         </div>
@@ -72,7 +73,7 @@ export default function ClaimShare() {
           <p className="mt-4 text-sm text-muted">{t("claimKeepLink")}</p>
           <Link
             to={`/billet/${claimed.ticketId}`}
-            className="mt-6 inline-flex h-12 items-center rounded-full bg-lagon px-6 text-sm font-semibold text-foam"
+            className="mt-6 inline-flex h-12 items-center rounded-full bg-primary px-6 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover"
           >
             {t("viewTicket")}
           </Link>
@@ -129,15 +130,11 @@ export default function ClaimShare() {
             onChange={(event) => setName(event.target.value)}
             required
             minLength={3}
-            className="mt-2 h-12 w-full rounded-xl border border-line/20 bg-card px-4 text-sm"
+            className="mt-2 h-12 w-full rounded-xl border border-line/15 bg-card px-4 text-sm outline-none transition focus:border-primary focus:ring-[3px] focus:ring-primary/20"
           />
-          <button
-            type="submit"
-            disabled={busy || name.trim().length < 3}
-            className="mt-4 h-12 w-full rounded-full bg-lagon text-sm font-semibold text-foam disabled:opacity-50"
-          >
+          <Button type="submit" full size="lg" className="mt-4" loading={busy} disabled={name.trim().length < 3}>
             {t("claimAccept")}
-          </button>
+          </Button>
         </form>
       </div>
     </Shell>

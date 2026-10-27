@@ -5,7 +5,7 @@ import { Protected } from "../../components/Protected";
 import { api } from "../../api";
 import { useI18n } from "../../i18n";
 import { ConfirmProvider } from "./ConfirmContext";
-import DashboardShell from "./Shell";
+import DashboardShell from "./chrome/DashboardShell";
 import { text } from "./copy";
 import Overview from "./Overview";
 import Events from "./Events";

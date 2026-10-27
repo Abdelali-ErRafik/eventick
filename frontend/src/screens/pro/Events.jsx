@@ -193,7 +193,7 @@ export default function Events() {
         actions={
           <Link
             to="/organiser"
-            className="inline-flex h-11 items-center rounded-full bg-safran px-4 text-sm font-semibold text-encre transition hover:bg-safran-deep active:scale-[0.97]"
+            className="inline-flex h-11 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover active:scale-[0.97]"
           >
             {t.create}
           </Link>
@@ -273,7 +273,7 @@ export default function Events() {
                 <MoneyCell unit="MAD">{money(row.revenue)}</MoneyCell>
               </Td>
               <Td className="text-center">
-                <Badge tone={row.hidden ? "gray" : "green"}>{row.hidden ? t.hidden : t.public}</Badge>
+                <Badge tone={row.hidden ? "neutral" : "success"}>{row.hidden ? t.hidden : t.public}</Badge>
               </Td>
               <Td className="w-px whitespace-nowrap pe-4">
                 <div className="flex justify-end gap-1.5">
@@ -297,7 +297,7 @@ export default function Events() {
                       to={`/evenements/${row.event.slug}`}
                       title={t.public}
                       aria-label={t.public}
-                      className="inline-flex size-9 items-center justify-center rounded-lg border border-line/15 bg-card text-muted transition hover:-translate-y-px hover:border-lagon hover:bg-brume hover:text-lagon-deep"
+                      className="inline-flex size-9 items-center justify-center rounded-lg border border-line/15 bg-card text-muted transition hover:-translate-y-px hover:border-primary hover:bg-brume hover:text-primary"
                     >
                       <ExternalLink className="size-4" />
                     </Link>

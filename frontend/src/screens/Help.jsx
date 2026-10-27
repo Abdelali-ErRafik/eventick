@@ -25,7 +25,7 @@ export default function Help() {
           ))}
         </div>
         <a
-          className="mt-6 inline-flex h-12 items-center rounded-full bg-lagon px-5 text-sm font-semibold text-foam"
+          className="mt-6 inline-flex h-12 items-center rounded-full bg-primary px-5 text-sm font-semibold text-foam"
           href="https://wa.me/212537001122"
           target="_blank"
           rel="noreferrer"
@@ -33,7 +33,7 @@ export default function Help() {
           {t("whatsapp")}
         </a>
         <p className="mt-4">
-          <Link to="/legal" className="text-sm font-semibold text-lagon">
+          <Link to="/legal" className="text-sm font-semibold text-primary">
             {t("cgu")}
           </Link>
         </p>
