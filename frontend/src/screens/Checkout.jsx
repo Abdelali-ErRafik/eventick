@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Headphones, Lock, QrCode, ShieldCheck } from "lucide-react";
+import { Check, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "../components/Shell";
 import StripeForm from "./StripeForm";
@@ -298,18 +298,6 @@ export default function Checkout() {
                 </div>
               </Card>
             )}
-
-            {/* A short reassurance strip right at the point of commitment --
-                the page used to end abruptly after the form, with nothing
-                between it and the footer far below, so a short form on a
-                tall screen left a long stretch of bare background. Same
-                three facts already shown in the footer's trust row, surfaced
-                here where they actually matter to someone about to pay. */}
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              <TrustMini icon={<ShieldCheck className="size-4" />} title={t("trustPay")} />
-              <TrustMini icon={<QrCode className="size-4" />} title={t("trustQr")} />
-              <TrustMini icon={<Headphones className="size-4" />} title={t("trustHelp")} />
-            </div>
           </div>
 
           {/* Order summary. The total is the largest thing on the page after
@@ -378,11 +366,3 @@ export default function Checkout() {
   );
 }
 
-function TrustMini({ icon, title }) {
-  return (
-    <div className="flex items-center gap-2.5 rounded-control border border-line/10 bg-card px-3.5 py-3 shadow-card">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-brume text-primary">{icon}</span>
-      <p className="text-sm font-semibold">{title}</p>
-    </div>
-  );
-}
