@@ -76,26 +76,36 @@ export default function Home() {
     );
   }
 
+  const seatsAvailable = live.reduce((sum, event) => sum + event.tiers.reduce((n, tier) => n + tier.remaining, 0), 0);
+
   return (
     <Shell overlay>
       {/* Deliberately always dark, like the reference's hero band — see the
-          note on --et-stage in styles.css. */}
-      <section className="relative -mt-16 overflow-hidden bg-stage pt-16 text-stage-fg">
-        <img src="/events/mawazine.jpg" alt="" className="absolute inset-0 h-full w-full object-cover opacity-40" />
-        <div className="absolute inset-0 bg-gradient-to-b from-stage/80 via-stage/88 to-stage" />
-        <div className="relative mx-auto max-w-7xl px-4 pb-12 pt-14 md:px-8 lg:pt-20">
-          <div className="max-w-3xl">
+          note on --et-stage in styles.css. Full-viewport height instead of a
+          content-hugging band: this is the one moment on the page meant to
+          feel like a poster, not a card, so the headline gets room the rest
+          of the page deliberately doesn't give anything else. */}
+      <section className="relative -mt-16 flex min-h-[min(92vh,56rem)] flex-col overflow-hidden bg-stage pt-16 text-stage-fg">
+        <img src="/events/mawazine.jpg" alt="" className="absolute inset-0 h-full w-full object-cover opacity-45" />
+        <div className="absolute inset-0 bg-gradient-to-t from-stage via-stage/75 to-stage/35" />
+        <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col justify-center px-4 py-16 md:px-8">
+          <div className="max-w-4xl">
             <p className="inline-flex items-center gap-2 rounded-full bg-stage-fg/10 px-3 py-1 text-xs font-semibold">
               <span className="size-2 rounded-full bg-accent" />
               {t("kicker")}
             </p>
-            <p className="mt-4 text-sm font-semibold text-accent">{t("secureMad")}</p>
-            <h1 className="mt-3 font-display text-4xl font-extrabold leading-none tracking-tight md:text-hero">
+            <p className="mt-5 text-sm font-semibold text-accent">{t("secureMad")}</p>
+            {/* The one colossal type moment on the whole site — every other
+                headline uses text-hero/text-display, this one alone reaches
+                for text-colossal so it reads as the page's visual climax
+                rather than one more section title at the top of a list. */}
+            <h1 className="mt-4 font-display text-6xl font-extrabold leading-none tracking-tight sm:text-7xl lg:text-colossal">
               {t("heroA")} <span className="text-accent">{t("heroB")}</span> {t("heroC")}
             </h1>
-            <p className="mt-4 max-w-xl text-base text-stage-muted lg:text-lg">{t("heroSub")}</p>
+            <p className="mt-6 max-w-xl text-base text-stage-muted lg:text-xl">{t("heroSub")}</p>
           </div>
-          <form className="mt-8" onSubmit={submitSearch}>
+
+          <form className="mt-10 max-w-4xl" onSubmit={submitSearch}>
             <div className="grid gap-2 rounded-panel bg-card p-3 text-ink shadow-pop md:grid-cols-[1fr_1fr_1fr_auto]">
               <label className="block px-2">
                 <span className="text-xs font-semibold text-muted">{t("fieldType")}</span>
@@ -145,29 +155,15 @@ export default function Home() {
             </div>
           </form>
         </div>
-      </section>
 
-      <section aria-label={t("trends")} className="border-b border-line/10 bg-card">
-        <dl className="mx-auto grid max-w-7xl grid-cols-3 gap-2 px-4 py-6 text-center md:px-8">
-          <div>
-            <dd className="font-display text-2xl font-extrabold text-encre tabular-nums md:text-3xl">{live.length}</dd>
-            <dt className="mt-1 text-xs font-semibold text-muted md:text-sm">{t("eventsWord")}</dt>
-          </div>
-          <div>
-            <dd className="font-display text-2xl font-extrabold text-encre tabular-nums md:text-3xl">{cityCount}</dd>
-            <dt className="mt-1 text-xs font-semibold text-muted md:text-sm">{t("activeCities")}</dt>
-          </div>
-          <div>
-            {/* Was a hardcoded "+250K" sitting between two real counts, which
-                made an invented number look like measured data. This one is
-                derived from the catalog like its neighbours. */}
-            <dd className="font-display text-2xl font-extrabold text-encre tabular-nums md:text-3xl">
-              {live.reduce((sum, event) => sum + event.tiers.reduce((n, tier) => n + tier.remaining, 0), 0).toLocaleString(
-                locale === "ar" ? "ar-MA" : "fr-MA",
-              )}
-            </dd>
-            <dt className="mt-1 text-xs font-semibold text-muted md:text-sm">{t("seatsAvailable")}</dt>
-          </div>
+        {/* Stats, folded into the hero's own footer instead of a separate
+            flat band right after it — one less "card after card" beat,
+            and the numbers read as proof sitting under the headline rather
+            than a standalone section with nothing else going on. */}
+        <dl className="relative mx-auto grid w-full max-w-7xl grid-cols-3 gap-4 border-t border-stage-fg/10 px-4 py-6 md:px-8">
+          <HeroStat value={live.length} label={t("eventsWord")} />
+          <HeroStat value={cityCount} label={t("activeCities")} />
+          <HeroStat value={seatsAvailable.toLocaleString(locale === "ar" ? "ar-MA" : "fr-MA")} label={t("seatsAvailable")} />
         </dl>
       </section>
 
@@ -204,15 +200,21 @@ export default function Home() {
       </section>
 
       {feature ? (
-        <section className="mx-auto max-w-7xl px-4 pb-4 pt-4 md:px-8">
-          <p className="font-mono text-xs font-bold tracking-widest text-primary">{t("majorKicker")}</p>
-          <h2 className="mt-2 font-display text-3xl font-extrabold text-encre md:text-display">{t("majorTitle")}</h2>
-          <div className="mt-6 grid gap-4 lg:grid-cols-[1.4fr_0.8fr]">
-            <EventCard event={feature} variant="feature" />
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-              {side.map((event) => (
-                <EventCard key={event.slug} event={event} variant="compact" />
-              ))}
+        // Brume tint instead of the plain paper background every other
+        // section sits on — one deliberate break in the rhythm at the
+        // page's real centrepiece, instead of white-card, white-card,
+        // white-card all the way down.
+        <section className="bg-brume/40 py-14">
+          <div className="mx-auto max-w-7xl px-4 md:px-8">
+            <p className="font-mono text-xs font-bold tracking-widest text-primary">{t("majorKicker")}</p>
+            <h2 className="mt-2 font-display text-4xl font-extrabold text-encre md:text-display">{t("majorTitle")}</h2>
+            <div className="mt-6 grid gap-4 lg:grid-cols-[1.4fr_0.8fr]">
+              <EventCard event={feature} variant="feature" />
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                {side.map((event) => (
+                  <EventCard key={event.slug} event={event} variant="compact" />
+                ))}
+              </div>
             </div>
           </div>
         </section>
@@ -300,6 +302,17 @@ export default function Home() {
         </div>
       </section>
     </Shell>
+  );
+}
+
+function HeroStat({ value, label }) {
+  // The hero's own stat row — plain numbers under the headline, not a tile,
+  // so they read as a caption to the poster rather than another card.
+  return (
+    <div>
+      <dd className="font-display text-2xl font-extrabold tabular-nums md:text-3xl">{value}</dd>
+      <dt className="mt-1 text-xs font-semibold text-stage-muted md:text-sm">{label}</dt>
+    </div>
   );
 }
 
