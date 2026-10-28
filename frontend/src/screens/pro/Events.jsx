@@ -6,22 +6,7 @@ import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
 import { CITIES, longDate, totalCapacity, totalRemaining } from "../../utils";
 import { useConfirm } from "./ConfirmContext";
-import {
-  Badge,
-  Btn,
-  CountChip,
-  DataTable,
-  EmptyState,
-  EntityCell,
-  FilterBar,
-  IconBtn,
-  Modal,
-  MoneyCell,
-  PageHead,
-  StockCell,
-  Td,
-  Th,
-} from "./ui";
+import { Badge, Btn, EmptyState, FilterBar, IconBtn, Modal, PageHead } from "./ui";
 import { text } from "./copy";
 
 export default function Events() {
@@ -233,84 +218,26 @@ export default function Events() {
         }}
       />
 
-      <DataTable minWidth={900}>
-        <thead>
-          <tr>
-            <Th className="text-start">{t.events}</Th>
-            <Th>{t.issued}</Th>
-            <Th>{t.left}</Th>
-            <Th>{t.revenue}</Th>
-            <Th>{t.colStatus}</Th>
-            <Th>
-              <span className="sr-only">{t.actions}</span>
-            </Th>
-          </tr>
-        </thead>
-        <tbody>
-          {events && rows.length === 0 ? (
-            <tr>
-              <td colSpan={6}>
-                <EmptyState icon="📅" title={activeCount ? t.noEventsFilter : t.noEventsYet} />
-              </td>
-            </tr>
-          ) : null}
+      {events && rows.length === 0 ? (
+        <EmptyState icon="📅" title={activeCount ? t.noEventsFilter : t.noEventsYet} />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {rows.map((row) => (
-            <tr key={row.event.slug} className="transition hover:bg-brume/40">
-              <Td>
-                <EntityCell
-                  image={row.event.image}
-                  title={locale === "ar" ? row.event.titleAr : row.event.titleFr}
-                  sub={`${row.event.city} · ${longDate(row.event.start, locale)}`}
-                />
-              </Td>
-              <Td className="text-center">
-                <CountChip icon={<Ticket className="size-3" />}>{row.issued}</CountChip>
-              </Td>
-              <Td className="text-center">
-                <StockCell left={row.left} total={row.cap} />
-              </Td>
-              <Td className="text-center">
-                <MoneyCell unit="MAD">{money(row.revenue)}</MoneyCell>
-              </Td>
-              <Td className="text-center">
-                <Badge tone={row.hidden ? "neutral" : "success"}>{row.hidden ? t.hidden : t.public}</Badge>
-              </Td>
-              <Td className="w-px whitespace-nowrap pe-4">
-                <div className="flex justify-end gap-1.5">
-                  <IconBtn label={t.edit} onClick={() => openEdit(row.event)}>
-                    <Pencil className="size-4" />
-                  </IconBtn>
-                  <IconBtn label={t.duplicate} onClick={() => duplicate(row.event)}>
-                    <Copy className="size-4" />
-                  </IconBtn>
-                  <IconBtn label={t.guests} onClick={() => exportGuests(row.event)}>
-                    <Users className="size-4" />
-                  </IconBtn>
-                  <IconBtn label={t.contact} onClick={() => openContact(row.event)}>
-                    <Mail className="size-4" />
-                  </IconBtn>
-                  <IconBtn label={row.hidden ? t.restore : t.hide} onClick={() => toggleHidden(row.event.slug, !row.hidden)}>
-                    {row.hidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
-                  </IconBtn>
-                  {!row.hidden ? (
-                    <Link
-                      to={`/evenements/${row.event.slug}`}
-                      title={t.public}
-                      aria-label={t.public}
-                      className="inline-flex size-9 items-center justify-center rounded-control border border-line/15 bg-card text-muted transition hover:-translate-y-px hover:border-primary hover:bg-brume hover:text-primary"
-                    >
-                      <ExternalLink className="size-4" />
-                    </Link>
-                  ) : null}
-                  <IconBtn tone="danger" label={t.remove} onClick={() => removeEvent(row.event)}>
-                    <Trash2 className="size-4" />
-                  </IconBtn>
-                </div>
-              </Td>
-            </tr>
+            <EventRow
+              key={row.event.slug}
+              row={row}
+              locale={locale}
+              t={t}
+              onEdit={() => openEdit(row.event)}
+              onDuplicate={() => duplicate(row.event)}
+              onGuests={() => exportGuests(row.event)}
+              onContact={() => openContact(row.event)}
+              onToggleHidden={() => toggleHidden(row.event.slug, !row.hidden)}
+              onRemove={() => removeEvent(row.event)}
+            />
           ))}
-        </tbody>
-      </DataTable>
+        </div>
+      )}
 
       <Modal
         open={Boolean(edit)}
@@ -405,5 +332,105 @@ export default function Events() {
         )}
       </Modal>
     </div>
+  );
+}
+
+/**
+ * One event, in the organiser's own list.
+ *
+ * Rebuilt from a table row whose five actions were squeezed into a single
+ * "w-px whitespace-nowrap" cell, same issue as Orders and Placements had.
+ * The poster, issued/remaining/revenue stats and visibility badge sit in
+ * their own rows here, and the jauge bar reuses Placements' colour logic
+ * (success/accent/danger by remaining ratio) instead of StockCell's tight
+ * table-cell layout.
+ */
+function EventRow({ row, locale, t, onEdit, onDuplicate, onGuests, onContact, onToggleHidden, onRemove }) {
+  const { event, issued, revenue, left, cap, hidden } = row;
+  const ratio = cap > 0 ? left / cap : 0;
+  const tone = ratio <= 0 ? "out" : ratio < 0.2 ? "low" : "ok";
+  const barColor = { ok: "bg-success", low: "bg-accent", out: "bg-danger/40" }[tone];
+  const textColor = { ok: "text-success", low: "text-accent", out: "text-danger" }[tone];
+
+  return (
+    <article className="flex flex-col gap-4 rounded-card border border-line/10 bg-card p-5 shadow-card">
+      <div className="flex items-start gap-3">
+        <img src={event.image} alt="" className="size-14 shrink-0 rounded-control object-cover" />
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-display text-subhead font-bold">{locale === "ar" ? event.titleAr : event.titleFr}</h3>
+          <p className="mt-0.5 truncate text-xs text-muted">
+            {event.city} · {longDate(event.start, locale)}
+          </p>
+        </div>
+        <Badge tone={hidden ? "neutral" : "success"}>{hidden ? t.hidden : t.public}</Badge>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted">{t.issued}</p>
+          <p className="mt-0.5 flex items-center gap-1.5 font-display text-heading font-bold tabular-nums">
+            <Ticket className="size-4 text-muted" aria-hidden />
+            {issued}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted">{t.revenue}</p>
+          <p className="mt-0.5 font-display text-heading font-bold tabular-nums">
+            {money(revenue)} <span className="text-xs font-semibold text-muted">MAD</span>
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-1.5 flex items-baseline justify-between gap-2">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted">{t.left}</p>
+          <p className="text-sm font-bold tabular-nums">
+            <span className={textColor}>{left}</span>
+            <span className="text-muted">/{cap}</span>
+          </p>
+        </div>
+        <div
+          className="h-2 overflow-hidden rounded-full bg-sunken"
+          role="progressbar"
+          aria-valuenow={cap > 0 ? Math.round((1 - ratio) * 100) : 0}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={t.left}
+        >
+          <div className={`h-full rounded-full transition-[width] ${barColor}`} style={{ width: `${Math.round((1 - ratio) * 100)}%` }} />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap justify-end gap-1.5 border-t border-line/10 pt-3.5">
+        <IconBtn label={t.edit} onClick={onEdit}>
+          <Pencil className="size-4" />
+        </IconBtn>
+        <IconBtn label={t.duplicate} onClick={onDuplicate}>
+          <Copy className="size-4" />
+        </IconBtn>
+        <IconBtn label={t.guests} onClick={onGuests}>
+          <Users className="size-4" />
+        </IconBtn>
+        <IconBtn label={t.contact} onClick={onContact}>
+          <Mail className="size-4" />
+        </IconBtn>
+        <IconBtn label={hidden ? t.restore : t.hide} onClick={onToggleHidden}>
+          {hidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+        </IconBtn>
+        {!hidden ? (
+          <Link
+            to={`/evenements/${event.slug}`}
+            title={t.public}
+            aria-label={t.public}
+            className="inline-flex size-9 items-center justify-center rounded-control border border-line/15 bg-card text-muted transition hover:-translate-y-px hover:border-primary hover:bg-brume hover:text-primary"
+          >
+            <ExternalLink className="size-4" />
+          </Link>
+        ) : null}
+        <IconBtn tone="danger" label={t.remove} onClick={onRemove}>
+          <Trash2 className="size-4" />
+        </IconBtn>
+      </div>
+    </article>
   );
 }

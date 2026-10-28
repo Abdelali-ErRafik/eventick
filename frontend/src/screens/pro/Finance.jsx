@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Landmark, Percent, Wallet } from "lucide-react";
+import { Landmark, Percent, Ticket, Wallet } from "lucide-react";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
 import { planCost } from "../../strategy";
-import { Card, DataTable, EmptyState, EntityCell, MoneyCell, PageHead, SectionTitle, StatCard, StatSkeletons, Td, Th } from "./ui";
+import { Card, EmptyState, PageHead, SectionTitle, StatCard, StatSkeletons } from "./ui";
 import { cn } from "../../utils";
 import { text } from "./copy";
 
@@ -82,35 +82,29 @@ export default function Finance() {
       </div>
 
       <SectionTitle>{t.perEvent}</SectionTitle>
-      <DataTable minWidth={620}>
-        <thead>
-          <tr>
-            <Th className="text-start">{t.events}</Th>
-            <Th>{t.tickets}</Th>
-            <Th>{t.gross}</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {orders && byEvent.length === 0 ? (
-            <tr>
-              <td colSpan={3}>
-                <EmptyState icon="💰" title={t.empty} />
-              </td>
-            </tr>
-          ) : null}
+      {orders && byEvent.length === 0 ? (
+        <EmptyState icon="💰" title={t.empty} />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {byEvent.map((row) => (
-            <tr key={row.slug} className="transition hover:bg-brume/40">
-              <Td>
-                <EntityCell image={row.image} title={row.title} sub={row.city} />
-              </Td>
-              <Td className="text-center tabular-nums">{row.tickets}</Td>
-              <Td className="text-center">
-                <MoneyCell unit="MAD">{money(row.gross)}</MoneyCell>
-              </Td>
-            </tr>
+            <article key={row.slug} className="flex items-center gap-3 rounded-card border border-line/10 bg-card p-4 shadow-card">
+              <img src={row.image} alt="" className="size-12 shrink-0 rounded-control object-cover" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold">{row.title}</p>
+                <p className="truncate text-xs text-muted">{row.city}</p>
+                <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-muted">
+                  <Ticket className="size-3.5" aria-hidden />
+                  {row.tickets}
+                </p>
+              </div>
+              <p className="shrink-0 text-end">
+                <span className="block font-display text-subhead font-bold tabular-nums">{money(row.gross)}</span>
+                <span className="block text-[11px] font-semibold text-muted">MAD</span>
+              </p>
+            </article>
           ))}
-        </tbody>
-      </DataTable>
+        </div>
+      )}
 
       <Card className="mt-4">
         <p className="text-sm text-muted">{t.payout}</p>

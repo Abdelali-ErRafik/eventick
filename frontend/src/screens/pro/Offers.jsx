@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Tags, Trash2 } from "lucide-react";
+import { Mail, Plus, Tags, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
 import { useConfirm } from "./ConfirmContext";
-import { Badge, Btn, DataTable, EmptyState, IconBtn, Modal, PageHead, PersonCell, SectionTitle, Td, Th } from "./ui";
+import { Badge, Btn, EmptyState, IconBtn, Modal, PageHead, SectionTitle } from "./ui";
 import { text } from "./copy";
 
 const WAITLIST_TONE = { WAITING: "neutral", OFFERED: "warn", CLAIMED: "success", EXPIRED: "danger" };
@@ -99,44 +99,24 @@ export default function Offers() {
         }
       />
 
-      <DataTable minWidth={760}>
-        <thead>
-          <tr>
-            <Th className="text-start">{t.code}</Th>
-            <Th>{t.kind}</Th>
-            <Th>{t.uses}</Th>
-            <Th className="text-start">{t.allEvents}</Th>
-            <Th>
-              <span className="sr-only">{t.actions}</span>
-            </Th>
-          </tr>
-        </thead>
-        <tbody>
-          {promos && promos.length === 0 ? (
-            <tr>
-              <td colSpan={5}>
-                <EmptyState icon="🏷️" title={t.noPromosYet} />
-              </td>
-            </tr>
-          ) : null}
+      {promos && promos.length === 0 ? (
+        <EmptyState icon="🏷️" title={t.noPromosYet} />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {(promos ?? []).map((promo) => {
             const exhausted = promo.uses >= promo.maxUses;
             return (
-              <tr key={promo.id} className="transition hover:bg-brume/40">
-                <Td>
+              <article key={promo.id} className="flex flex-col gap-3 rounded-card border border-line/10 bg-card p-4 shadow-card">
+                <div className="flex items-start justify-between gap-2">
                   <span className="font-mono text-sm font-extrabold">{promo.code}</span>
-                </Td>
-                <Td className="text-center">
                   <Badge tone="info">{promo.kind === "PERCENT" ? `${promo.value}%` : `${money(promo.value)} MAD`}</Badge>
-                </Td>
-                <Td className="text-center">
+                </div>
+                <p className="truncate text-sm text-muted">{promo.eventId ? (eventById.get(promo.eventId) ?? promo.eventId) : t.allDates}</p>
+                <div className="flex items-center justify-between gap-2 border-t border-line/10 pt-3">
                   <Badge tone={exhausted ? "danger" : "neutral"}>
                     {promo.uses}/{promo.maxUses}
                   </Badge>
-                </Td>
-                <Td className="text-sm">{promo.eventId ? (eventById.get(promo.eventId) ?? promo.eventId) : t.allDates}</Td>
-                <Td className="w-px whitespace-nowrap pe-4">
-                  <div className="flex justify-end gap-1.5">
+                  <div className="flex gap-1.5">
                     <Btn variant="secondary" size="sm" onClick={() => bump(promo)}>
                       +50
                     </Btn>
@@ -144,51 +124,42 @@ export default function Offers() {
                       <Trash2 className="size-4" />
                     </IconBtn>
                   </div>
-                </Td>
-              </tr>
+                </div>
+              </article>
             );
           })}
-        </tbody>
-      </DataTable>
+        </div>
+      )}
 
       <SectionTitle>{t.waitlist}</SectionTitle>
-      <DataTable minWidth={620}>
-        <thead>
-          <tr>
-            <Th className="text-start">{t.email}</Th>
-            <Th className="text-start">{t.events}</Th>
-            <Th>{t.wlStatus}</Th>
-            <Th>{t.colDate}</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {waitlist.length === 0 ? (
-            <tr>
-              <td colSpan={4}>
-                <EmptyState icon="📬" title={t.noWaitlist} />
-              </td>
-            </tr>
-          ) : null}
+      {waitlist.length === 0 ? (
+        <EmptyState icon="📬" title={t.noWaitlist} />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {waitlist.map((item, i) => (
-            <tr key={`${item.slug}-${item.email}-${i}`} className="transition hover:bg-brume/40">
-              <Td>
-                <PersonCell name={item.email} />
-              </Td>
-              <Td className="text-sm">{item.title}</Td>
-              <Td className="text-center">
+            <article key={`${item.slug}-${item.email}-${i}`} className="flex flex-col gap-2.5 rounded-card border border-line/10 bg-card p-4 shadow-card">
+              <div className="flex items-start gap-2.5">
+                <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-control bg-brume text-primary" aria-hidden>
+                  <Mail className="size-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold">{item.email}</p>
+                  <p className="truncate text-xs text-muted">{item.title}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-2 border-t border-line/10 pt-2.5 text-xs">
                 <Badge tone={WAITLIST_TONE[item.status] ?? "neutral"}>{waitlistLabel(t, item.status)}</Badge>
-                {/* An outstanding offer is the only state with a deadline. */}
-                {item.status === "OFFERED" && item.claimExpiresAt ? (
-                  <span className="mt-0.5 block text-[11px] text-muted">
-                    {t.wlExpires} {new Date(item.claimExpiresAt).toLocaleTimeString(locale === "ar" ? "ar-MA" : "fr-FR", { hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                ) : null}
-              </Td>
-              <Td className="text-center text-sm text-muted">{item.createdAt.slice(0, 10)}</Td>
-            </tr>
+                <span className="text-muted">{item.createdAt.slice(0, 10)}</span>
+              </div>
+              {item.status === "OFFERED" && item.claimExpiresAt ? (
+                <span className="text-[11px] text-muted">
+                  {t.wlExpires} {new Date(item.claimExpiresAt).toLocaleTimeString(locale === "ar" ? "ar-MA" : "fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              ) : null}
+            </article>
           ))}
-        </tbody>
-      </DataTable>
+        </div>
+      )}
 
       <Modal
         open={open}
