@@ -4,10 +4,12 @@ import { ChevronDown, LayoutDashboard, LogOut, MapPin, Menu, Moon, Search, Sun, 
 import { useAuth } from "../../AuthContext";
 import { useCart } from "../../CartContext";
 import { useCatalog } from "../../useCatalog";
+import { money } from "../../api";
 import { LOCALES, LOCALE_LABELS, useI18n } from "../../i18n";
 import { useTheme } from "../../ThemeContext";
 import { Button, IconButton, Popover, PopoverItem } from "../../ui";
-import { cn, CITIES } from "../../utils";
+import { cn, CITIES, minPriceCents, monthBadge } from "../../utils";
+import { EventTicker } from "./EventTicker";
 
 /**
  * The public site header.
@@ -119,6 +121,8 @@ export function SiteHeader({ overlay = false }) {
         onImage ? "border-transparent bg-stage/30 text-stage-fg backdrop-blur-md" : "border-line/10 bg-card/95 text-ink backdrop-blur",
       )}
     >
+      <EventTicker events={events} onImage={onImage} />
+
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-2 px-4 md:px-8">
         <IconButton
           label={t("openMenu")}
@@ -214,7 +218,7 @@ export function SiteHeader({ overlay = false }) {
           <Popover
             label={t("searchPh")}
             align="end"
-            width="w-80"
+            width="w-96"
             trigger={
               <>
                 <span
@@ -248,22 +252,42 @@ export function SiteHeader({ overlay = false }) {
                   aria-label={t("searchPh")}
                   className="h-11 w-full rounded-control border border-line/15 bg-card px-4 text-sm outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/20"
                 />
+                {/* Poster thumbnail + month stamp + price, same information
+                    hierarchy EventCard uses -- a bare text row told you a
+                    title and a city and nothing else, which made the one
+                    interactive search result in the whole header feel like
+                    an afterthought next to every other event listing. */}
                 {results.length > 0 ? (
                   <ul className="mt-2 grid gap-0.5">
-                    {results.map((event) => (
-                      <li key={event.slug}>
-                        <Link
-                          to={`/evenements/${event.slug}`}
-                          onClick={close}
-                          className="block rounded-control px-3 py-2 transition hover:bg-paper"
-                        >
-                          <span className="block truncate text-sm font-semibold">
-                            {locale === "ar" ? event.titleAr : event.titleFr}
-                          </span>
-                          <span className="block text-xs text-muted">{event.city}</span>
-                        </Link>
-                      </li>
-                    ))}
+                    {results.map((event) => {
+                      const stamp = monthBadge(event.start, locale);
+                      return (
+                        <li key={event.slug}>
+                          <Link
+                            to={`/evenements/${event.slug}`}
+                            onClick={close}
+                            className="flex items-center gap-3 rounded-control p-2 transition hover:bg-paper"
+                          >
+                            <span className="relative shrink-0 overflow-hidden rounded-control">
+                              <img src={event.image} alt="" className="size-12 object-cover" />
+                              <span className="absolute inset-x-0 bottom-0 bg-stage/70 px-1 py-0.5 text-center font-mono text-[9px] font-bold uppercase leading-none text-stage-fg">
+                                {stamp.month} {stamp.day}
+                              </span>
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold">
+                                {locale === "ar" ? event.titleAr : event.titleFr}
+                              </span>
+                              <span className="block truncate text-xs text-muted">{event.city}</span>
+                            </span>
+                            <span className="shrink-0 text-end">
+                              <span className="block text-[10px] font-semibold uppercase text-muted">{t("from")}</span>
+                              <span className="block text-sm font-bold tabular-nums">{money(minPriceCents(event))}</span>
+                            </span>
+                          </Link>
+                        </li>
+                      );
+                    })}
                   </ul>
                 ) : null}
               </div>
