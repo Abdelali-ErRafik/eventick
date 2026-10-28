@@ -7,7 +7,7 @@ import { EventCard } from "../components/EventCard";
 import { useCatalog } from "../useCatalog";
 import { Button, Container, Dropdown, ErrorState, LoadingState } from "../ui";
 import { categoryLabel, useI18n } from "../i18n";
-import { CITIES, addDays, dateKey, todayKey } from "../utils";
+import { CITIES, addDays, cn, dateKey, todayKey } from "../utils";
 
 // nightlife used to fill bg-stage (near-black) with text-stage-fg -- fine on
 // the old light-page version of this rail, but once the section sits on the
@@ -313,10 +313,16 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-4 md:px-8">
           <p className="text-center font-mono text-xs font-bold tracking-widest text-primary">{t("calmKicker")}</p>
           <h2 className="mt-2 text-center font-display text-3xl font-extrabold">{t("calmTitle")}</h2>
-          <div className="mx-auto mt-8 grid max-w-5xl gap-8 sm:grid-cols-3 sm:gap-0">
-            <Trust icon={<QrCode className="size-5" />} title={t("perkQr")} body={t("perkQrBody")} />
-            <Trust icon={<RefreshCcw className="size-5" />} title={t("perkRefund")} body={t("perkRefundBody")} />
-            <Trust icon={<Headphones className="size-5" />} title={t("perkLocal")} body={t("perkLocalBody")} />
+          {/* Three real cards instead of a loosely bordered row -- the old
+              icon chip was bg-card on a bg-brume/30 section, two near-
+              identical darks in dark mode, so it nearly vanished (same bug
+              as the category rail's nightlife tile). Each perk now gets its
+              own coloured icon chip and a card surface instead of floating
+              in a lot of empty space between thin dividers. */}
+          <div className="mx-auto mt-8 grid max-w-5xl gap-4 sm:grid-cols-3">
+            <Trust tone="bg-primary text-primary-fg" icon={<QrCode className="size-5" />} title={t("perkQr")} body={t("perkQrBody")} />
+            <Trust tone="bg-secondary text-secondary-fg" icon={<RefreshCcw className="size-5" />} title={t("perkRefund")} body={t("perkRefundBody")} />
+            <Trust tone="bg-accent text-accent-fg" icon={<Headphones className="size-5" />} title={t("perkLocal")} body={t("perkLocalBody")} />
           </div>
         </div>
       </section>
@@ -416,12 +422,10 @@ function Stat({ value, label }) {
   );
 }
 
-function Trust({ icon, title, body }) {
+function Trust({ tone, icon, title, body }) {
   return (
-    <article className="flex gap-4 sm:flex-col sm:gap-0 sm:border-s sm:border-line/10 sm:px-8 sm:text-center sm:first:border-s-0 sm:first:ps-0 sm:[&:last-child]:pe-0">
-      <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-control bg-card text-primary shadow-card sm:mx-auto">
-        {icon}
-      </span>
+    <article className="flex gap-4 rounded-card border border-line/10 bg-card p-5 shadow-card sm:flex-col sm:text-center">
+      <span className={cn("inline-flex size-12 shrink-0 items-center justify-center rounded-control sm:mx-auto", tone)}>{icon}</span>
       <div className="sm:mt-3">
         <h3 className="font-display text-lg font-bold">{title}</h3>
         <p className="mt-1 text-sm text-muted">{body}</p>
