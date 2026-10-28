@@ -41,9 +41,16 @@ export default function Home() {
   const live = useMemo(() => events.filter((event) => dateKey(event.end) >= today), [events, today]);
   const cityCount = useMemo(() => new Set(live.map((event) => event.city)).size, [live]);
   const feature = live.find((event) => event.slug === "mawazine-2027") ?? live[0];
-  const side = ["gnaoua-2027", "oasis-2026"]
-    .map((slug) => live.find((event) => event.slug === slug))
-    .filter((event) => event && event.slug !== feature?.slug);
+  // Used to be two hardcoded slugs, so the side column silently dropped to
+  // one card (or zero) whenever one of those two specific events wasn't in
+  // `live` -- the exact gap reported against a real screenshot. Derived from
+  // the catalog instead: the next 3 upcoming events after the feature, by
+  // start date, so the column is never short a card just because a named
+  // slug happened not to match today.
+  const side = [...live]
+    .filter((event) => event.slug !== feature?.slug)
+    .sort((a, b) => a.start.localeCompare(b.start))
+    .slice(0, 3);
   const imminent = [...live]
     .filter((event) => dateKey(event.start) <= addDays(today, 21))
     .sort((a, b) => a.start.localeCompare(b.start))
@@ -257,11 +264,10 @@ export default function Home() {
           <div className="mx-auto max-w-7xl px-4 md:px-8">
             <p className="font-mono text-xs font-bold tracking-widest text-primary">{t("majorKicker")}</p>
             <h2 className="mt-2 font-display text-4xl font-extrabold text-encre md:text-display">{t("majorTitle")}</h2>
-            {/* items-start on the outer grid, not the CSS grid default of
-                stretch -- with only one event in `side` some days, a
-                stretched single-row compact card inherited the feature
-                card's full height and sat with a large empty void below its
-                content instead of its own natural, content-sized height. */}
+            {/* items-start, not the CSS grid default of stretch -- keeps the
+                side column at its own natural height if the catalog ever
+                has fewer than 3 upcoming events to fill it, rather than a
+                short column being stretched into a card-sized empty void. */}
             <div className="mt-6 grid items-start gap-4 lg:grid-cols-[1.4fr_0.8fr]">
               <EventCard event={feature} variant="feature" />
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
