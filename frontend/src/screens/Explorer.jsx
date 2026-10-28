@@ -192,28 +192,36 @@ export default function Explorer() {
 
   return (
     <Shell>
-      <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-        <p className="inline-flex items-center gap-2 rounded-full bg-brume px-3 py-1 text-xs font-bold text-primary">
-          <span className="size-2 rounded-full bg-danger" />
-          {t("liveKicker")}
-        </p>
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="font-display text-4xl font-extrabold text-encre md:text-hero">
-              {t("exploreA")} <span className="text-primary">{t("exploreB")}</span>
-            </h1>
-            <p className="mt-2 max-w-xl text-muted">{t("exploreSub")}</p>
-          </div>
-          <dl className="grid grid-cols-3 gap-2 rounded-card bg-card p-3 text-center shadow-card">
+      {/* A compact dark band instead of the page just starting on bare
+          paper -- not the full-viewport poster treatment Home's hero gets,
+          but enough to give this page its own identity instead of reading
+          as a plain content list from the very first pixel. "Cette semaine"
+          used to be a dangling, disconnected text line below the stat card;
+          it is now the fourth stat in the same row instead of an orphaned
+          fragment. */}
+      <section className="relative overflow-hidden bg-stage text-stage-fg">
+        <div className="absolute inset-0 bg-linear-to-br from-primary/20 via-transparent to-secondary/20" aria-hidden />
+        <div className="relative mx-auto max-w-7xl px-4 py-10 md:px-8 md:py-14">
+          <p className="inline-flex items-center gap-2 rounded-full bg-stage-fg/10 px-3 py-1 text-xs font-bold">
+            <span className="size-2 rounded-full bg-danger" />
+            {t("liveKicker")}
+          </p>
+          <h1 className="mt-3 font-display text-4xl font-extrabold leading-tight md:text-hero">
+            {t("exploreA")} <span className="text-accent">{t("exploreB")}</span>
+          </h1>
+          <p className="mt-2 max-w-xl text-stage-muted">{t("exploreSub")}</p>
+
+          <dl className="mt-6 grid grid-cols-2 gap-4 rounded-panel border border-stage-fg/10 bg-stage-fg/5 p-4 sm:grid-cols-4 sm:p-5">
             <Stat value={String(live.length)} label={t("eventsWord")} />
             <Stat value={String(new Set(live.map((event) => event.city)).size)} label={t("activeCities")} />
+            <Stat value={String(thisWeek)} label={t("thisWeek")} />
             <Stat value={String(almost)} label={t("almost")} accent />
           </dl>
         </div>
-        <p className="mt-2 text-sm text-muted">
-          {t("thisWeek")} · {thisWeek}
-        </p>
-        <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
+      </section>
+
+      <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           <Chip active={!search.cat} onClick={() => setSearch({ cat: "" })}>
             {t("allGenres")}
           </Chip>
@@ -316,13 +324,19 @@ function compare(a, b, tri) {
 }
 
 function Stat({ value, label, accent = false }) {
-  // A plain figure (event count, city count), not a CTA or a brand moment --
-  // was text-primary, so it glowed pink the same way StockCell's healthy
-  // numbers did. Neutral ink, matching Home's identical header stats.
+  // Rendered inside the always-dark header band (bg-stage), same pattern as
+  // Home's HeroStat -- stage-fg text, not encre/ink, which would flip
+  // light-on-light depending on app theme since the band itself never
+  // flips. "Almost sold out" gets the lime accent as its one highlight
+  // moment, not danger red -- danger's light-mode value (tuned for a
+  // theme-reactive background) fails contrast against the fixed-dark
+  // stage, same bug class caught elsewhere this session; accent has the
+  // identical hex in both themes, which is exactly what a fixed-dark
+  // surface needs.
   return (
-    <div className="px-3">
-      <dt className={`font-display text-2xl font-extrabold ${accent ? "text-danger" : "text-encre"}`}>{value}</dt>
-      <dd className="text-xs text-muted">{label}</dd>
+    <div>
+      <dt className={`font-display text-2xl font-extrabold tabular-nums md:text-3xl ${accent ? "text-accent" : ""}`}>{value}</dt>
+      <dd className="mt-0.5 text-xs font-semibold text-stage-muted">{label}</dd>
     </div>
   );
 }
