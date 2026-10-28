@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:live": "node ../scripts/live-api-test.mjs",
+    "test:live:authz": "node ../scripts/live-authz-test.mjs",
     "test:live:coverage": "node ../scripts/live-coverage-test.mjs",
     "test:live:share": "node ../scripts/live-share-test.mjs",
     "test:live:refund": "tsx ../scripts/live-refund-webhook-test.mjs",
