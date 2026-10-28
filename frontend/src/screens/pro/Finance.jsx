@@ -3,6 +3,7 @@ import { Landmark, Percent, Ticket, Wallet } from "lucide-react";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
 import { planCost } from "../../strategy";
+import { useOrganisers } from "./useOrganisers";
 import { Card, EmptyState, PageHead, SectionTitle, StatCard, StatSkeletons } from "./ui";
 import { cn } from "../../utils";
 import { text } from "./copy";
@@ -16,12 +17,15 @@ const PLANS = [
 export default function Finance() {
   const { locale } = useI18n();
   const t = text[locale];
+  const { isAdmin, organisers } = useOrganisers();
   const [orders, setOrders] = useState(null);
   const [plan, setPlan] = useState("starter");
+  const [organiserId, setOrganiserId] = useState("");
 
   useEffect(() => {
-    api.get("/organiser/orders/detailed").then((data) => setOrders(data.orders));
-  }, []);
+    const suffix = organiserId ? `?organiserId=${organiserId}` : "";
+    api.get(`/organiser/orders/detailed${suffix}`).then((data) => setOrders(data.orders));
+  }, [organiserId]);
 
   const gmv = (orders ?? []).filter((order) => order.status === "PAID").reduce((sum, order) => sum + order.totalCents, 0);
   const fee = planCost(plan, gmv);
@@ -49,7 +53,30 @@ export default function Finance() {
 
   return (
     <div>
-      <PageHead title={t.finance} sub={t.financeSub} />
+      <PageHead
+        title={t.finance}
+        sub={t.financeSub}
+        actions={
+          isAdmin ? (
+            <label className="flex flex-col gap-1.5">
+              <span className="ps-0.5 text-[11px] font-bold uppercase tracking-wide text-muted">{t.allOrganisers}</span>
+              <select
+                value={organiserId}
+                onChange={(e) => setOrganiserId(e.target.value)}
+                className="h-11 rounded-control border border-line/20 bg-card px-3 text-sm outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/15"
+                style={{ width: 200 }}
+              >
+                <option value="">{t.allOrganisers}</option>
+                {organisers.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {!orders ? (

@@ -6,6 +6,7 @@ import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
 import { CITIES, longDate, totalCapacity, totalRemaining } from "../../utils";
 import { useConfirm } from "./ConfirmContext";
+import { useOrganisers } from "./useOrganisers";
 import { Badge, Btn, EmptyState, FilterBar, IconBtn, Modal, PageHead } from "./ui";
 import { text } from "./copy";
 
@@ -14,11 +15,13 @@ export default function Events() {
   const t = text[locale];
   const navigate = useNavigate();
   const confirm = useConfirm();
+  const { isAdmin, organisers } = useOrganisers();
   const [events, setEvents] = useState(null);
   const [orders, setOrders] = useState(null);
   const [query, setQuery] = useState("");
   const [city, setCity] = useState("");
   const [visibility, setVisibility] = useState("");
+  const [organiserId, setOrganiserId] = useState("");
   const [edit, setEdit] = useState(null);
   const [titleFr, setTitleFr] = useState("");
   const [titleAr, setTitleAr] = useState("");
@@ -29,14 +32,20 @@ export default function Events() {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
 
+  // The ?organiserId= suffix is only ever meaningful for an admin -- the
+  // backend ignores it for anyone else (see requestedOrganiserId in
+  // organiser.ts), so appending it unconditionally here is safe either way.
+  const suffix = organiserId ? `?organiserId=${organiserId}` : "";
+
   const load = () => {
-    api.get("/organiser/events").then((data) => setEvents(data.events));
-    api.get("/organiser/orders/detailed").then((data) => setOrders(data.orders));
+    api.get(`/organiser/events${suffix}`).then((data) => setEvents(data.events));
+    api.get(`/organiser/orders/detailed${suffix}`).then((data) => setOrders(data.orders));
   };
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organiserId]);
 
   const rows = useMemo(() => {
     if (!events || !orders) return [];
@@ -185,9 +194,29 @@ export default function Events() {
         }
       />
 
+      {/* The organiser-scope control only exists for an admin -- an
+          organiser's FilterBar is unchanged. Kept out of activeCount/reset
+          deliberately: it's a viewing scope, not a content filter, so
+          clearing filters shouldn't also silently kick an admin back to
+          "all organisers". */}
       <FilterBar
         search={{ value: query, onChange: setQuery, placeholder: t.search }}
         controls={[
+          ...(isAdmin
+            ? [
+                {
+                  key: "organiser",
+                  label: t.allOrganisers,
+                  value: organiserId,
+                  onChange: (e) => setOrganiserId(e.target.value),
+                  style: { width: 200 },
+                  options: [
+                    { value: "", label: t.allOrganisers },
+                    ...organisers.map((o) => ({ value: o.id, label: o.name })),
+                  ],
+                },
+              ]
+            : []),
           {
             key: "city",
             label: t.allEvents,

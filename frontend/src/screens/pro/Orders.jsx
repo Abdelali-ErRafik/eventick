@@ -6,6 +6,7 @@ import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
 import { longDate } from "../../utils";
 import { useConfirm } from "./ConfirmContext";
+import { useOrganisers } from "./useOrganisers";
 import { Badge, Btn, EmptyState, FilterBar, IconBtn, PageHead, Pager } from "./ui";
 import { text } from "./copy";
 
@@ -30,18 +31,24 @@ export default function Orders() {
   const { locale } = useI18n();
   const t = text[locale];
   const confirm = useConfirm();
+  const { isAdmin, organisers } = useOrganisers();
   const [orders, setOrders] = useState(null);
   const [query, setQuery] = useState("");
   const [eventSlug, setEventSlug] = useState("");
   const [status, setStatus] = useState("");
+  const [organiserId, setOrganiserId] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(PAGE_SIZE_DEFAULT);
 
-  const load = () => api.get("/organiser/orders/detailed").then((data) => setOrders(data.orders));
+  const load = () => {
+    const suffix = organiserId ? `?organiserId=${organiserId}` : "";
+    api.get(`/organiser/orders/detailed${suffix}`).then((data) => setOrders(data.orders));
+  };
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organiserId]);
 
   useEffect(() => {
     setPage(1);
@@ -155,6 +162,21 @@ export default function Orders() {
       <FilterBar
         search={{ value: query, onChange: setQuery, placeholder: t.search }}
         controls={[
+          ...(isAdmin
+            ? [
+                {
+                  key: "organiser",
+                  label: t.allOrganisers,
+                  value: organiserId,
+                  onChange: (e) => setOrganiserId(e.target.value),
+                  style: { width: 200 },
+                  options: [
+                    { value: "", label: t.allOrganisers },
+                    ...organisers.map((o) => ({ value: o.id, label: o.name })),
+                  ],
+                },
+              ]
+            : []),
           {
             key: "event",
             label: t.allEvents,
