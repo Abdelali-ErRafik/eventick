@@ -349,7 +349,12 @@ export default function Home() {
             a flat fill gives the band some depth to match the hero and the
             search card, rather than being the one remaining flat-colour
             rectangle on the page. */}
-        <div className="relative grid items-center gap-8 overflow-hidden rounded-panel bg-stage px-5 pb-10 pt-12 text-stage-fg md:px-8 lg:grid-cols-2 lg:pb-14 lg:pt-16">
+        {/* items-stretch (the grid default), not items-center -- the right
+            column needs its grid cell to actually be the full row height so
+            its own flex wrapper can centre the ticket card inside that real
+            height, rather than the cell shrink-wrapping to the card's own
+            (shorter) content size. */}
+        <div className="relative grid items-stretch gap-8 overflow-hidden rounded-panel bg-stage px-5 py-12 text-stage-fg md:px-8 lg:grid-cols-2 lg:py-16">
           <div
             className="pointer-events-none absolute -inset-e-24 -top-24 size-96 rounded-full bg-accent/15 blur-3xl"
             aria-hidden
@@ -383,29 +388,35 @@ export default function Home() {
             </div>
           </div>
 
-          {/* A slight rotation + stronger shadow reads as a physical preview
-              artifact floating over the glow, instead of a flat panel
-              sitting in a grid cell like everything else on the page. */}
-          <div className="relative rounded-card bg-card p-4 text-ink shadow-modal transition duration-300 lg:rotate-1 lg:hover:rotate-0">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-muted">{t("previewKicker")}</p>
-              <span className="rounded-full bg-success px-2 py-1 text-xs font-bold text-success-fg">{t("valid")}</span>
-            </div>
-            <img src="/events/electro.jpg" alt="" className="mt-3 h-36 w-full rounded-control object-cover" />
-            <h3 className="mt-3 font-display text-xl font-extrabold">Casablanca Summer Beats</h3>
-            <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <dt className="text-xs text-muted">{t("dates")}</dt>
-                <dd className="font-semibold">28 JUIL · 21:00</dd>
+          {/* The grid cell is made to stretch (self-stretch) and then flex-
+              centers the card inside itself -- that guarantees the card's
+              visual centre lands on the cell's actual midpoint, instead of
+              depending on the grid row's own auto height (set by the taller
+              text column) and items-center's centering within that track,
+              which reads correctly in principle but didn't look centered
+              against the panel's padding in the reported screenshot. */}
+          <div className="relative flex h-full items-center justify-center self-stretch">
+            <div className="w-full max-w-md rounded-card bg-card p-4 text-ink shadow-modal transition duration-300 lg:rotate-1 lg:hover:rotate-0">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-muted">{t("previewKicker")}</p>
+                <span className="rounded-full bg-success px-2 py-1 text-xs font-bold text-success-fg">{t("valid")}</span>
               </div>
-              <div>
-                <dt className="text-xs text-muted">{t("zoneAccess")}</dt>
-                <dd className="font-semibold">VIP · PORTE 4</dd>
+              <img src="/events/electro.jpg" alt="" className="mt-3 h-36 w-full rounded-control object-cover" />
+              <h3 className="mt-3 font-display text-xl font-extrabold">Casablanca Summer Beats</h3>
+              <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <dt className="text-xs text-muted">{t("dates")}</dt>
+                  <dd className="font-semibold">28 JUIL · 21:00</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">{t("zoneAccess")}</dt>
+                  <dd className="font-semibold">VIP · PORTE 4</dd>
+                </div>
+              </dl>
+              <div className="mt-3 flex items-center justify-between border-t border-dashed border-line/20 pt-3">
+                <p className="font-mono text-xs">MA-2026-TICK-9082</p>
+                <QrMark value="EVENTICK|MA-2026-TICK-9082|preview" className="size-16" />
               </div>
-            </dl>
-            <div className="mt-3 flex items-center justify-between border-t border-dashed border-line/20 pt-3">
-              <p className="font-mono text-xs">MA-2026-TICK-9082</p>
-              <QrMark value="EVENTICK|MA-2026-TICK-9082|preview" className="size-16" />
             </div>
           </div>
         </div>
