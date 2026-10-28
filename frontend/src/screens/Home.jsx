@@ -257,7 +257,12 @@ export default function Home() {
           <div className="mx-auto max-w-7xl px-4 md:px-8">
             <p className="font-mono text-xs font-bold tracking-widest text-primary">{t("majorKicker")}</p>
             <h2 className="mt-2 font-display text-4xl font-extrabold text-encre md:text-display">{t("majorTitle")}</h2>
-            <div className="mt-6 grid gap-4 lg:grid-cols-[1.4fr_0.8fr]">
+            {/* items-start on the outer grid, not the CSS grid default of
+                stretch -- with only one event in `side` some days, a
+                stretched single-row compact card inherited the feature
+                card's full height and sat with a large empty void below its
+                content instead of its own natural, content-sized height. */}
+            <div className="mt-6 grid items-start gap-4 lg:grid-cols-[1.4fr_0.8fr]">
               <EventCard event={feature} variant="feature" />
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
                 {side.map((event) => (

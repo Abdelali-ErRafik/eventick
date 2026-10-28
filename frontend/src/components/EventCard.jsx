@@ -51,6 +51,10 @@ export function EventCard({ event, variant = "grid" }) {
   if (compact) {
     return (
       <article className="group relative flex items-center gap-3 overflow-hidden rounded-card border border-line/10 bg-card p-3 shadow-card transition duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-pop">
+        {/* The badge moved onto the thumbnail (same spot the full card uses)
+            instead of racing the category label for space on one line --
+            "Pass gold limité" next to a truncating label wrapped onto two
+            lines and broke the row's height. */}
         <div className="relative size-20 shrink-0 overflow-hidden rounded-control">
           <img
             src={event.image}
@@ -64,20 +68,22 @@ export function EventCard({ event, variant = "grid" }) {
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="truncate font-mono text-[10px] font-bold uppercase tracking-widest text-primary">
-              {categoryLabel(event.category, t)}
-            </p>
-            {badge ? <Badge tone={badge.tone}>{t(badge.key)}</Badge> : null}
-          </div>
+          <p className="truncate font-mono text-[10px] font-bold uppercase tracking-widest text-primary">
+            {categoryLabel(event.category, t)}
+          </p>
           <h3 className="mt-0.5 truncate font-display text-base font-bold leading-tight">{title}</h3>
           <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted">
             <MapPin className="size-3.5 shrink-0" aria-hidden />
             {venue}, {event.city}
           </p>
+          {badge ? (
+            <Badge tone={badge.tone} className="mt-1.5">
+              {t(badge.key)}
+            </Badge>
+          ) : null}
         </div>
 
-        <div className="shrink-0 text-end">
+        <div className="shrink-0 whitespace-nowrap text-end">
           <span className="block text-[10px] font-semibold uppercase text-muted">{t("from")}</span>
           <span className="block font-display text-sm font-extrabold tabular-nums">{money(priceCents)}</span>
         </div>
