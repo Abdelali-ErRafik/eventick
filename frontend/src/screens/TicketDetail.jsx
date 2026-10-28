@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
+import { Download, Pencil, Printer, Share2, Ticket as TicketIcon, XCircle } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { QrMark } from "../components/QrMark";
 import { Shell } from "../components/Shell";
 import { toast } from "sonner";
-import { seatLabel } from "../components/TicketPass";
+import { Meta, seatLabel } from "../components/TicketPass";
 import { api, downloadFile, money, rememberTicketKey } from "../api";
 import { useI18n } from "../i18n";
-import { Badge, Button, Card, Field, Input, Modal } from "../ui";
+import { Badge, Button, Card, Container, ErrorState, Field, IconButton, Input, Modal } from "../ui";
+import { cn } from "../utils";
+
+const STATUS_TONE = { VALID: "success", USED: "neutral", CANCELLED: "danger", TRANSFERRED: "warn" };
 
 export default function TicketDetail() {
   const { ticketId } = useParams();
@@ -138,12 +142,17 @@ export default function TicketDetail() {
   if (error) {
     return (
       <Shell>
-        <div className="mx-auto max-w-xl px-4 py-16 text-center">
-          <h1 className="font-display text-3xl font-extrabold">{t("notFound")}</h1>
-          <Link to="/billets" className="mt-4 inline-flex h-12 items-center rounded-full bg-action px-5 font-semibold text-action-fg transition hover:bg-action-hover">
-            {t("seeTickets")}
-          </Link>
-        </div>
+        <Container size="narrow" className="py-16">
+          <ErrorState title={t("ticketNotFound")} body={t("ticketNotFoundBody")} />
+          <div className="mt-6 flex justify-center">
+            <Link
+              to="/billets"
+              className="inline-flex h-12 items-center rounded-full bg-action px-5 text-sm font-semibold text-action-fg transition hover:bg-action-hover"
+            >
+              {t("seeTickets")}
+            </Link>
+          </div>
+        </Container>
       </Shell>
     );
   }
@@ -151,7 +160,11 @@ export default function TicketDetail() {
   if (!data) {
     return (
       <Shell>
-        <div className="mx-auto h-80 max-w-xl animate-pulse px-4 py-10" />
+        <Container size="form" className="py-8">
+          <div className="h-11 w-32 animate-pulse rounded-control bg-card" />
+          <div className="mt-4 h-96 animate-pulse rounded-card bg-card" />
+          <div className="mt-4 h-40 animate-pulse rounded-card bg-card" />
+        </Container>
       </Shell>
     );
   }
@@ -161,101 +174,150 @@ export default function TicketDetail() {
   const venue = locale === "ar" ? event.venueAr : event.venueFr;
   const zone = locale === "ar" ? tier.zoneAr : tier.zoneFr;
   const gate = locale === "ar" ? tier.gateAr : tier.gateFr;
+  const tierName = locale === "ar" ? tier.nameAr : tier.nameFr;
   const seat = seatLabel(ticket, locale);
+  const statusLabel =
+    ticket.status === "VALID"
+      ? t("validEntry")
+      : ticket.status === "USED"
+        ? t("used")
+        : ticket.status === "TRANSFERRED"
+          ? t("transferred")
+          : t("cancelled");
 
   return (
     <Shell>
-      <div className="mx-auto max-w-xl px-4 py-8">
-        <div className="flex items-center justify-between no-print">
-          <Link to="/billets" className="text-sm font-semibold text-primary">
+      <Container size="form" className="py-6 md:py-8">
+        <div className="no-print flex items-center justify-between">
+          <Link to="/billets" className="text-sm font-semibold text-primary hover:underline">
             {t("back")}
           </Link>
           <div className="flex gap-2">
-            <button
-              type="button"
-              className="h-11 rounded-full bg-action px-4 text-sm font-semibold text-action-fg transition hover:bg-action-hover"
+            <IconButton
+              label={t("download")}
               onClick={() => downloadFile(`/tickets/${ticketId}/pdf`, `${ticket.ref}.pdf`).catch((err) => toast.error(err.message))}
             >
-              {t("download")}
-            </button>
-            <button type="button" className="h-11 rounded-full border border-line/20 bg-card px-4 text-sm font-semibold transition hover:bg-paper" onClick={() => window.print()}>
-              {t("print")}
-            </button>
+              <Download className="size-4.5" />
+            </IconButton>
+            <IconButton label={t("print")} onClick={() => window.print()}>
+              <Printer className="size-4.5" />
+            </IconButton>
           </div>
         </div>
-        <article className="mt-4 overflow-hidden rounded-card bg-card shadow-pop">
-          {event.image ? <img src={event.image} alt="" className="h-44 w-full object-cover" /> : null}
-          <div className="p-5">
-            <p className="font-mono text-xs text-primary">{ticket.ref}</p>
-            <h1 className="mt-1 font-display text-3xl font-extrabold">{title}</h1>
-            <p className="mt-2 text-sm text-muted">{new Date(event.start).toLocaleDateString(locale === "ar" ? "ar-MA" : "fr-FR")}</p>
-            <p className="font-semibold">{venue}</p>
-            <p className="text-sm">
-              {zone} · {gate}
-            </p>
-            <p className="text-sm">{seat ?? t("freeSeat")}</p>
-            <p className="mt-2 text-sm">
-              {t("holderOf")} · {ticket.holderName}
-            </p>
-            <div className="mt-4 flex justify-center rounded-control bg-paper p-4">
-              <QrMark value={data.qrPayload} className="size-52" />
+
+        {/* The ticket itself, in the same stub/QR split TicketPass uses on
+            every list — this is just the single-ticket, full-detail version
+            of the same object, not a different design for the same thing. */}
+        <article className="mt-4 overflow-hidden rounded-card border border-line/10 bg-card shadow-pop">
+          {event.image ? (
+            <div className="relative h-44 w-full md:h-52">
+              <img src={event.image} alt="" className="h-full w-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-stage/90 via-stage/10 to-transparent" />
+              <div className="absolute inset-x-5 bottom-4 flex items-center justify-between gap-2">
+                <Badge tone="primary">{tierName}</Badge>
+                <span className="font-mono text-xs font-semibold text-stage-fg">{ticket.ref}</span>
+              </div>
             </div>
-            <p className="mt-2 text-center text-xs text-muted">{t("brightness")}</p>
-            {ticket.status !== "VALID" ? (
-              <p className="mt-3 text-center font-bold text-danger">
-                {ticket.status === "TRANSFERRED" ? t("transferred") : ticket.status === "CANCELLED" ? t("cancelled") : t("used")}
+          ) : (
+            <div className="flex items-center justify-between gap-2 border-b border-line/10 px-5 py-4 md:px-6">
+              <Badge tone="primary">{tierName}</Badge>
+              <span className="font-mono text-xs text-muted">{ticket.ref}</span>
+            </div>
+          )}
+
+          <div className="grid lg:grid-cols-[1fr_17rem]">
+            <div className="min-w-0 p-5 md:p-6">
+              <p className="text-sm font-semibold text-primary">
+                {new Date(event.start).toLocaleDateString(locale === "ar" ? "ar-MA" : "fr-MA", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}
               </p>
-            ) : (
-              <p className="mt-3 text-center font-bold text-success">{t("validEntry")}</p>
-            )}
+              <h1 className="mt-1 font-display text-title font-extrabold">{title}</h1>
+
+              <dl className="mt-5 grid gap-2.5 sm:grid-cols-2">
+                <Meta label={t("venue")} value={venue} hint={gate} />
+                <Meta label={t("zone")} value={zone} hint={seat ?? t("freeSeat")} />
+                <Meta label={t("holderOf")} value={ticket.holderName} />
+                <Meta label={t("paidPrice")} value={`${money(order.totalCents)} MAD`} />
+              </dl>
+            </div>
+
+            {/*
+              Same perforated-stub treatment as TicketPass, at the scale this
+              page deserves: this is the one screen a buyer actually holds up
+              at the gate, so the QR gets the most room it can get rather than
+              competing with everything else in a 208px card.
+            */}
+            <div className="relative flex flex-col items-center justify-center gap-3 border-t border-dashed border-line/25 bg-brume/40 p-5 lg:border-s lg:border-t-0">
+              <span
+                className="absolute -top-2.5 inset-inline-0 mx-auto size-5 rounded-full bg-paper lg:inset-inline-auto lg:top-0 lg:-mt-2.5 lg:-ms-2.5 lg:start-0"
+                aria-hidden
+              />
+              <span
+                className="absolute -bottom-2.5 inset-inline-0 mx-auto size-5 rounded-full bg-paper lg:inset-inline-auto lg:bottom-0 lg:-mb-2.5 lg:-ms-2.5 lg:start-0"
+                aria-hidden
+              />
+              <Badge tone={STATUS_TONE[ticket.status] ?? "neutral"}>{statusLabel}</Badge>
+              <div className="rounded-control bg-white p-3 shadow-card">
+                <QrMark value={data.qrPayload} className="size-52" />
+              </div>
+              <p className="max-w-52 text-center text-xs leading-relaxed text-muted">{t("brightness")}</p>
+            </div>
           </div>
         </article>
-        <section className="mt-4 rounded-card border border-line/10 bg-card p-4">
+
+        {/* Invoice, as a real Card with aligned figures instead of loose
+            flex rows — the total gets its own weight at the bottom, same
+            pattern as Confirmation's amount line. */}
+        <Card className="mt-4">
           <h2 className="font-display text-lg font-bold">{t("invoice")}</h2>
-          <p className="mt-2 flex justify-between text-sm">
-            <span>{t("subtotal")}</span>
-            <span>{money(order.subtotalCents)} MAD</span>
-          </p>
-          <p className="flex justify-between text-sm">
-            <span>{t("fees")}</span>
-            <span>{t("feesFree")}</span>
-          </p>
-          <p className="flex justify-between text-sm">
-            <span>{t("vat")}</span>
-            <span>{t("included")}</span>
-          </p>
-          <p className="mt-2 flex justify-between font-display text-xl font-extrabold">
-            <span>{t("totalDebited")}</span>
-            <span>{money(order.totalCents)} MAD</span>
-          </p>
-          <p className="mt-2 font-mono text-xs text-muted">
+          <dl className="mt-3 grid gap-2 text-sm">
+            <Row label={t("subtotal")} value={`${money(order.subtotalCents)} MAD`} />
+            <Row label={t("fees")} value={t("feesFree")} />
+            <Row label={t("vat")} value={t("included")} />
+          </dl>
+          <div className="mt-3 flex items-baseline justify-between border-t border-line/10 pt-3">
+            <span className="font-display text-lg font-bold">{t("totalDebited")}</span>
+            <span className="font-display text-xl font-extrabold tabular-nums">{money(order.totalCents)} MAD</span>
+          </div>
+          <p className="mt-3 font-mono text-xs text-muted">
             {order.paymentRef} · {order.cardBank} ···· {order.cardLast4}
           </p>
-        </section>
+        </Card>
 
         {/* Only offered while the ticket is still a live entitlement. */}
         {options && ticket.status === "VALID" ? (
-          <section className="no-print mt-4 rounded-card border border-line/10 bg-card p-4">
+          <Card className="no-print mt-4">
             <h2 className="font-display text-lg font-bold">{t("manageTicket")}</h2>
 
+            {/* The cancel action is the one with a real consequence (money
+                moves, the ticket dies), so it is the only one in danger
+                colour — everything else here is reversible or routine, and
+                giving them all the same visual weight is what made every
+                button on this page read as equally risky before. */}
             <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="h-11 rounded-full border border-line/20 bg-card px-4 text-sm font-semibold transition hover:bg-paper disabled:opacity-50"
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Pencil className="size-4" />}
                 onClick={() => setRenaming(data?.ticket?.holderName ?? "")}
                 disabled={busy}
               >
                 {t("fixName")}
-              </button>
+              </Button>
               {options.cancel?.allowed ? (
-                <button
-                  type="button"
-                  className="h-11 rounded-full bg-danger px-4 text-sm font-semibold text-danger-fg transition hover:brightness-110 disabled:opacity-50"
+                <Button
+                  variant="danger"
+                  size="sm"
+                  icon={<XCircle className="size-4" />}
                   onClick={() => setConfirmCancel(true)}
                   disabled={busy}
                 >
                   {t("cancelTicket")}
-                </button>
+                </Button>
               ) : null}
             </div>
 
@@ -269,28 +331,35 @@ export default function TicketDetail() {
 
             {options.exchange?.length ? (
               <>
-                <h3 className="mt-4 text-sm font-bold">{t("changeZone")}</h3>
+                <h3 className="mt-5 flex items-center gap-2 text-sm font-bold">
+                  <TicketIcon className="size-4 text-muted" />
+                  {t("changeZone")}
+                </h3>
                 <ul className="mt-2 grid gap-2">
-                  {options.exchange.map((zone) => (
-                    <li key={zone.tierId} className="flex items-center justify-between gap-3 rounded-control bg-paper px-3 py-2">
+                  {options.exchange.map((z) => (
+                    <li
+                      key={z.tierId}
+                      className={cn(
+                        "flex items-center justify-between gap-3 rounded-control bg-paper px-3.5 py-2.5",
+                        (z.soldOut || z.dueCents > 0) && "opacity-60",
+                      )}
+                    >
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold">
-                          {locale === "ar" ? zone.nameAr : zone.nameFr}
-                        </span>
+                        <span className="block truncate text-sm font-semibold">{locale === "ar" ? z.nameAr : z.nameFr}</span>
                         <span className="block text-xs text-muted">
-                          {zone.dueCents > 0 ? t("zoneExtra").replace("{n}", money(zone.dueCents)) : t("zoneIncluded")}
+                          {z.dueCents > 0 ? t("zoneExtra").replace("{n}", money(z.dueCents)) : t("zoneIncluded")}
                         </span>
                       </span>
-                      <button
-                        type="button"
-                        className="h-10 shrink-0 rounded-full bg-action px-3.5 text-xs font-semibold text-action-fg transition hover:bg-action-hover disabled:opacity-40"
-                        onClick={() => changeZone(zone.tierId)}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => changeZone(z.tierId)}
                         // An upgrade owes money, which this page cannot yet
                         // collect — the server refuses it, so don't offer it.
-                        disabled={busy || zone.soldOut || zone.dueCents > 0}
+                        disabled={busy || z.soldOut || z.dueCents > 0}
                       >
-                        {zone.soldOut ? t("zoneSoldOut") : t("changeZone")}
-                      </button>
+                        {z.soldOut ? t("zoneSoldOut") : t("changeZone")}
+                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -301,57 +370,53 @@ export default function TicketDetail() {
                 a second "share" button the server would refuse. */}
             {options.share ? (
               <>
-                <h3 className="mt-4 text-sm font-bold">{t("shareTicket")}</h3>
+                <h3 className="mt-5 flex items-center gap-2 text-sm font-bold">
+                  <Share2 className="size-4 text-muted" />
+                  {t("shareTicket")}
+                </h3>
                 <p className="mt-1 text-xs text-muted">{t("shareOpen")}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="h-11 rounded-full bg-action px-4 text-sm font-semibold text-action-fg transition hover:bg-action-hover disabled:opacity-50"
-                    onClick={() => copyShare(options.share.token)}
-                    disabled={busy}
-                  >
+                  <Button variant="primary" size="sm" onClick={() => copyShare(options.share.token)} disabled={busy}>
                     {t("shareCopy")}
-                  </button>
-                  <button
-                    type="button"
-                    className="h-11 rounded-full border border-line/20 bg-card px-4 text-sm font-semibold transition hover:bg-paper disabled:opacity-50"
-                    onClick={() => revokeShare(options.share.id)}
-                    disabled={busy}
-                  >
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => revokeShare(options.share.id)} disabled={busy}>
                     {t("shareRevoke")}
-                  </button>
+                  </Button>
                 </div>
               </>
             ) : options.shareable ? (
               <>
-                <h3 className="mt-4 text-sm font-bold">{t("shareTicket")}</h3>
+                <h3 className="mt-5 flex items-center gap-2 text-sm font-bold">
+                  <Share2 className="size-4 text-muted" />
+                  {t("shareTicket")}
+                </h3>
                 <p className="mt-1 text-xs text-muted">{t("shareTicketHint")}</p>
-                <input
-                  value={shareMessage}
-                  onChange={(event) => setShareMessage(event.target.value)}
-                  maxLength={280}
-                  placeholder={t("shareMessagePlaceholder")}
-                  aria-label={t("shareMessage")}
-                  className="mt-2 h-11 w-full rounded-control border border-line/20 bg-paper px-3 text-sm"
-                />
-                <button
-                  type="button"
-                  className="mt-2 h-11 rounded-full bg-action px-4 text-sm font-semibold text-action-fg transition hover:bg-action-hover disabled:opacity-50"
-                  onClick={createShare}
-                  disabled={busy}
-                >
+                <Field label={t("shareMessage")} className="mt-2">
+                  {({ id, describedBy, invalid }) => (
+                    <Input
+                      id={id}
+                      describedBy={describedBy}
+                      invalid={invalid}
+                      value={shareMessage}
+                      onChange={(event) => setShareMessage(event.target.value)}
+                      maxLength={280}
+                      placeholder={t("shareMessagePlaceholder")}
+                    />
+                  )}
+                </Field>
+                <Button variant="primary" size="sm" className="mt-3" onClick={createShare} disabled={busy}>
                   {t("shareCreate")}
-                </button>
+                </Button>
                 <p className="mt-2 text-xs text-muted">{t("shareNote")}</p>
               </>
             ) : null}
-          </section>
+          </Card>
         ) : null}
-      </div>
+      </Container>
 
       {/* Cancelling refunds money and cannot be undone, so it gets a real
           dialog. window.confirm could not be styled or fully translated, and
-          some mobile browsers suppress it outright - which would have
+          some mobile browsers suppress it outright, which would have
           cancelled the ticket with no prompt shown at all. */}
       <Modal
         open={confirmCancel}
@@ -390,12 +455,19 @@ export default function TicketDetail() {
       >
         <form id="rename-form" onSubmit={submitName}>
           <Field label={t("holderOf")} required>
-            {(props) => (
-              <Input {...props} value={renaming ?? ""} onChange={(e) => setRenaming(e.target.value)} autoComplete="name" />
-            )}
+            {(props) => <Input {...props} value={renaming ?? ""} onChange={(e) => setRenaming(e.target.value)} autoComplete="name" />}
           </Field>
         </form>
       </Modal>
     </Shell>
+  );
+}
+
+function Row({ label, value }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-muted">{label}</dt>
+      <dd className="font-semibold tabular-nums">{value}</dd>
+    </div>
   );
 }
