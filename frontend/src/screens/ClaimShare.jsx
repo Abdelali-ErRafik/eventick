@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { Shell } from "../components/Shell";
 import { QrMark } from "../components/QrMark";
 import { toast } from "sonner";
-import { api } from "../api";
+import { api, rememberTicketKey } from "../api";
 import { Button } from "../ui";
 import { useI18n } from "../i18n";
 
@@ -37,6 +37,9 @@ export default function ClaimShare() {
     setBusy(true);
     try {
       const result = await api.post(`/share/${token}/claim`, { holderName: name.trim() });
+      // The claimed ticket sits on the SENDER's order, so this token is the
+      // recipient's only proof of it -- and it is returned exactly once.
+      rememberTicketKey(result.ticketId, result.accessToken);
       setClaimed(result);
       toast.success(t("claimDone"));
     } catch (err) {
@@ -72,7 +75,7 @@ export default function ClaimShare() {
           </div>
           <p className="mt-4 text-sm text-muted">{t("claimKeepLink")}</p>
           <Link
-            to={`/billet/${claimed.ticketId}`}
+            to={`/billet/${claimed.ticketId}?k=${encodeURIComponent(claimed.accessToken ?? "")}`}
             className="mt-6 inline-flex h-12 items-center rounded-full bg-action px-6 text-sm font-semibold text-action-fg transition hover:bg-action-hover"
           >
             {t("viewTicket")}

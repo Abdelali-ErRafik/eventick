@@ -4,7 +4,7 @@ import { Calendar, Clock, Heart, MapPin, Minus, ParkingCircle, Plus, QrCode, Shi
 import { toast } from "sonner";
 import { Shell } from "../components/Shell";
 import { EventCard } from "../components/EventCard";
-import { api, money } from "../api";
+import { api, money, rememberOrderKey } from "../api";
 import { useCart } from "../CartContext";
 import { useFavorites } from "../FavoritesContext";
 import { useCatalog } from "../useCatalog";
@@ -132,6 +132,11 @@ export default function EventDetail() {
         eventSlug: event.slug,
         lines: lines.map((line) => ({ tierId: line.tier.id, qty: line.qty })),
       });
+      // This response is the only time the server hands over the order's
+      // access token. A guest has no session, so losing it here would mean
+      // losing the ticket — api.js attaches it to every later call from this
+      // store, and it also rides in the confirmation URL for other devices.
+      rememberOrderKey(hold.order.id, hold.accessToken);
       setCart({
         eventSlug: event.slug,
         lines: lines.map((line) => ({ tierId: line.tier.id, qty: line.qty })),

@@ -9,18 +9,19 @@ import { committedForTier } from "../lib/availability.js";
 import { ticketPayload } from "../lib/ticket-signature.js";
 import { cancelPolicy, exchangeTicket, renameHolder, selfCancelTicket } from "../lib/ticket-admin.js";
 import { shareTicket } from "../lib/share.js";
+import { authoriseOrderOrOrganiser, requireTicketAccess } from "../lib/order-access.js";
 
 export const ticketsRouter = Router();
 
 ticketsRouter.get(
   "/:id",
+  optionalAuth,
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
-    const ticket = await prisma.ticket.findUnique({
-      where: { id },
-      include: { order: { include: { event: true } }, tier: true },
-    });
-    if (!ticket) throw new HttpError(404, "Ticket not found");
+    // This route hands out the SIGNED QR payload — the thing the gate scans.
+    // It had no auth at all, so the id alone produced a working entry
+    // credential for someone else's seat.
+    const ticket = await requireTicketAccess(req, id);
     res.json({
       // Signed QR payload: only the server can produce this, so the client
       // renders the image but cannot forge what it encodes.
@@ -55,9 +56,11 @@ ticketsRouter.get(
 );
 
 /**
- * Ticket PDF. Readable by the buyer, the event's organiser, or an admin.
- * Guest orders (customerId null) stay reachable by anyone holding the ticket
- * id — the id is the capability, same as the confirmation page link.
+ * Ticket PDF. Readable by the buyer (session or order token), the event's
+ * organiser, or an admin.
+ *
+ * The old rule ended in `|| isGuestOrder`, which meant a guest ticket's PDF —
+ * QR and all — was served to anyone who knew the id.
  */
 ticketsRouter.get(
   "/:id/pdf",
@@ -71,10 +74,7 @@ ticketsRouter.get(
     if (!ticket) throw new HttpError(404, "Ticket not found");
 
     const order = ticket.order;
-    const isOwner = order.customerId !== null && order.customerId === req.user?.id;
-    const isOrganiser = req.user?.role === "ADMIN" || order.event.organiserId === req.user?.id;
-    const isGuestOrder = order.customerId === null;
-    if (!isOwner && !isOrganiser && !isGuestOrder) throw new HttpError(403, "Not your ticket");
+    await authoriseOrderOrOrganiser(req, order);
 
     const pdf = await renderTicketsPdf([
       {
@@ -128,18 +128,11 @@ ticketsRouter.post(
 
 // ─── Buyer-side ticket management ────────────────────────────────────────
 
-/** Ownership for buyer actions. Guest orders have no customer, so the ticket
- * id is the capability — the same rule the PDF and confirmation links use. */
-async function requireOwnTicket(ticketId: string, userId: string | undefined) {
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: ticketId },
-    include: { order: { include: { event: true } }, tier: true },
-  });
-  if (!ticket) throw new HttpError(404, "Ticket not found");
-  const isGuestOrder = ticket.order.customerId === null;
-  if (!isGuestOrder && ticket.order.customerId !== userId) throw new HttpError(403, "Not your ticket");
-  return ticket;
-}
+// Ownership for buyer actions now lives in lib/order-access.ts, shared with
+// resale.ts and share.ts. All three had their own copy of a check that read
+// "if this is a guest order, allow anyone", which is why a stranger holding a
+// ticket id could cancel, rename, exchange, resell or give away a seat they
+// had never paid for.
 
 /** What the holder may do with this ticket right now — lets the UI show the
  * cancellation deadline instead of offering a button that will fail. */
@@ -147,7 +140,7 @@ ticketsRouter.get(
   "/:id/options",
   optionalAuth,
   asyncHandler(async (req, res) => {
-    const ticket = await requireOwnTicket(param(req, "id"), req.user?.id);
+    const ticket = await requireTicketAccess(req, param(req, "id"));
     const policy = cancelPolicy(ticket);
 
     // Zones they could move to, with the extra due for each.
@@ -194,7 +187,7 @@ ticketsRouter.post(
   "/:id/cancel",
   optionalAuth,
   asyncHandler(async (req, res) => {
-    const ticket = await requireOwnTicket(param(req, "id"), req.user?.id);
+    const ticket = await requireTicketAccess(req, param(req, "id"));
     const result = await selfCancelTicket(ticket.id);
     res.json(result);
   }),
@@ -206,7 +199,7 @@ ticketsRouter.post(
   "/:id/exchange",
   optionalAuth,
   asyncHandler(async (req, res) => {
-    const ticket = await requireOwnTicket(param(req, "id"), req.user?.id);
+    const ticket = await requireTicketAccess(req, param(req, "id"));
     const body = exchangeSchema.parse(req.body);
 
     // State before price: a used or cancelled ticket can't be exchanged at
@@ -236,7 +229,7 @@ ticketsRouter.patch(
   "/:id/holder",
   optionalAuth,
   asyncHandler(async (req, res) => {
-    const ticket = await requireOwnTicket(param(req, "id"), req.user?.id);
+    const ticket = await requireTicketAccess(req, param(req, "id"));
     const body = renameSchema.parse(req.body);
     await renameHolder(ticket.id, body.holderName);
     res.json({ ok: true });

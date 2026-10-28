@@ -6,18 +6,13 @@ import { optionalAuth } from "../middleware/auth.js";
 import { phoneOk, makePaymentRef } from "../lib/payment-sim.js";
 import { isMockPayments, getStripe, CURRENCY } from "../lib/stripe.js";
 import { cancelListing, completeResale, listTicketForResale, resolveListing } from "../lib/resale.js";
+import { requireTicketAccess } from "../lib/order-access.js";
 
 export const resaleRouter = Router();
 
-/** Ownership for seller actions. A guest order has no customer, so holding
- * the ticket id is the credential — same rule as the PDF and ticket pages. */
-async function requireOwnTicket(ticketId: string, userId: string | undefined) {
-  const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, include: { order: true } });
-  if (!ticket) throw new HttpError(404, "Ticket not found");
-  const isGuestOrder = ticket.order.customerId === null;
-  if (!isGuestOrder && ticket.order.customerId !== userId) throw new HttpError(403, "Not your ticket");
-  return ticket;
-}
+// Ownership for seller actions lives in lib/order-access.ts. The copy that
+// used to be here ended in "if this is a guest order, allow anyone", so a
+// stranger holding a ticket id could act on a seat they never bought.
 
 const listSchema = z.object({ ticketId: z.string() });
 
@@ -27,7 +22,7 @@ resaleRouter.post(
   optionalAuth,
   asyncHandler(async (req, res) => {
     const body = listSchema.parse(req.body);
-    const ticket = await requireOwnTicket(body.ticketId, req.user?.id);
+    const ticket = await requireTicketAccess(req, body.ticketId);
     const listing = await listTicketForResale(ticket.id, ticket.order.customerId);
     res.status(201).json({
       id: listing.id,
@@ -45,7 +40,7 @@ resaleRouter.delete(
     const id = param(req, "id");
     const listing = await prisma.resaleListing.findUnique({ where: { id }, include: { ticket: true } });
     if (!listing) throw new HttpError(404, "Listing not found");
-    await requireOwnTicket(listing.ticketId, req.user?.id);
+    await requireTicketAccess(req, listing.ticketId);
     await cancelListing(id);
     res.status(204).end();
   }),

@@ -4,7 +4,7 @@ import { QrMark } from "../components/QrMark";
 import { Shell } from "../components/Shell";
 import { toast } from "sonner";
 import { seatLabel } from "../components/TicketPass";
-import { api, downloadFile, money } from "../api";
+import { api, downloadFile, money, rememberTicketKey } from "../api";
 import { useI18n } from "../i18n";
 import { Badge, Button, Card, Field, Input, Modal } from "../ui";
 
@@ -20,6 +20,12 @@ export default function TicketDetail() {
   const [renaming, setRenaming] = useState(null);
 
   const load = useCallback(() => {
+    // A share recipient opening this link on another device has their token
+    // only in the URL, so adopt it before the first fetch. api.js attaches it
+    // to every call from here on.
+    const fromUrl = new URLSearchParams(window.location.search).get("k");
+    if (fromUrl) rememberTicketKey(ticketId, fromUrl);
+
     api
       .get(`/tickets/${ticketId}`)
       .then(setData)

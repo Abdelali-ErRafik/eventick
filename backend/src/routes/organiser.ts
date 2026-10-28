@@ -256,7 +256,7 @@ organiserRouter.get(
       include: { tickets: { include: { tier: { include: { event: true } } } } },
       orderBy: { createdAt: "desc" },
     });
-    res.json({ orders: orders.map(publicOrderWithContext) });
+    res.json({ orders: orders.map((o) => publicOrderWithContext(o)) });
   }),
 );
 

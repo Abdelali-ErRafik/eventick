@@ -5,18 +5,13 @@ import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { optionalAuth } from "../middleware/auth.js";
 import { claimShare, resolveShare, revokeShare, shareTicket } from "../lib/share.js";
 import { ticketPayload } from "../lib/ticket-signature.js";
+import { newAccessToken, requireTicketAccess } from "../lib/order-access.js";
 
 export const shareRouter = Router();
 
-/** Ownership for sender actions. A guest order has no customer, so holding
- * the ticket id is the credential — same rule as the PDF and ticket pages. */
-async function requireOwnTicket(ticketId: string, userId: string | undefined) {
-  const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, include: { order: true } });
-  if (!ticket) throw new HttpError(404, "Ticket not found");
-  const isGuestOrder = ticket.order.customerId === null;
-  if (!isGuestOrder && ticket.order.customerId !== userId) throw new HttpError(403, "Not your ticket");
-  return ticket;
-}
+// Ownership for sender actions lives in lib/order-access.ts. The copy that
+// used to be here ended in "if this is a guest order, allow anyone", so a
+// stranger holding a ticket id could act on a seat they never bought.
 
 const createSchema = z.object({
   ticketId: z.string(),
@@ -29,7 +24,7 @@ shareRouter.post(
   optionalAuth,
   asyncHandler(async (req, res) => {
     const body = createSchema.parse(req.body);
-    const ticket = await requireOwnTicket(body.ticketId, req.user?.id);
+    const ticket = await requireTicketAccess(req, body.ticketId);
     const share = await shareTicket(ticket.id, ticket.order.customerId, body.message);
     res.status(201).json({
       id: share.id,
@@ -48,7 +43,7 @@ shareRouter.delete(
     const id = param(req, "id");
     const share = await prisma.ticketShare.findUnique({ where: { id } });
     if (!share) throw new HttpError(404, "Share not found");
-    await requireOwnTicket(share.ticketId, req.user?.id);
+    await requireTicketAccess(req, share.ticketId);
     await revokeShare(id);
     res.status(204).end();
   }),
@@ -88,16 +83,21 @@ shareRouter.post(
     const body = claimSchema.parse(req.body);
     const result = await claimShare(param(req, "token"), body.holderName, req.user?.id ?? null);
 
-    const ticket = await prisma.ticket.findUniqueOrThrow({
+    // The replacement ticket lives on the SENDER's order, so the recipient has
+    // no order credential and must not be given one — it would unlock the
+    // sender's other tickets. Mint a token scoped to this ticket alone.
+    const ticket = await prisma.ticket.update({
       where: { id: result.ticketId },
+      data: { accessToken: newAccessToken() },
       include: { order: { include: { event: true } } },
     });
 
     res.status(201).json({
       ticketId: ticket.id,
       ref: ticket.ref,
-      // The recipient has no account link to this ticket, so hand them the QR
-      // straight away — the ticket id is their capability from here on.
+      // Returned once, here, to the person who just claimed it. This is what
+      // their /billet/:id link carries from now on.
+      accessToken: ticket.accessToken,
       qrPayload: ticketPayload(ticket.ref, ticket.order.event.slug),
     });
   }),

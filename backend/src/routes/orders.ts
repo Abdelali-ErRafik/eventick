@@ -12,6 +12,7 @@ import { getStripe, isMockPayments, CURRENCY } from "../lib/stripe.js";
 import { settleOrder } from "../lib/settle.js";
 import { withSerializableRetry } from "../lib/serializable.js";
 import { markClaimed, offerFreedSeats, resolveClaim } from "../lib/waitlist.js";
+import { authoriseOrder, authoriseOrderOrOrganiser, newAccessToken } from "../lib/order-access.js";
 
 export const ordersRouter = Router();
 
@@ -152,6 +153,11 @@ ordersRouter.post(
           totalCents: subtotalCents - discountCents,
           promoCodeId: appliedPromo?.id ?? null,
           holdUntil: holdExpiry(),
+          // The buyer's credential, issued here because this is where the
+          // order comes into being. A guest has no session, so this token is
+          // the only thing that will distinguish them from a stranger who
+          // happens to learn the order id.
+          accessToken: newAccessToken(),
         },
       });
 
@@ -164,6 +170,11 @@ ordersRouter.post(
 
     res.status(201).json({
       order: publicOrder(order),
+      // The ONE response that carries the token: this is the buyer, at the
+      // moment they created the order. Everywhere else it is deliberately
+      // withheld, so that reading an order can never hand over the
+      // credential for changing it.
+      accessToken: order.accessToken,
       holdUntil: order.holdUntil?.toISOString() ?? null,
       claimEntryId: claim?.id ?? null,
     });
@@ -179,6 +190,9 @@ ordersRouter.delete(
     const id = param(req, "id");
     const order = await prisma.order.findUnique({ where: { id } });
     if (!order) throw new HttpError(404, "Order not found");
+    // Releasing someone else's hold would hand their seats to whoever is
+    // waiting — cheap to do, and invisible to the buyer until they try to pay.
+    await authoriseOrder(req, order);
     if (order.status !== "PENDING") throw new HttpError(409, "Order is no longer pending");
     await prisma.order.update({ where: { id }, data: { status: "CANCELLED", holdUntil: null } });
     // An abandoned cart returns seats — offer them to whoever is waiting.
@@ -211,6 +225,10 @@ ordersRouter.post(
     const body = paySchema.parse(req.body ?? {});
     const order = await prisma.order.findUnique({ where: { id }, include: { event: true } });
     if (!order) throw new HttpError(404, "Order not found");
+    // Paying is a write: it attaches a name, email and phone to the order and
+    // then issues tickets in that name. Without this, a stranger could put
+    // their own details on someone else's held order.
+    await authoriseOrder(req, order);
     if (order.status === "PAID") throw new HttpError(409, "Order is already paid");
     if (order.status !== "PENDING") throw new HttpError(409, "Order is no longer payable");
     if (order.holdUntil && order.holdUntil.getTime() < Date.now()) {
@@ -270,7 +288,13 @@ ordersRouter.get(
       include: { tickets: { include: { tier: { include: { event: true } } } } },
     });
     if (!order) throw new HttpError(404, "Order not found");
-    res.json({ order: publicOrderWithContext(order) });
+
+    // Was open to anyone holding the id, which exposed the buyer's name,
+    // email and phone. The organiser is allowed too: these are their own
+    // buyers, and they already see them on the guest list.
+    const auth = await authoriseOrderOrOrganiser(req, order);
+
+    res.json({ order: publicOrderWithContext(order, { contact: auth.maySeeContact }) });
   }),
 );
 
@@ -283,7 +307,7 @@ ordersRouter.get(
       include: { tickets: { include: { tier: { include: { event: true } } } } },
       orderBy: { createdAt: "desc" },
     });
-    res.json({ orders: orders.map(publicOrderWithContext) });
+    res.json({ orders: orders.map((o) => publicOrderWithContext(o)) });
   }),
 );
 

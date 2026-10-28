@@ -322,6 +322,9 @@ async function main() {
     await check("GET /orders anonymous sends them to login", "GET", "/orders", 401);
 
     const detail = await check("GET /tickets/:id fills TicketDetail", "GET", `/tickets/${ticketId}`, 200, {
+      // The buyer is logged in here, so their session is the credential --
+      // a guest reaches the same route with their order access token.
+      token: tokens.customer,
       // The page renders the QR from qrPayload and the event context beside it.
       shape: (d) => typeof d?.qrPayload === "string" && typeof d?.ticket?.ref === "string" && !!d?.event,
     });
@@ -390,14 +393,30 @@ async function main() {
 
     const claimed = await check("POST /share/:token/claim issues the new ticket", "POST", `/share/${token}/claim`, 201, {
       body: { holderName: "Destinataire Interface" },
-      // The claim screen renders the QR immediately — the recipient has no
-      // account, so the ticket id is their only way back to it.
-      shape: (d) => typeof d?.ticketId === "string" && typeof d?.qrPayload === "string" && typeof d?.ref === "string",
+      // The claim screen renders the QR immediately, and hands back a token
+      // scoped to this one ticket -- the recipient has no account, and the
+      // ticket sits on the SENDER's order, so they get neither a session
+      // nor the order credential.
+      shape: (d) =>
+        typeof d?.ticketId === "string" &&
+        typeof d?.qrPayload === "string" &&
+        typeof d?.ref === "string" &&
+        typeof d?.accessToken === "string",
     });
-    // And that id must actually open the ticket page.
-    await check("the claimed ticket id opens /billet/:id", "GET", `/tickets/${claimed.data.ticketId}`, 200, {
+    // The recipient's token must open the ticket page...
+    await check("the claimed ticket opens /billet/:id with its token", "GET", `/tickets/${claimed.data.ticketId}?k=${encodeURIComponent(claimed.data.accessToken)}`, 200, {
       shape: (d) => d?.ticket?.ref === claimed.data.ref,
     });
+    // ...and the id on its own must not, or the share link would have
+    // handed a working QR to anyone who guessed it.
+    await check("the claimed ticket id alone → 403", "GET", `/tickets/${claimed.data.ticketId}`, 403);
+    // The narrow token must not reach the sender's OTHER tickets.
+    await check(
+      "the recipient token does not open the sender's other ticket",
+      "GET",
+      `/tickets/${bought.tickets[0].id}?k=${encodeURIComponent(claimed.data.accessToken)}`,
+      403,
+    );
     await check("GET /share/:token after claiming is gone", "GET", `/share/${token}`, 410);
 
     // Revoking, as the panel's second button does.

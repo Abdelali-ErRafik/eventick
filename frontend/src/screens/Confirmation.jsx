@@ -3,7 +3,7 @@ import { Check } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { Shell } from "../components/Shell";
 import { TicketPass, toTicketPassProps } from "../components/TicketPass";
-import { api, money } from "../api";
+import { api, money, rememberOrderKey, rememberTicketOrder } from "../api";
 import { useI18n } from "../i18n";
 
 export default function Confirmation() {
@@ -13,9 +13,22 @@ export default function Confirmation() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    // A buyer who opens this link on another device — or after clearing their
+    // browser — has the token only in the URL, so adopt it before the fetch.
+    // That is the whole reason the token travels in the link as well as in
+    // local storage.
+    const fromUrl = new URLSearchParams(window.location.search).get("k");
+    if (fromUrl) rememberOrderKey(orderId, fromUrl);
+
     api
       .get(`/orders/${orderId}`)
-      .then((data) => setOrder(data.order))
+      .then((data) => {
+        setOrder(data.order);
+        // Tickets are opened by ticket id, which carries no hint of which
+        // order it belongs to. Record the link here so TicketDetail can find
+        // the right credential later.
+        for (const ticket of data.order?.tickets ?? []) rememberTicketOrder(ticket.id, orderId);
+      })
       .catch((err) => setError(err.message));
   }, [orderId]);
 

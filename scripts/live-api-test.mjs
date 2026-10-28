@@ -152,6 +152,12 @@ const hold = await call("POST", "/api/orders/hold", {
 });
 const orderId = hold.data?.order?.id;
 if (orderId) created.orders.push(orderId);
+// A guest order has no session, so the hold hands back an access token the
+// buyer carries for everything after. It is returned exactly once, here;
+// `?k=` is how their confirmation link holds it.
+const orderKey = hold.data?.accessToken;
+const k = (t) => (t ? `?k=${encodeURIComponent(t)}` : "");
+record("hold issues an order access token", typeof orderKey === "string" && orderKey.length >= 24, orderKey ? "issued" : "MISSING");
 record("POST /orders/hold creates PENDING", hold.status === 201 && hold.data?.order?.status === "PENDING", `${hold.status} status=${hold.data?.order?.status}`);
 record("hold issues NO tickets before payment", (hold.data?.order?.tickets?.length ?? -1) === 0, `tickets=${hold.data?.order?.tickets?.length}`);
 
@@ -165,12 +171,15 @@ await expectStatus("hold with absurd qty → 409", "POST", "/api/orders/hold", 4
   body: { eventSlug: slug, lines: [{ tierId, qty: 99999 }], holderName: "Too Many", email: "x@example.com", phone: "0612345678" },
 });
 
-await expectStatus("GET /orders/:id (guest, by id)", "GET", `/api/orders/${orderId}`, 200);
-const pay = await expectStatus("POST /orders/:id/pay", "POST", `/api/orders/${orderId}/pay`, 200);
+await expectStatus("GET /orders/:id with the buyer's token", "GET", `/api/orders/${orderId}${k(orderKey)}`, 200);
+// The id alone is NOT a credential: cuid() is partly sequential and was
+// never meant as a secret, and this response carries email and phone.
+await expectStatus("GET /orders/:id without the token → 403", "GET", `/api/orders/${orderId}`, 403);
+const pay = await expectStatus("POST /orders/:id/pay", "POST", `/api/orders/${orderId}/pay${k(orderKey)}`, 200);
 record("mock mode settles immediately", pay.data?.settled === true, `mode=${pay.data?.mode}`);
-await expectStatus("paying twice → 409", "POST", `/api/orders/${orderId}/pay`, 409);
+await expectStatus("paying twice → 409", "POST", `/api/orders/${orderId}/pay${k(orderKey)}`, 409);
 
-const paid = await call("GET", `/api/orders/${orderId}`);
+const paid = await call("GET", `/api/orders/${orderId}${k(orderKey)}`);
 record("order is PAID with 2 tickets", paid.data?.order?.status === "PAID" && paid.data?.order?.tickets?.length === 2, `status=${paid.data?.order?.status} tickets=${paid.data?.order?.tickets?.length}`);
 const ticket = paid.data?.order?.tickets?.[0];
 const ticket2 = paid.data?.order?.tickets?.[1];
@@ -181,8 +190,12 @@ const rel = await call("POST", "/api/orders/hold", {
   body: { eventSlug: slug, lines: [{ tierId, qty: 1 }], holderName: "Release Me", email: "release@example.com", phone: "0612345678" },
 });
 if (rel.data?.order?.id) created.orders.push(rel.data.order.id);
-await expectStatus("DELETE /orders/hold/:id releases it", "DELETE", `/api/orders/hold/${rel.data?.order?.id}`, 204);
-await expectStatus("paying a released hold → 409", "POST", `/api/orders/${rel.data?.order?.id}/pay`, 409);
+const relKey = rel.data?.accessToken;
+// Releasing a hold frees the seats to whoever is waiting, so it needs the
+// same proof as paying -- otherwise anyone could drop a stranger's cart.
+await expectStatus("releasing someone else's hold → 403", "DELETE", `/api/orders/hold/${rel.data?.order?.id}`, 403);
+await expectStatus("DELETE /orders/hold/:id releases it", "DELETE", `/api/orders/hold/${rel.data?.order?.id}${k(relKey)}`, 204);
+await expectStatus("paying a released hold → 409", "POST", `/api/orders/${rel.data?.order?.id}/pay${k(relKey)}`, 409);
 
 await expectStatus("GET /orders (list) anonymous → 401", "GET", "/api/orders", 401);
 await expectStatus("GET /orders (list) as customer", "GET", "/api/orders", 200, { token: tokens.customer });
@@ -190,9 +203,12 @@ await expectStatus("GET /orders (list) as customer", "GET", "/api/orders", 200, 
 // ────────────────────────────────────────────────────────────── tickets ──
 setGroup("TICKETS  /api/tickets");
 
-await expectStatus("GET /tickets/:id", "GET", `/api/tickets/${ticket?.id}`, 200);
+// The ticket route serves the SIGNED QR -- the thing the gate scans -- so
+// it needs the buyer's token, not just the ticket id.
+await expectStatus("GET /tickets/:id with the token", "GET", `/api/tickets/${ticket?.id}${k(orderKey)}`, 200);
+await expectStatus("GET /tickets/:id without it → 403", "GET", `/api/tickets/${ticket?.id}`, 403);
 await expectStatus("GET /tickets/:id unknown → 404", "GET", "/api/tickets/nope-xyz", 404);
-const pdf = await call("GET", `/api/tickets/${ticket?.id}/pdf`);
+const pdf = await call("GET", `/api/tickets/${ticket?.id}/pdf${k(orderKey)}`);
 record("GET /tickets/:id/pdf returns a PDF", pdf.status === 200 && pdf.contentType.includes("application/pdf"), `${pdf.status} ${pdf.contentType}`);
 
 await expectStatus("transfer anonymous → 401", "POST", `/api/tickets/${ticket2?.id}/transfer`, 401, {
@@ -210,15 +226,16 @@ await expectStatus("transfer of a guest order by a customer → 403", "POST", `/
 // checks keep the route surface and its guards covered here.
 setGroup("SHARE  /api/share");
 
-const share = await call("POST", "/api/share", { body: { ticketId: ticket2?.id } });
+const share = await call("POST", `/api/share${k(orderKey)}`, { body: { ticketId: ticket2?.id } });
 record("POST /share creates a link for a guest ticket", share.status === 201 && typeof share.data?.token === "string", `${share.status}`);
 await expectStatus("GET /share/:token is public", "GET", `/api/share/${share.data?.token}`, 200);
 await expectStatus("GET /share/:token unknown → 410", "GET", "/api/share/nope-xyz", 410);
-await expectStatus("a second open link → 409", "POST", "/api/share", 409, { body: { ticketId: ticket2?.id } });
+await expectStatus("giving away a ticket without the token → 403", "POST", "/api/share", 403, { body: { ticketId: ticket2?.id } });
+await expectStatus("a second open link → 409", "POST", `/api/share${k(orderKey)}`, 409, { body: { ticketId: ticket2?.id } });
 await expectStatus("claim with a too-short name → 400", "POST", `/api/share/${share.data?.token}/claim`, 400, {
   body: { holderName: "ab" },
 });
-await expectStatus("DELETE /share/:id revokes it", "DELETE", `/api/share/${share.data?.id}`, 204);
+await expectStatus("DELETE /share/:id revokes it", "DELETE", `/api/share/${share.data?.id}${k(orderKey)}`, 204);
 await expectStatus("claiming a revoked link → 410", "POST", `/api/share/${share.data?.token}/claim`, 410, {
   body: { holderName: "Too Late" },
 });
@@ -369,7 +386,7 @@ await expectStatus("over-refund → 400", "POST", `/api/organiser/orders/${order
 });
 const full = await call("POST", `/api/organiser/orders/${orderId}/refund`, { token: tokens.admin, body: {} });
 record("full refund voids tickets", full.status === 200 && full.data?.full === true, `${full.status} full=${full.data?.full}`);
-const afterRefund = await call("GET", `/api/orders/${orderId}`);
+const afterRefund = await call("GET", `/api/orders/${orderId}${k(orderKey)}`);
 record("order is REFUNDED, tickets CANCELLED", afterRefund.data?.order?.status === "REFUNDED" && afterRefund.data.order.tickets.every((t) => t.status === "CANCELLED"), `status=${afterRefund.data?.order?.status}`);
 await expectStatus("refunding again → 409", "POST", `/api/organiser/orders/${orderId}/refund`, 409, { token: tokens.admin, body: {} });
 

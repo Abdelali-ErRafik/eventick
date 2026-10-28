@@ -58,13 +58,22 @@ export function publicEvent(event: EventWithTiers, remainingByTier: Record<strin
   };
 }
 
-export function publicOrder(order: Order & { tickets: Ticket[] }) {
+/**
+ * `contact: false` withholds the buyer's own name, email and phone.
+ *
+ * Note what is NOT here: accessToken. The order credential is returned once,
+ * by the hold that creates the order, and never again — otherwise being able
+ * to read an order would hand over the right to change it, and the whole
+ * boundary would be decorative.
+ */
+export function publicOrder(order: Order & { tickets: Ticket[] }, opts: { contact?: boolean } = {}) {
+  const contact = opts.contact !== false;
   return {
     id: order.id,
     status: order.status,
-    holderName: order.holderName,
-    email: order.email,
-    phone: order.phone,
+    ...(contact
+      ? { holderName: order.holderName, email: order.email, phone: order.phone }
+      : {}),
     subtotalCents: order.subtotalCents,
     discountCents: order.discountCents,
     totalCents: order.totalCents,
@@ -122,9 +131,12 @@ export function publicTicketWithContext(ticket: TicketWithContext) {
   };
 }
 
-export function publicOrderWithContext(order: Order & { tickets: TicketWithContext[] }) {
+export function publicOrderWithContext(
+  order: Order & { tickets: TicketWithContext[] },
+  opts: { contact?: boolean } = {},
+) {
   return {
-    ...publicOrder(order),
+    ...publicOrder(order, opts),
     tickets: order.tickets.map(publicTicketWithContext),
   };
 }

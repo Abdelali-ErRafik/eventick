@@ -228,6 +228,19 @@ model Order {
   eventId    String      @map("event_id")
   status     OrderStatus @default(PENDING)
 
+  /// Proof of purchase for a buyer who has no account.
+  ///
+  /// A guest order has no customerId, so there is no user to authorise a
+  /// request against — and the id alone cannot stand in for one, because
+  /// cuid() embeds a timestamp and counter and was never meant to be secret.
+  /// This is: randomBytes(24), handed to the buyer as the `k` parameter of
+  /// their confirmation link, and required for anything that reads personal
+  /// data or changes a ticket.
+  ///
+  /// Set for EVERY order, not just guest ones, so a registered buyer can also
+  /// use their emailed link without logging in first.
+  accessToken String? @unique @map("access_token")
+
   holderName String  @map("holder_name")
   email      String
   phone      String
@@ -301,6 +314,15 @@ model Ticket {
   /// The ref this ticket replaced, when an organiser reissued a lost one.
   /// Keeps the paper trail without reusing a compromised reference.
   replacesRef String?   @map("replaces_ref")
+
+  /// Credential for a holder who is not the buyer.
+  ///
+  /// A claimed share puts the replacement ticket on the SENDER's order, so the
+  /// recipient can never present that order's token — and they should not be
+  /// able to, since it would unlock the sender's other tickets too. This gives
+  /// them proof of exactly one ticket. Null for ordinary tickets, which are
+  /// reached through their order.
+  accessToken String? @unique @map("access_token")
 
   order  Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   tier   TicketTier     @relation(fields: [tierId], references: [id], onDelete: Restrict)
