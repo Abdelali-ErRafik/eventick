@@ -379,7 +379,7 @@ function OrganiserInner() {
               ))}
             </div>
             {error ? <p className="mt-4 rounded-control bg-danger/10 px-4 py-3 text-sm text-danger">{error}</p> : null}
-            <button type="submit" disabled={busy} className="mt-5 h-12 w-full rounded-full bg-primary text-sm font-semibold text-primary-fg transition hover:bg-primary-hover disabled:opacity-50">
+            <button type="submit" disabled={busy} className="mt-5 h-12 w-full rounded-full bg-action text-sm font-semibold text-action-fg transition hover:bg-action-hover disabled:opacity-50">
               {busy ? "..." : t("publish")}
             </button>
           </form>

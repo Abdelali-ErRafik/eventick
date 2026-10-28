@@ -134,7 +134,7 @@ export default function TicketDetail() {
       <Shell>
         <div className="mx-auto max-w-xl px-4 py-16 text-center">
           <h1 className="font-display text-3xl font-extrabold">{t("notFound")}</h1>
-          <Link to="/billets" className="mt-4 inline-flex h-12 items-center rounded-full bg-primary px-5 font-semibold text-primary-fg transition hover:bg-primary-hover">
+          <Link to="/billets" className="mt-4 inline-flex h-12 items-center rounded-full bg-action px-5 font-semibold text-action-fg transition hover:bg-action-hover">
             {t("seeTickets")}
           </Link>
         </div>
@@ -167,7 +167,7 @@ export default function TicketDetail() {
           <div className="flex gap-2">
             <button
               type="button"
-              className="h-11 rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover"
+              className="h-11 rounded-full bg-action px-4 text-sm font-semibold text-action-fg transition hover:bg-action-hover"
               onClick={() => downloadFile(`/tickets/${ticketId}/pdf`, `${ticket.ref}.pdf`).catch((err) => toast.error(err.message))}
             >
               {t("download")}
@@ -277,7 +277,7 @@ export default function TicketDetail() {
                       </span>
                       <button
                         type="button"
-                        className="h-10 shrink-0 rounded-full bg-primary px-3.5 text-xs font-semibold text-primary-fg transition hover:bg-primary-hover disabled:opacity-40"
+                        className="h-10 shrink-0 rounded-full bg-action px-3.5 text-xs font-semibold text-action-fg transition hover:bg-action-hover disabled:opacity-40"
                         onClick={() => changeZone(zone.tierId)}
                         // An upgrade owes money, which this page cannot yet
                         // collect — the server refuses it, so don't offer it.
@@ -300,7 +300,7 @@ export default function TicketDetail() {
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    className="h-11 rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover disabled:opacity-50"
+                    className="h-11 rounded-full bg-action px-4 text-sm font-semibold text-action-fg transition hover:bg-action-hover disabled:opacity-50"
                     onClick={() => copyShare(options.share.token)}
                     disabled={busy}
                   >
@@ -330,7 +330,7 @@ export default function TicketDetail() {
                 />
                 <button
                   type="button"
-                  className="mt-2 h-11 rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover disabled:opacity-50"
+                  className="mt-2 h-11 rounded-full bg-action px-4 text-sm font-semibold text-action-fg transition hover:bg-action-hover disabled:opacity-50"
                   onClick={createShare}
                   disabled={busy}
                 >

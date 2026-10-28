@@ -168,7 +168,10 @@ export default function Login() {
                   {error}
                 </p>
               ) : null}
-              <button type="submit" disabled={busy} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary text-sm font-semibold text-primary-fg transition hover:bg-primary-hover disabled:opacity-50">
+              {/* Was bg-primary (pink) — the actual submit action, so it
+                  follows the same rule as every other CTA: the near-black/
+                  near-white action pill, not the brand colour. */}
+              <button type="submit" disabled={busy} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-action text-sm font-semibold text-action-fg transition hover:bg-action-hover disabled:opacity-50">
                 {busy ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />

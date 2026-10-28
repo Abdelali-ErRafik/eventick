@@ -261,7 +261,7 @@ function BilletsInner() {
                   {(props) => <Input {...props} value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} autoComplete="name" />}
                 </Field>
                 <div className="flex gap-2">
-                  <button type="submit" disabled={busy} className="h-11 flex-1 rounded-full bg-primary text-sm font-semibold text-primary-fg transition hover:bg-primary-hover disabled:opacity-50">
+                  <button type="submit" disabled={busy} className="h-11 flex-1 rounded-full bg-action text-sm font-semibold text-action-fg transition hover:bg-action-hover disabled:opacity-50">
                     {t("saveProfile")}
                   </button>
                   <button type="button" className="h-11 rounded-full border border-line/20 bg-card px-4 text-sm font-semibold transition hover:bg-paper" onClick={() => setEditingName(false)}>
