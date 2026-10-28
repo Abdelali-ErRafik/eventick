@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Heart, Search, Send, Ticket as TicketIcon } from "lucide-react";
+import { Heart, History, Search, Send, Ticket as TicketIcon } from "lucide-react";
 import { toast } from "sonner";
 import { TicketPass, toTicketPassProps } from "../components/TicketPass";
 import { EventCard } from "../components/EventCard";
@@ -198,7 +198,13 @@ function BilletsInner() {
                 {t("exportCsv")}
               </button>
             </div>
-            {past.length === 0 ? <p className="px-4 pb-4 text-muted">{t("noPast")}</p> : null}
+            {/* Headers over zero rows read as a broken table -- the whole
+                table (headers included) only renders once there's at least
+                one row; the empty state gets the same EmptyState treatment
+                as the other two tabs instead of a bare line of text. */}
+            {past.length === 0 ? (
+              <EmptyState icon={<History className="size-6" />} title={t("noPast")} />
+            ) : (
             <table className="w-full min-w-[40rem] text-start text-sm">
               <thead className="text-xs text-muted">
                 <tr>
@@ -226,6 +232,7 @@ function BilletsInner() {
                 ))}
               </tbody>
             </table>
+            )}
           </div>
         ) : null}
 
@@ -271,7 +278,12 @@ function BilletsInner() {
                 </p>
               </>
             ) : (
-              <p className="mt-2 text-sm text-muted">{t("noPast")}</p>
+              // noTx ("no transactions at all") is a different fact than
+              // noPast ("no past/ended events yet") -- this card is about
+              // the latest ORDER, not about tickets whose event has ended,
+              // and conflating the two previously meant someone with 3
+              // active orders could see "no history" copy here too.
+              <p className="mt-2 text-sm text-muted">{t("noTx")}</p>
             )}
           </article>
           <article className="rounded-card border border-line/10 bg-card p-4 shadow-card">
