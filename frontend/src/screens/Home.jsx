@@ -1,6 +1,22 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, Flame, Headphones, MapPin, Music, QrCode, RefreshCcw, Theater, Ticket, Trophy, Utensils, MoonStar } from "lucide-react";
+import {
+  Activity,
+  Calendar,
+  CreditCard,
+  Flame,
+  Headphones,
+  MapPin,
+  Music,
+  QrCode,
+  Repeat,
+  RefreshCcw,
+  Theater,
+  Ticket,
+  Trophy,
+  Utensils,
+  MoonStar,
+} from "lucide-react";
 import { QrMark } from "../components/QrMark";
 import { Shell } from "../components/Shell";
 import { EventCard } from "../components/EventCard";
@@ -329,19 +345,33 @@ export default function Home() {
 
       <section className="mx-auto max-w-7xl px-4 pb-4 md:px-8">
         {/* Deliberately always dark, to set off the light ticket-preview
-            card beside it regardless of app theme. */}
-        <div className="grid items-center gap-8 rounded-panel bg-stage px-5 py-8 text-stage-fg md:px-8 lg:grid-cols-2">
-          <div>
+            card beside it regardless of app theme. A radial glow instead of
+            a flat fill gives the band some depth to match the hero and the
+            search card, rather than being the one remaining flat-colour
+            rectangle on the page. */}
+        <div className="relative grid items-center gap-8 overflow-hidden rounded-panel bg-stage px-5 py-10 text-stage-fg md:px-8 lg:grid-cols-2 lg:py-14">
+          <div
+            className="pointer-events-none absolute -inset-e-24 -top-24 size-96 rounded-full bg-accent/15 blur-3xl"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute -bottom-32 -inset-s-16 size-96 rounded-full bg-primary/15 blur-3xl"
+            aria-hidden
+          />
+
+          <div className="relative">
             <p className="text-sm font-semibold text-accent">{t("orgKicker")}</p>
             <h2 className="mt-2 font-display text-3xl font-extrabold md:text-display">{t("orgTitle")}</h2>
             <p className="mt-3 max-w-xl text-stage-muted">{t("orgBody")}</p>
             <div className="mt-6 grid grid-cols-3 gap-3">
               {/* Three invented numbers (+250K / 99.8% / 48H) stood here with
                   nothing behind them. These are real capabilities instead of
-                  metrics no one measured. */}
-              <Stat value="100%" label={t("statLive")} />
-              <Stat value="Stripe" label={t("statPay")} />
-              <Stat value="✓" label={t("statResale")} />
+                  metrics no one measured -- each now with its own icon so
+                  they read as three distinct features, not three identical
+                  text-only boxes. */}
+              <Stat icon={<Activity className="size-4" />} value="100%" label={t("statLive")} />
+              <Stat icon={<CreditCard className="size-4" />} value="Stripe" label={t("statPay")} />
+              <Stat icon={<Repeat className="size-4" />} value="✓" label={t("statResale")} />
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button size="lg" onClick={() => navigate("/organiser")}>
@@ -352,7 +382,11 @@ export default function Home() {
               </Button>
             </div>
           </div>
-          <div className="rounded-card bg-card p-4 text-ink shadow-pop">
+
+          {/* A slight rotation + stronger shadow reads as a physical preview
+              artifact floating over the glow, instead of a flat panel
+              sitting in a grid cell like everything else on the page. */}
+          <div className="relative rounded-card bg-card p-4 text-ink shadow-modal transition duration-300 lg:rotate-1 lg:hover:rotate-0">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-muted">{t("previewKicker")}</p>
               <span className="rounded-full bg-success px-2 py-1 text-xs font-bold text-success-fg">{t("valid")}</span>
@@ -412,11 +446,12 @@ function HeroStat({ icon, value, label }) {
   );
 }
 
-function Stat({ value, label }) {
+function Stat({ icon, value, label }) {
   // Rendered inside the always-dark organiser promo band (bg-stage).
   return (
     <div className="rounded-control bg-stage-fg/10 p-3">
-      <p className="font-display text-2xl font-extrabold text-accent">{value}</p>
+      <span className="text-accent">{icon}</span>
+      <p className="mt-1.5 font-display text-2xl font-extrabold text-accent">{value}</p>
       <p className="text-xs text-stage-muted">{label}</p>
     </div>
   );
