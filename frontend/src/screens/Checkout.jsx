@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Headphones, Lock, QrCode, ShieldCheck } from "lucide-react";
+import { Check, Headphones, Lock, QrCode, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "../components/Shell";
 import StripeForm from "./StripeForm";
@@ -10,6 +10,7 @@ import { useAuth } from "../AuthContext";
 import { useI18n } from "../i18n";
 import { Button, Card, Container, Countdown, Field, Input, LoadingState, Notice } from "../ui";
 import { emailOk, phoneOk } from "../payment";
+import { cn } from "../utils";
 
 export default function Checkout() {
   const { locale, t, tf } = useI18n();
@@ -204,25 +205,35 @@ export default function Checkout() {
             <h1 className="font-display text-title font-extrabold">{t("payTitle")}</h1>
 
             {/* Progress. aria-current marks the live step for a screen reader
-                rather than relying on the colour change alone. */}
-            <ol className="mt-4 flex flex-wrap gap-2 text-xs font-bold">
+                rather than relying on the colour change alone. A connecting
+                line between numbered circles instead of a row of disjointed
+                pills -- the old treatment read as three unrelated buttons,
+                not a journey with a start and an end. */}
+            <ol className="mt-5 flex items-center text-xs font-bold">
               {[
                 { n: 1, label: t("stepInfo"), done: Boolean(payment), active: !payment },
                 { n: 2, label: t("stepPay"), done: false, active: Boolean(payment) },
                 { n: 3, label: t("stepDone"), done: false, active: false },
-              ].map((step) => (
-                <li
-                  key={step.n}
-                  aria-current={step.active ? "step" : undefined}
-                  className={
-                    step.active
-                      ? "rounded-full bg-action px-3 py-1.5 text-action-fg"
-                      : step.done
-                        ? "rounded-full bg-success-bg px-3 py-1.5 text-success"
-                        : "rounded-full bg-paper px-3 py-1.5 text-muted"
-                  }
-                >
-                  {step.n} - {step.label}
+              ].map((step, i, all) => (
+                <li key={step.n} className={cn("flex items-center", i < all.length - 1 && "flex-1")}>
+                  <span aria-current={step.active ? "step" : undefined} className="flex shrink-0 items-center gap-2">
+                    <span
+                      className={cn(
+                        "flex size-7 shrink-0 items-center justify-center rounded-full",
+                        step.active
+                          ? "bg-action text-action-fg"
+                          : step.done
+                            ? "bg-success text-success-fg"
+                            : "bg-paper text-muted",
+                      )}
+                    >
+                      {step.done ? <Check className="size-3.5" aria-hidden /> : step.n}
+                    </span>
+                    <span className={step.active || step.done ? "text-ink" : "text-muted"}>{step.label}</span>
+                  </span>
+                  {i < all.length - 1 ? (
+                    <span className={cn("mx-3 h-px flex-1", all[i + 1].active || all[i + 1].done || step.done ? "bg-success" : "bg-line/15")} aria-hidden />
+                  ) : null}
                 </li>
               ))}
             </ol>
