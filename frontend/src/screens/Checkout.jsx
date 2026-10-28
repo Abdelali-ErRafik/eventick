@@ -31,7 +31,15 @@ export default function Checkout() {
   const [payment, setPayment] = useState(null);
   const [busy, setBusy] = useState(false);
 
+  // True from the moment payment succeeds. Without it, the guard below fires
+  // on the way out: paying calls clear(), cart becomes null, this effect
+  // re-runs and sends the buyer to /explorer — overriding the navigate to
+  // /confirmation that had just been issued. They paid and landed on the
+  // catalogue with no ticket in sight.
+  const paid = useRef(false);
+
   useEffect(() => {
+    if (paid.current) return;
     if (!cart) {
       navigate("/explorer");
       return;
@@ -152,8 +160,12 @@ export default function Checkout() {
     if (Object.keys(next).length) return;
 
     setBusy(true);
+    // Read the id BEFORE clearing: `cart` is the thing clear() empties, so
+    // building the confirmation URL from it afterwards is a race against the
+    // state update.
+    const orderId = cart.orderId;
     try {
-      const pay = await api.post(`/orders/${cart.orderId}/pay`, {
+      const pay = await api.post(`/orders/${orderId}/pay`, {
         holderName: name.trim(),
         email: email.trim(),
         phone: phone.trim(),
@@ -162,8 +174,11 @@ export default function Checkout() {
 
       // Mock mode settles immediately — there is no gateway to redirect to.
       if (pay.mode === "mock" && pay.settled) {
+        // Order matters: mark it paid first, so the guard effect above does
+        // not treat the emptied cart as "no cart, send them to /explorer".
+        paid.current = true;
         clear();
-        navigate(`/confirmation/${cart.orderId}`);
+        navigate(`/confirmation/${orderId}`, { replace: true });
       }
     } catch (err) {
       setPayment(null);
