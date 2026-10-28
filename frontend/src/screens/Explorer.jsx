@@ -4,7 +4,7 @@ import { SearchX, SlidersHorizontal } from "lucide-react";
 import { Shell } from "../components/Shell";
 import { EventCard } from "../components/EventCard";
 import { useCatalog } from "../useCatalog";
-import { Badge, Button, Card, Container, Dropdown, EmptyState, ErrorState, LoadingState, Modal } from "../ui";
+import { Badge, Button, Card, CheckOption, Container, Dropdown, EmptyState, ErrorState, LoadingState, Modal, RadioOption, RangeField } from "../ui";
 import { categoryLabel, useI18n } from "../i18n";
 import { CATEGORIES, CITIES, addDays, dateKey, minPriceCents, overlaps, todayKey, weekendRange } from "../utils";
 
@@ -101,11 +101,18 @@ export default function Explorer() {
       </div>
       <fieldset>
         <legend className="text-sm font-semibold">{t("cityIn")}</legend>
-        <div className="mt-2 space-y-1">
-          <Radio checked={!search.ville} label={t("allCitiesF")} count={live.length} onChange={() => setSearch({ ville: "" })} />
+        <div className="mt-2 space-y-0.5">
+          <RadioOption
+            name="ville"
+            checked={!search.ville}
+            label={t("allCitiesF")}
+            count={live.length}
+            onChange={() => setSearch({ ville: "" })}
+          />
           {CITIES.map((city) => (
-            <Radio
+            <RadioOption
               key={city}
+              name="ville"
               checked={search.ville === city}
               label={city}
               count={live.filter((event) => event.city === city).length}
@@ -136,29 +143,21 @@ export default function Explorer() {
           ))}
         </div>
       </div>
-      <label className="block">
-        <span className="flex justify-between text-sm font-semibold">
-          {t("maxPrice")}
-          <span className="tabular-nums text-primary">{search.max >= 2500 ? "2 500+" : search.max} </span>
-        </span>
-        <input
-          className="mt-3"
-          type="range"
-          min={0}
-          max={2500}
-          step={50}
-          value={search.max}
-          onChange={(e) => setSearch({ max: Number(e.target.value) })}
-        />
-        <span className="mt-1 flex justify-between text-xs text-muted">
-          <span>{t("free")}</span>
-          <span>2 500+</span>
-        </span>
-      </label>
-      <div className="space-y-2 text-sm">
-        <Check label={t("eticket")} checked={search.instant === "1"} onChange={(on) => setSearch({ instant: on ? "1" : "" })} />
-        <Check label={t("seated")} checked={search.seated === "1"} onChange={(on) => setSearch({ seated: on ? "1" : "" })} />
-        <Check label={t("vipAccess")} checked={search.vip === "1"} onChange={(on) => setSearch({ vip: on ? "1" : "" })} />
+      <RangeField
+        label={t("maxPrice")}
+        value={search.max}
+        valueLabel={search.max >= 2500 ? "2 500+" : String(search.max)}
+        min={0}
+        max={2500}
+        step={50}
+        minLabel={t("free")}
+        maxLabel="2 500+"
+        onChange={(max) => setSearch({ max })}
+      />
+      <div className="space-y-0.5 text-sm">
+        <CheckOption label={t("eticket")} checked={search.instant === "1"} onChange={(on) => setSearch({ instant: on ? "1" : "" })} />
+        <CheckOption label={t("seated")} checked={search.seated === "1"} onChange={(on) => setSearch({ seated: on ? "1" : "" })} />
+        <CheckOption label={t("vipAccess")} checked={search.vip === "1"} onChange={(on) => setSearch({ vip: on ? "1" : "" })} />
       </div>
       <div className="rounded-card bg-brume p-3.5 text-sm text-primary">
         <p className="font-bold">{t("guarantee")}</p>
@@ -365,23 +364,3 @@ function Chip({ active, children, onClick }) {
   );
 }
 
-function Radio({ checked, label, count, onChange }) {
-  return (
-    <label className="flex items-center justify-between gap-2 py-1 text-sm">
-      <span className="flex items-center gap-2">
-        <input type="radio" checked={checked} onChange={onChange} />
-        {label}
-      </span>
-      <span className="text-muted tabular-nums">{count}</span>
-    </label>
-  );
-}
-
-function Check({ label, checked, onChange }) {
-  return (
-    <label className="flex items-center gap-2">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      {label}
-    </label>
-  );
-}
