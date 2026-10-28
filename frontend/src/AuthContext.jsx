@@ -61,8 +61,14 @@ export function AuthProvider({ children }) {
     return me;
   }, []);
 
+  // Derived, not stored — there is nowhere this can drift from `user.role`,
+  // so a plain boolean computed on every render is simpler than a memo.
+  const isAdmin = user?.role === "ADMIN";
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refresh }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refresh, isAdmin }}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 

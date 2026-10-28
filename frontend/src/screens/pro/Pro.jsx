@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Route, Routes } from "react-router-dom";
-import { CalendarDays, LayoutDashboard, LayoutGrid, QrCode, ReceiptText, Tags, Wallet } from "lucide-react";
+import { CalendarDays, LayoutDashboard, LayoutGrid, QrCode, ReceiptText, ShieldCheck, Tags, Wallet } from "lucide-react";
 import { Protected } from "../../components/Protected";
+import { useAuth } from "../../AuthContext";
 import { api } from "../../api";
 import { useI18n } from "../../i18n";
 import { ConfirmProvider } from "./ConfirmContext";
@@ -14,12 +15,14 @@ import Gate from "./Gate";
 import Finance from "./Finance";
 import Offers from "./Offers";
 import Placements from "./Placements";
+import Users from "./Users";
 
 const ic = (Icon) => <Icon size={19} strokeWidth={2} aria-hidden />;
 
 function ProInner() {
   const { locale } = useI18n();
   const t = text[locale];
+  const { isAdmin } = useAuth();
   const [todayCount, setTodayCount] = useState(0);
 
   // Badge on Réservations: tickets still to be scanned for events happening today.
@@ -41,6 +44,10 @@ function ProInner() {
     };
   }, []);
 
+  // The Administration group only exists for isAdmin -- this is the actual
+  // fix for "ORGANISER and ADMIN see the same pages": every other section
+  // here is shown to both, so a distinct capability needed its own group an
+  // organiser never sees, not just a new item folded into an existing one.
   const sections = [
     { group: t.grpPilotage, to: "/pro", end: true, label: t.overview, icon: ic(LayoutDashboard) },
     { group: t.grpPilotage, to: "/pro/orders", label: t.orders, icon: ic(ReceiptText), badge: todayCount },
@@ -49,6 +56,7 @@ function ProInner() {
     { group: t.grpCatalogue, to: "/pro/offers", label: t.offers, icon: ic(Tags) },
     { group: t.grpOperations, to: "/pro/gate", label: t.gate, icon: ic(QrCode) },
     { group: t.grpFinances, to: "/pro/finance", label: t.finance, icon: ic(Wallet) },
+    ...(isAdmin ? [{ group: t.grpAdmin, to: "/pro/users", label: t.team, icon: ic(ShieldCheck) }] : []),
   ];
 
   return (
@@ -61,6 +69,18 @@ function ProInner() {
         <Route path="finance" element={<Finance />} />
         <Route path="placements" element={<Placements />} />
         <Route path="offers" element={<Offers />} />
+        {/* Hiding the nav item above is not access control -- an ORGANISER
+            typing /pro/users directly would otherwise render the screen and
+            only find out from a string of 403s. Protected redirects before
+            any of that happens. */}
+        <Route
+          path="users"
+          element={
+            <Protected roles={["ADMIN"]}>
+              <Users />
+            </Protected>
+          }
+        />
       </Routes>
     </DashboardShell>
   );
