@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Calendar, Clock, Heart, MapPin, Minus, Plus, ShieldCheck } from "lucide-react";
+import { Calendar, Clock, Heart, MapPin, Minus, ParkingCircle, Plus, QrCode, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "../components/Shell";
 import { EventCard } from "../components/EventCard";
@@ -377,11 +377,20 @@ export default function EventDetail() {
 
           <section>
             <h2 className="font-display text-2xl font-extrabold">{t("practical")}</h2>
+            {/* Each card gets its own icon chip, same colour-coded language
+                used for the trust row and category tiles -- four identical
+                title+body blocks were only distinguishable by reading the
+                title text; now they're scannable at a glance. */}
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <Info title={t("access")} body={`${venue}, ${event.address}. ${t("accessBody")}`} />
-              <Info title={t("parking")} body={t("parkingBody")} />
-              <Info title={t("age")} body={locale === "ar" ? event.ageAr : event.ageFr} />
-              <Info title={t("fraud")} body={t("fraudBody")} />
+              <Info
+                tone="bg-primary text-primary-fg"
+                icon={<MapPin className="size-5" />}
+                title={t("access")}
+                body={`${venue}, ${event.address}. ${t("accessBody")}`}
+              />
+              <Info tone="bg-secondary text-secondary-fg" icon={<ParkingCircle className="size-5" />} title={t("parking")} body={t("parkingBody")} />
+              <Info tone="bg-accent text-accent-fg" icon={<ShieldCheck className="size-5" />} title={t("age")} body={locale === "ar" ? event.ageAr : event.ageFr} />
+              <Info tone="bg-info text-info-fg" icon={<QrCode className="size-5" />} title={t("fraud")} body={t("fraudBody")} />
             </div>
           </section>
         </div>
@@ -509,11 +518,16 @@ function Row({ label, value }) {
   );
 }
 
-function Info({ title, body }) {
+function Info({ tone, icon, title, body }) {
   return (
-    <article className="rounded-card border border-line/10 bg-card p-4 shadow-card">
-      <h3 className="font-display font-bold">{title}</h3>
-      <p className="mt-1 text-sm text-muted">{body}</p>
+    <article className="flex gap-3.5 rounded-card border border-line/10 bg-card p-4 shadow-card">
+      <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-control", tone)} aria-hidden>
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <h3 className="font-display font-bold">{title}</h3>
+        <p className="mt-1 text-sm text-muted">{body}</p>
+      </div>
     </article>
   );
 }
