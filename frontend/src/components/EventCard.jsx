@@ -153,27 +153,44 @@ export function EventCard({ event, variant = "grid" }) {
 
           {variant === "weekend" ? (
             <div className="mt-1">
-              <div className="mb-1.5 flex justify-between font-mono text-[11px] text-muted">
-                <span>
-                  {Math.round(ratio * 100)}% {t("soldWord")}
-                </span>
-                <span>{tf("left", { n: groupNumber(left) })}</span>
+              <div className="mb-1.5 flex items-center justify-between font-mono text-[11px] text-muted">
+                {/* "0% vendu" on a brand-new listing reads as "nobody wants
+                    this" and the bar itself is invisible at 0% width — not
+                    useful, and actively bad marketing. Below 5% sold, lead
+                    with the positive fact (seats available) instead; the
+                    sold-percentage + bar only appear once there's a real
+                    trend worth showing. */}
+                {ratio >= 0.05 ? (
+                  <>
+                    <span>
+                      {Math.round(ratio * 100)}% {t("soldWord")}
+                    </span>
+                    <span>{tf("left", { n: groupNumber(left) })}</span>
+                  </>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-success">
+                    <span className="size-1.5 rounded-full bg-success" aria-hidden />
+                    {tf("left", { n: groupNumber(left) })}
+                  </span>
+                )}
               </div>
-              <div
-                className="h-1.5 overflow-hidden rounded-full bg-brume"
-                role="progressbar"
-                aria-valuenow={Math.round(ratio * 100)}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label={t("soldWord")}
-              >
+              {ratio >= 0.05 ? (
                 <div
-                  // "% sold" is a status, not a brand moment -- same bug as
-                  // StockCell's healthy-stock bar, fixed the same way.
-                  className={cn("h-full rounded-full transition-[width]", ratio > 0.82 ? "bg-danger" : "bg-success")}
-                  style={{ width: `${Math.min(100, Math.round(ratio * 100))}%` }}
-                />
-              </div>
+                  className="h-1.5 overflow-hidden rounded-full bg-brume"
+                  role="progressbar"
+                  aria-valuenow={Math.round(ratio * 100)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={t("soldWord")}
+                >
+                  <div
+                    // "% sold" is a status, not a brand moment -- same bug as
+                    // StockCell's healthy-stock bar, fixed the same way.
+                    className={cn("h-full rounded-full transition-[width]", ratio > 0.82 ? "bg-danger" : "bg-success")}
+                    style={{ width: `${Math.min(100, Math.round(ratio * 100))}%` }}
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null}
 
