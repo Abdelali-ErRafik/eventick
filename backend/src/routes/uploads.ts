@@ -4,7 +4,7 @@ import path from "node:path";
 import { Router } from "express";
 import multer from "multer";
 import { asyncHandler, HttpError } from "../lib/http.js";
-import { authenticate, requireRole } from "../middleware/auth.js";
+import { authenticate, requirePermission } from "../middleware/auth.js";
 
 export const uploadsRouter = Router();
 
@@ -49,7 +49,7 @@ function sniff(buffer: Buffer): string | null {
 uploadsRouter.post(
   "/image",
   authenticate,
-  requireRole("ORGANISER", "ADMIN"),
+  requirePermission("uploads.create"),
   upload.single("file"),
   asyncHandler(async (req, res) => {
     const file = req.file;

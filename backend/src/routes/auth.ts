@@ -5,8 +5,10 @@ import { prisma } from "../lib/prisma.js";
 import { signToken } from "../lib/jwt.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { authRateLimit } from "../middleware/rateLimit.js";
-import { authenticate, requireRole } from "../middleware/auth.js";
-import { PUBLIC_SIGNUP_ROLE, ROLES } from "../domain/auth.js";
+import { authenticate, requirePermission } from "../middleware/auth.js";
+import { isRole, PUBLIC_SIGNUP_ROLE, ROLES, type Role } from "../domain/auth.js";
+import { isLockedGrant, isPermission, PERMISSION_KEYS, PERMISSIONS } from "../domain/permissions.js";
+import { invalidatePermissionCache, permissionListForRole } from "../lib/permissions.js";
 
 export const authRouter = Router();
 
@@ -21,8 +23,26 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-function publicUser(user: { id: string; name: string; email: string; role: string }) {
-  return { id: user.id, name: user.name, email: user.email, role: user.role };
+/**
+ * Everyone's own identity, as the SPA's AuthContext consumes it.
+ *
+ * `permissions` is a required argument rather than something resolved in
+ * here, because this is called from four places and two of them (register,
+ * login) never pass through `authenticate` and so have no resolved list in
+ * hand. Making it explicit forces each call site to fetch it rather than
+ * silently shipping a user object with the field missing — which the
+ * frontend would read as "no permissions" and quietly hide every control.
+ */
+function publicUser(
+  user: { id: string; name: string; email: string; role: string },
+  permissions: string[],
+) {
+  return { id: user.id, name: user.name, email: user.email, role: user.role, permissions };
+}
+
+/** The caller's permission list, or [] for a role that somehow isn't valid. */
+async function permissionsOf(user: { role: string }): Promise<string[]> {
+  return isRole(user.role) ? permissionListForRole(user.role) : [];
 }
 
 // A separate shape from publicUser, not an extension of it: /auth/me is
@@ -61,7 +81,7 @@ authRouter.post(
       data: { name: body.name, email: body.email, passwordHash, role: PUBLIC_SIGNUP_ROLE },
     });
     const token = signToken({ sub: user.id, role: user.role });
-    res.status(201).json({ token, user: publicUser(user) });
+    res.status(201).json({ token, user: publicUser(user, await permissionsOf(user)) });
   }),
 );
 
@@ -77,7 +97,7 @@ authRouter.post(
     if (!ok) throw new HttpError(401, "Invalid email or password");
 
     const token = signToken({ sub: user.id, role: user.role });
-    res.json({ token, user: publicUser(user) });
+    res.json({ token, user: publicUser(user, await permissionsOf(user)) });
   }),
 );
 
@@ -85,7 +105,7 @@ authRouter.get(
   "/me",
   authenticate,
   asyncHandler(async (req, res) => {
-    res.json({ user: publicUser(req.user!) });
+    res.json({ user: publicUser(req.user!, await permissionsOf(req.user!)) });
   }),
 );
 
@@ -97,7 +117,7 @@ authRouter.patch(
   asyncHandler(async (req, res) => {
     const body = updateMeSchema.parse(req.body);
     const user = await prisma.user.update({ where: { id: req.user!.id }, data: { name: body.name } });
-    res.json({ user: publicUser(user) });
+    res.json({ user: publicUser(user, await permissionsOf(user)) });
   }),
 );
 
@@ -118,7 +138,7 @@ const listUsersSchema = z.object({
 authRouter.get(
   "/users",
   authenticate,
-  requireRole("ADMIN"),
+  requirePermission("users.manage"),
   asyncHandler(async (req, res) => {
     const query = listUsersSchema.parse(req.query);
     const needle = query.q?.trim();
@@ -155,7 +175,7 @@ const promoteSchema = z.object({ role: z.enum(ROLES) });
 authRouter.patch(
   "/users/:id/role",
   authenticate,
-  requireRole("ADMIN"),
+  requirePermission("users.manage"),
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
     const body = promoteSchema.parse(req.body);
@@ -171,6 +191,141 @@ authRouter.patch(
     if (!existing) throw new HttpError(404, "User not found");
 
     const user = await prisma.user.update({ where: { id }, data: { role: body.role } });
-    res.json({ user: publicUser(user) });
+    res.json({ user: publicUser(user, await permissionsOf(user)) });
+  }),
+);
+
+const createUserSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  password: z.string().min(8),
+  role: z.enum(ROLES),
+});
+
+/**
+ * Create a user with a chosen role, directly.
+ *
+ * Deliberately NOT a variant of /register: that route is public and must
+ * always produce a CUSTOMER (PUBLIC_SIGNUP_ROLE), or self-service signup
+ * would be a way to mint organisers. This one is admin-only and takes an
+ * explicit role, which also means it widens how an ADMIN can come into
+ * existence — previously only the seed could create one. That is the point
+ * of the endpoint, but it is a real change to the bootstrap story, so it is
+ * gated on users.manage and nothing weaker.
+ *
+ * Mirrors /register's hardening: same bcrypt cost, same 8-character
+ * minimum, same duplicate-email 422.
+ */
+authRouter.post(
+  "/users",
+  authenticate,
+  requirePermission("users.manage"),
+  asyncHandler(async (req, res) => {
+    const body = createUserSchema.parse(req.body);
+
+    const existing = await prisma.user.findUnique({ where: { email: body.email } });
+    if (existing) throw new HttpError(422, "An account with this email already exists");
+
+    const passwordHash = await bcrypt.hash(body.password, 10);
+    const user = await prisma.user.create({
+      data: { name: body.name, email: body.email, passwordHash, role: body.role },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        _count: { select: { events: true, orders: true } },
+      },
+    });
+    res.status(201).json({ user: adminUser(user) });
+  }),
+);
+
+// ─────────────────────────────────────── role → permission grants ──
+
+/**
+ * The permission catalogue plus who currently holds what.
+ *
+ * Reads the grants from the database rather than from DEFAULT_ROLE_
+ * PERMISSIONS, because the defaults are only a seed — once an admin edits a
+ * grant, the database is the authority and the constant is stale.
+ */
+authRouter.get(
+  "/permissions",
+  authenticate,
+  requirePermission("users.manage"),
+  asyncHandler(async (_req, res) => {
+    const grants = await prisma.rolePermission.findMany({ select: { role: true, permissionKey: true } });
+
+    const byRole: Record<string, string[]> = {};
+    for (const role of ROLES) byRole[role] = [];
+    for (const grant of grants) byRole[grant.role]?.push(grant.permissionKey);
+    for (const role of ROLES) byRole[role].sort();
+
+    res.json({
+      permissions: PERMISSION_KEYS.map((key) => ({
+        key,
+        description: PERMISSIONS[key],
+        locked: isLockedGrant("ADMIN", key),
+      })),
+      roles: byRole,
+    });
+  }),
+);
+
+function roleParam(req: Parameters<typeof param>[0]): Role {
+  const value = param(req, "role");
+  if (!isRole(value)) throw new HttpError(404, "Unknown role");
+  return value;
+}
+
+const grantSchema = z.object({ permission: z.string() });
+
+authRouter.post(
+  "/roles/:role/permissions",
+  authenticate,
+  requirePermission("users.manage"),
+  asyncHandler(async (req, res) => {
+    const role = roleParam(req);
+    const { permission } = grantSchema.parse(req.body);
+    if (!isPermission(permission)) throw new HttpError(404, "Unknown permission");
+
+    await prisma.rolePermission.upsert({
+      where: { role_permissionKey: { role, permissionKey: permission } },
+      update: {},
+      create: { role, permissionKey: permission },
+    });
+    // The cache is keyed by role and read on nearly every request; without
+    // this the grant would take up to its TTL to appear, which looks like a
+    // bug to whoever just clicked the toggle.
+    invalidatePermissionCache(role);
+
+    res.json({ role, permissions: await permissionListForRole(role) });
+  }),
+);
+
+authRouter.delete(
+  "/roles/:role/permissions/:permission",
+  authenticate,
+  requirePermission("users.manage"),
+  asyncHandler(async (req, res) => {
+    const role = roleParam(req);
+    const permission = param(req, "permission");
+    if (!isPermission(permission)) throw new HttpError(404, "Unknown permission");
+
+    // The anti-lockout invariant. Stripping users.manage from ADMIN would
+    // lock every admin out of user and permission management permanently —
+    // including out of the screen needed to undo it — and re-seeding would
+    // not restore it on an existing install. This is the deliberate
+    // exception to "a role's powers are data".
+    if (isLockedGrant(role, permission)) {
+      throw new HttpError(422, "This permission cannot be removed from this role");
+    }
+
+    await prisma.rolePermission.deleteMany({ where: { role, permissionKey: permission } });
+    invalidatePermissionCache(role);
+
+    res.json({ role, permissions: await permissionListForRole(role) });
   }),
 );

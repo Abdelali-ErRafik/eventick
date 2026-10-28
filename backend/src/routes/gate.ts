@@ -2,13 +2,13 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
-import { authenticate, requireRole } from "../middleware/auth.js";
+import { authenticate, requirePermission, userHasPermission } from "../middleware/auth.js";
 import { resolveScan } from "../lib/ticket-signature.js";
 import { emitToOrganiser } from "../lib/realtime.js";
 
 export const gateRouter = Router();
 
-gateRouter.use(authenticate, requireRole("ORGANISER", "ADMIN"));
+gateRouter.use(authenticate, requirePermission("gate.checkin"));
 
 const checkInSchema = z.object({
   ref: z.string().min(3),
@@ -42,6 +42,21 @@ gateRouter.post(
           ? "Unsigned QR code — scan the ticket's own code, or enter the reference manually"
           : "Invalid ticket code";
       throw new HttpError(400, message);
+    }
+
+    // Ownership BEFORE the write. Previously this route had no ownership
+    // check at all — any organiser could burn any other organiser's tickets
+    // by reference, and because the update came first, the ticket was
+    // already spent by the time its event was known. Looked up first now so
+    // a refusal leaves the ticket untouched.
+    const target = await prisma.ticket.findUnique({
+      where: { ref: scan.ref },
+      select: { order: { select: { event: { select: { organiserId: true } } } } },
+    });
+    if (target && !(await userHasPermission(req.user, "scope.any"))) {
+      if (target.order.event.organiserId !== req.user!.id) {
+        throw new HttpError(403, "This ticket is for another organiser's event");
+      }
     }
 
     const claimed = await prisma.ticket.updateMany({
@@ -104,7 +119,7 @@ gateRouter.get(
     const slug = param(req, "slug");
     const event = await prisma.event.findUnique({ where: { slug } });
     if (!event) throw new HttpError(404, "Event not found");
-    if (event.organiserId !== req.user!.id && req.user!.role !== "ADMIN") {
+    if (event.organiserId !== req.user!.id && !(await userHasPermission(req.user, "scope.any"))) {
       throw new HttpError(403, "Not your event");
     }
 

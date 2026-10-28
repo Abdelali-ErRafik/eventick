@@ -3,6 +3,8 @@ import { Server as IOServer } from "socket.io";
 import { verifyToken } from "./jwt.js";
 import { prisma } from "./prisma.js";
 import { logger } from "./logger.js";
+import { isRole } from "../domain/auth.js";
+import { roleHasPermission } from "./permissions.js";
 
 /**
  * Realtime push for the organiser dashboard.
@@ -53,7 +55,14 @@ export function initRealtime(httpServer: HttpServer): void {
       // rather than lasting until the JWT expires.
       const user = await prisma.user.findUnique({ where: { id: payload.sub } });
       if (!user) return next(new Error("unauthorized"));
-      if (user.role !== "ORGANISER" && user.role !== "ADMIN") return next(new Error("forbidden"));
+      // Same capability the dashboard's order screens require, because that
+      // is what this socket pushes: check-ins and order events. Gated on the
+      // permission rather than a hardcoded role list so that revoking the
+      // capability closes this door too — a grep for requireRole would never
+      // have found this one.
+      if (!isRole(user.role) || !(await roleHasPermission(user.role, "orders.manage"))) {
+        return next(new Error("forbidden"));
+      }
 
       socket.data.userId = user.id;
       socket.data.role = user.role;

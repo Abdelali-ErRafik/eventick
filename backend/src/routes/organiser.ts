@@ -1,9 +1,9 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
-import { authenticate, requireRole } from "../middleware/auth.js";
-import { isPlatformAdmin, organiserScope } from "../domain/auth.js";
+import { authenticate, requirePermission, userHasPermission } from "../middleware/auth.js";
+import { organiserScope } from "../domain/auth.js";
 import { publicEvent, publicOrderWithContext } from "../lib/serialize.js";
 import { committedForTier, remainingByTier } from "../lib/availability.js";
 import { broadcastRateLimit } from "../middleware/rateLimit.js";
@@ -15,26 +15,33 @@ import { reissueTicket, renameHolder } from "../lib/ticket-admin.js";
 
 export const organiserRouter = Router();
 
-organiserRouter.use(authenticate, requireRole("ORGANISER", "ADMIN"));
+organiserRouter.use(authenticate, requirePermission("events.manage"));
 
 /**
- * The `?organiserId=` override on the list routes below. Only ever honoured
- * for an ADMIN — organiserScope() itself enforces that by ignoring the
- * argument for a plain ORGANISER, but the query param is read here, once,
- * rather than at each call site, so there is exactly one place a future
- * change could get this wrong.
+ * The `?organiserId=` override on the list routes below.
+ *
+ * Returns the raw value; whether it is HONOURED is decided by
+ * organiserScope(), which ignores it unless the caller may act platform-wide.
+ * Parsing lives here, once, so there is exactly one place a future change
+ * could get the parsing wrong — and exactly one place (organiserScope) that
+ * can get the authorisation wrong.
  */
-function requestedOrganiserId(req: { query: { organiserId?: unknown }; user?: { role: string } }): string | undefined {
-  if (!req.user || !isPlatformAdmin(req.user.role)) return undefined;
+function requestedOrganiserId(req: { query: { organiserId?: unknown } }): string | undefined {
   const value = req.query.organiserId;
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/** The scope fragment for a list route, with the capability resolved. */
+async function scopeFor(req: Request): Promise<{ organiserId?: string }> {
+  const mayActAnywhere = await userHasPermission(req.user, "scope.any");
+  return organiserScope(req.user!, mayActAnywhere, requestedOrganiserId(req));
 }
 
 organiserRouter.get(
   "/events",
   asyncHandler(async (req, res) => {
     const events = await prisma.event.findMany({
-      where: organiserScope(req.user!, requestedOrganiserId(req)),
+      where: await scopeFor(req),
       include: { tiers: true, lineup: true },
       orderBy: { createdAt: "desc" },
     });
@@ -120,10 +127,12 @@ organiserRouter.post(
   }),
 );
 
-async function requireOwnedEvent(organiserId: string, role: string, slug: string) {
+async function requireOwnedEvent(user: Express.Request["user"], slug: string) {
   const event = await prisma.event.findUnique({ where: { slug } });
   if (!event) throw new HttpError(404, "Event not found");
-  if (event.organiserId !== organiserId && role !== "ADMIN") throw new HttpError(403, "Not your event");
+  if (event.organiserId !== user!.id && !(await userHasPermission(user, "scope.any"))) {
+    throw new HttpError(403, "Not your event");
+  }
   return event;
 }
 
@@ -131,7 +140,7 @@ organiserRouter.patch(
   "/events/:slug/visibility",
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
-    const event = await requireOwnedEvent(req.user!.id, req.user!.role, slug);
+    const event = await requireOwnedEvent(req.user, slug);
     const hidden = Boolean(req.body?.hidden);
     const updated = await prisma.event.update({
       where: { id: event.id },
@@ -146,7 +155,7 @@ organiserRouter.delete(
   "/events/:slug",
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
-    const event = await requireOwnedEvent(req.user!.id, req.user!.role, slug);
+    const event = await requireOwnedEvent(req.user, slug);
 
     // Order -> Event is onDelete Restrict, so an event anyone has ever
     // ordered against cannot be deleted. Checking first turns what was a
@@ -179,7 +188,7 @@ organiserRouter.patch(
   "/events/:slug",
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
-    const event = await requireOwnedEvent(req.user!.id, req.user!.role, slug);
+    const event = await requireOwnedEvent(req.user, slug);
     const body = updateEventSchema.parse(req.body);
     const updated = await prisma.event.update({
       where: { id: event.id },
@@ -194,7 +203,7 @@ organiserRouter.get(
   "/orders",
   asyncHandler(async (req, res) => {
     const orders = await prisma.order.findMany({
-      where: { event: organiserScope(req.user!, requestedOrganiserId(req)) },
+      where: { event: await scopeFor(req) },
       include: { tickets: true, event: { select: { titleFr: true, titleAr: true, slug: true } } },
       orderBy: { createdAt: "desc" },
     });
@@ -218,7 +227,7 @@ organiserRouter.get(
   "/events/:slug/waitlist",
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
-    const event = await requireOwnedEvent(req.user!.id, req.user!.role, slug);
+    const event = await requireOwnedEvent(req.user, slug);
     const entries = await prisma.waitlistEntry.findMany({
       where: { eventId: event.id },
       orderBy: { createdAt: "desc" },
@@ -243,7 +252,7 @@ organiserRouter.get(
   "/orders/detailed",
   asyncHandler(async (req, res) => {
     const orders = await prisma.order.findMany({
-      where: { event: organiserScope(req.user!, requestedOrganiserId(req)) },
+      where: { event: await scopeFor(req) },
       include: { tickets: { include: { tier: { include: { event: true } } } } },
       orderBy: { createdAt: "desc" },
     });
@@ -251,10 +260,12 @@ organiserRouter.get(
   }),
 );
 
-async function requireOwnedOrder(organiserId: string, role: string, orderId: string) {
+async function requireOwnedOrder(user: Express.Request["user"], orderId: string) {
   const order = await prisma.order.findUnique({ where: { id: orderId }, include: { event: true } });
   if (!order) throw new HttpError(404, "Order not found");
-  if (order.event.organiserId !== organiserId && role !== "ADMIN") throw new HttpError(403, "Not your order");
+  if (order.event.organiserId !== user!.id && !(await userHasPermission(user, "scope.any"))) {
+    throw new HttpError(403, "Not your order");
+  }
   return order;
 }
 
@@ -267,7 +278,7 @@ organiserRouter.post(
   "/orders/:id/cancel",
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
-    const cancelled = await requireOwnedOrder(req.user!.id, req.user!.role, id);
+    const cancelled = await requireOwnedOrder(req.user, id);
     await prisma.$transaction([
       prisma.order.update({ where: { id }, data: { status: "CANCELLED" } }),
       prisma.ticket.updateMany({ where: { orderId: id }, data: { status: "CANCELLED" } }),
@@ -282,7 +293,7 @@ organiserRouter.delete(
   "/orders/:id",
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
-    await requireOwnedOrder(req.user!.id, req.user!.role, id);
+    await requireOwnedOrder(req.user, id);
     await prisma.order.delete({ where: { id } });
     res.status(204).end();
   }),
@@ -300,7 +311,7 @@ organiserRouter.patch(
     const body = admitSchema.parse(req.body);
     const ticket = await prisma.ticket.findUnique({ where: { id }, include: { order: { include: { event: true } } } });
     if (!ticket) throw new HttpError(404, "Ticket not found");
-    if (ticket.order.event.organiserId !== req.user!.id && req.user!.role !== "ADMIN") {
+    if (ticket.order.event.organiserId !== req.user!.id && !(await userHasPermission(req.user, "scope.any"))) {
       throw new HttpError(403, "Not your ticket");
     }
     const updated = await prisma.ticket.update({
@@ -336,7 +347,7 @@ organiserRouter.get(
   "/events/:slug/audience",
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
-    const event = await requireOwnedEvent(req.user!.id, req.user!.role, slug);
+    const event = await requireOwnedEvent(req.user, slug);
     const recipients = await broadcastRecipients(event.id);
     res.json({ count: recipients.length });
   }),
@@ -347,7 +358,7 @@ organiserRouter.post(
   broadcastRateLimit,
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
-    const event = await requireOwnedEvent(req.user!.id, req.user!.role, slug);
+    const event = await requireOwnedEvent(req.user, slug);
     const body = broadcastSchema.parse(req.body);
 
     const recipients = await broadcastRecipients(event.id);
@@ -382,7 +393,7 @@ organiserRouter.post(
 organiserRouter.get(
   "/stats",
   asyncHandler(async (req, res) => {
-    const events = await prisma.event.findMany({ where: organiserScope(req.user!, requestedOrganiserId(req)), select: { id: true } });
+    const events = await prisma.event.findMany({ where: await scopeFor(req), select: { id: true } });
     const eventIds = events.map((event) => event.id);
 
     if (eventIds.length === 0) {
@@ -428,7 +439,7 @@ organiserRouter.post(
   "/orders/:id/refund",
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
-    await requireOwnedOrder(req.user!.id, req.user!.role, id);
+    await requireOwnedOrder(req.user, id);
     const body = refundSchema.parse(req.body ?? {});
     const result = await refundOrder(id, body.amountCents ?? null);
     res.json(result);
@@ -468,7 +479,7 @@ organiserRouter.get(
   "/events/:slug/tiers",
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
-    const event = await requireOwnedEvent(req.user!.id, req.user!.role, slug);
+    const event = await requireOwnedEvent(req.user, slug);
     const tiers = await prisma.ticketTier.findMany({ where: { eventId: event.id }, orderBy: { priceCents: "asc" } });
     const withSold = await Promise.all(
       tiers.map(async (tier) => {
@@ -484,7 +495,7 @@ organiserRouter.post(
   "/events/:slug/tiers",
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
-    const event = await requireOwnedEvent(req.user!.id, req.user!.role, slug);
+    const event = await requireOwnedEvent(req.user, slug);
     const body = tierInput.parse(req.body);
     const tier = await prisma.ticketTier.create({ data: { ...body, eventId: event.id } });
     res.status(201).json({ tier });
@@ -497,7 +508,7 @@ organiserRouter.patch(
     const id = param(req, "id");
     const tier = await prisma.ticketTier.findUnique({ where: { id }, include: { event: true } });
     if (!tier) throw new HttpError(404, "Tier not found");
-    if (tier.event.organiserId !== req.user!.id && req.user!.role !== "ADMIN") {
+    if (tier.event.organiserId !== req.user!.id && !(await userHasPermission(req.user, "scope.any"))) {
       throw new HttpError(403, "Not your event");
     }
     const body = tierPatchSchema.parse(req.body);
@@ -523,7 +534,7 @@ organiserRouter.delete(
     const id = param(req, "id");
     const tier = await prisma.ticketTier.findUnique({ where: { id }, include: { event: { include: { tiers: true } } } });
     if (!tier) throw new HttpError(404, "Tier not found");
-    if (tier.event.organiserId !== req.user!.id && req.user!.role !== "ADMIN") {
+    if (tier.event.organiserId !== req.user!.id && !(await userHasPermission(req.user, "scope.any"))) {
       throw new HttpError(403, "Not your event");
     }
 
@@ -552,7 +563,7 @@ organiserRouter.post(
       include: { order: { include: { event: true } } },
     });
     if (!ticket) throw new HttpError(404, "Ticket not found");
-    if (ticket.order.event.organiserId !== req.user!.id && req.user!.role !== "ADMIN") {
+    if (ticket.order.event.organiserId !== req.user!.id && !(await userHasPermission(req.user, "scope.any"))) {
       throw new HttpError(403, "Not your ticket");
     }
     const result = await reissueTicket(id);
@@ -574,7 +585,7 @@ organiserRouter.patch(
       include: { order: { include: { event: true } } },
     });
     if (!ticket) throw new HttpError(404, "Ticket not found");
-    if (ticket.order.event.organiserId !== req.user!.id && req.user!.role !== "ADMIN") {
+    if (ticket.order.event.organiserId !== req.user!.id && !(await userHasPermission(req.user, "scope.any"))) {
       throw new HttpError(403, "Not your ticket");
     }
     await renameHolder(id, body.holderName);
