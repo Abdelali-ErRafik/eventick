@@ -349,7 +349,7 @@ export default function Home() {
             a flat fill gives the band some depth to match the hero and the
             search card, rather than being the one remaining flat-colour
             rectangle on the page. */}
-        <div className="relative grid items-center gap-8 overflow-hidden rounded-panel bg-stage px-5 py-10 text-stage-fg md:px-8 lg:grid-cols-2 lg:py-14">
+        <div className="relative grid items-center gap-8 overflow-hidden rounded-panel bg-stage px-5 pb-10 pt-12 text-stage-fg md:px-8 lg:grid-cols-2 lg:pb-14 lg:pt-16">
           <div
             className="pointer-events-none absolute -inset-e-24 -top-24 size-96 rounded-full bg-accent/15 blur-3xl"
             aria-hidden
