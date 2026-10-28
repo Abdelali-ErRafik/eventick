@@ -28,9 +28,14 @@ export function Field({
   const errorId = error ? `${id}-error` : undefined;
   const describedBy = [errorId, hintId].filter(Boolean).join(" ") || undefined;
 
+  // `required` is handed to the render prop as well as drawn as an asterisk,
+  // so a call site can forward it to the control instead of repeating the
+  // literal. Existing call sites pass `required` to both the Field and the
+  // input directly, which works but lets the marker and the browser's own
+  // validation drift apart if only one is ever edited.
   const control =
     typeof children === "function"
-      ? children({ id: controlId, describedBy, invalid: Boolean(error) })
+      ? children({ id: controlId, describedBy, invalid: Boolean(error), required })
       : children;
 
   const Wrapper = asGroup ? "fieldset" : "div";

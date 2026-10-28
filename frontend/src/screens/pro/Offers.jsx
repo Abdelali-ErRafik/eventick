@@ -3,9 +3,11 @@ import { Mail, Plus, Tags, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
+import { useAuth } from "../../AuthContext";
 import { useConfirm } from "./ConfirmContext";
 import { Badge, Btn, EmptyState, IconBtn, Modal, PageHead, SectionTitle } from "./ui";
 import { text } from "./copy";
+import { Field, Input, Select } from "../../ui";
 
 const WAITLIST_TONE = { WAITING: "neutral", OFFERED: "warn", CLAIMED: "success", EXPIRED: "danger" };
 
@@ -18,6 +20,7 @@ function waitlistLabel(t, status) {
 
 export default function Offers() {
   const { locale } = useI18n();
+  const { can } = useAuth();
   const t = text[locale];
   const confirm = useConfirm();
   const [events, setEvents] = useState(null);
@@ -178,36 +181,69 @@ export default function Offers() {
         }
       >
         <form id="promo-form" className="grid gap-4 sm:grid-cols-2" onSubmit={submit}>
-          <label className="grid gap-1.5 text-sm font-semibold sm:col-span-2">
-            {t.code}
-            <input className="field font-mono" value={code} onChange={(e) => setCode(e.target.value)} placeholder="SAFRAN15" required />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {t.kind}
-            <select className="field" value={kind} onChange={(e) => setKind(e.target.value)}>
-              <option value="PERCENT">{t.percent}</option>
-              <option value="AMOUNT">{t.amount}</option>
-            </select>
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {kind === "PERCENT" ? t.percent : t.amount}
-            <input className="field" type="number" min={1} value={value} onChange={(e) => setValue(Number(e.target.value))} />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {t.allEvents}
-            <select className="field" value={eventSlug} onChange={(e) => setEventSlug(e.target.value)}>
-              <option value="">{t.allDates}</option>
-              {(events ?? []).map((event) => (
-                <option key={event.slug} value={event.slug}>
-                  {locale === "ar" ? event.titleAr : event.titleFr}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {t.maxUses}
-            <input className="field" type="number" min={1} value={maxUses} onChange={(e) => setMaxUses(Number(e.target.value))} />
-          </label>
+          <Field label={t.code} required className="sm:col-span-2">
+            {({ id, describedBy, invalid, required }) => (
+              <Input
+                id={id}
+                describedBy={describedBy}
+                invalid={invalid}
+                required={required}
+                className="font-mono"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="SAFRAN15"
+              />
+            )}
+          </Field>
+          <Field label={t.kind}>
+            {({ id, describedBy, invalid }) => (
+              <Select id={id} describedBy={describedBy} invalid={invalid} value={kind} onChange={(e) => setKind(e.target.value)}>
+                <option value="PERCENT">{t.percent}</option>
+                <option value="AMOUNT">{t.amount}</option>
+              </Select>
+            )}
+          </Field>
+          <Field label={kind === "PERCENT" ? t.percent : t.amount}>
+            {({ id, describedBy, invalid }) => (
+              <Input
+                id={id}
+                describedBy={describedBy}
+                invalid={invalid}
+                type="number"
+                min={1}
+                value={value}
+                onChange={(e) => setValue(Number(e.target.value))}
+              />
+            )}
+          </Field>
+          {/* Leaving this on "all dates" asks for a platform-wide code, which
+              the server only grants with scope.any — so say that here rather
+              than letting a plain organiser find out from a 403. */}
+          <Field label={t.allEvents} hint={!eventSlug && !can("scope.any") ? t.globalPromoAdminOnly : undefined}>
+            {({ id, describedBy, invalid }) => (
+              <Select id={id} describedBy={describedBy} invalid={invalid} value={eventSlug} onChange={(e) => setEventSlug(e.target.value)}>
+                <option value="">{t.allDates}</option>
+                {(events ?? []).map((event) => (
+                  <option key={event.slug} value={event.slug}>
+                    {locale === "ar" ? event.titleAr : event.titleFr}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label={t.maxUses}>
+            {({ id, describedBy, invalid }) => (
+              <Input
+                id={id}
+                describedBy={describedBy}
+                invalid={invalid}
+                type="number"
+                min={1}
+                value={maxUses}
+                onChange={(e) => setMaxUses(Number(e.target.value))}
+              />
+            )}
+          </Field>
         </form>
       </Modal>
     </div>

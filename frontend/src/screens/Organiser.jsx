@@ -8,6 +8,7 @@ import { api, money, uploadImage } from "../api";
 import { categoryLabel, useI18n } from "../i18n";
 import { CATEGORIES, CITIES } from "../utils";
 import { parseBrief, EXAMPLE_BRIEF } from "../strategy";
+import { Field, Input, Select, Textarea } from "../ui";
 
 const COVERS = [
   "/events/mawazine.jpg",
@@ -256,99 +257,227 @@ function OrganiserInner() {
               </button>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <label className="text-sm md:col-span-2">
-                {t("briefLabel")}
-                <textarea className="field field-area mt-1" value={instruction} placeholder={t("briefHint")} onChange={(e) => setInstruction(e.target.value)} />
-              </label>
+              <Field label={t("briefLabel")} className="md:col-span-2">
+                {({ id, describedBy, invalid }) => (
+                  <Textarea
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    value={instruction}
+                    placeholder={t("briefHint")}
+                    onChange={(e) => setInstruction(e.target.value)}
+                  />
+                )}
+              </Field>
               <button type="button" className="h-11 rounded-full bg-action px-4 text-sm font-semibold text-action-fg md:col-span-2" onClick={applyInstruction}>
                 {t("briefApply")}
               </button>
-              <label className="text-sm md:col-span-2">
-                {t("eventName")}
-                <input className="field mt-1" value={title} onChange={(e) => setTitle(e.target.value)} required />
-              </label>
-              <label className="text-sm">
-                {t("category")}
-                <select className="field mt-1" value={category} onChange={(e) => setCategory(e.target.value)}>
-                  {CATEGORIES.map((id) => (
-                    <option key={id} value={id}>
-                      {categoryLabel(id, t)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-sm">
-                {t("city")}
-                <select className="field mt-1" value={city} onChange={(e) => setCity(e.target.value)}>
-                  {CITIES.map((item) => (
-                    <option key={item}>{item}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-sm">
-                {t("venueLabel")}
-                <input className="field mt-1" value={venue} onChange={(e) => setVenue(e.target.value)} required />
-              </label>
-              <label className="text-sm">
-                {t("address")}
-                <input className="field mt-1" value={address} onChange={(e) => setAddress(e.target.value)} />
-              </label>
-              <label className="text-sm">
-                {t("date")}
-                <input className="field mt-1" type="date" value={start} onChange={(e) => setStart(e.target.value)} required />
-              </label>
-              <label className="text-sm">
-                {t("endDate")}
-                <input className="field mt-1" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
-              </label>
-              <label className="text-sm">
-                {t("time")}
-                <input className="field mt-1" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-              </label>
-              <label className="text-sm">
-                {t("price")}
-                <input className="field mt-1" type="number" min={0} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
-              </label>
-              <label className="text-sm">
-                {t("tierName")}
-                <input className="field mt-1" value={tierName} onChange={(e) => setTierName(e.target.value)} />
-              </label>
-              <label className="text-sm">
-                {t("stock")}
-                <input className="field mt-1" type="number" min={1} value={stock} onChange={(e) => setStock(Number(e.target.value))} />
-              </label>
-              <label className="text-sm">
-                {t("earlyPct")}
-                <input className="field mt-1" type="number" min={0} max={90} value={earlyPct} onChange={(e) => setEarlyPct(Number(e.target.value))} />
-              </label>
-              <label className="text-sm">
-                {t("earlyCount")}
-                <input className="field mt-1" type="number" min={0} value={earlyCount} onChange={(e) => setEarlyCount(Number(e.target.value))} />
-              </label>
+              <Field label={t("eventName")} required className="md:col-span-2">
+                {({ id, describedBy, invalid, required }) => (
+                  <Input
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    required={required}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                  />
+                )}
+              </Field>
+              <Field label={t("category")}>
+                {({ id, describedBy, invalid }) => (
+                  <Select id={id} describedBy={describedBy} invalid={invalid} value={category} onChange={(e) => setCategory(e.target.value)}>
+                    {CATEGORIES.map((value) => (
+                      <option key={value} value={value}>
+                        {categoryLabel(value, t)}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <Field label={t("city")}>
+                {({ id, describedBy, invalid }) => (
+                  <Select id={id} describedBy={describedBy} invalid={invalid} value={city} onChange={(e) => setCity(e.target.value)}>
+                    {CITIES.map((item) => (
+                      <option key={item}>{item}</option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <Field label={t("venueLabel")} required>
+                {({ id, describedBy, invalid, required }) => (
+                  <Input
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    required={required}
+                    value={venue}
+                    onChange={(e) => setVenue(e.target.value)}
+                  />
+                )}
+              </Field>
+              <Field label={t("address")}>
+                {({ id, describedBy, invalid }) => (
+                  <Input
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                  />
+                )}
+              </Field>
+              <Field label={t("date")} required>
+                {({ id, describedBy, invalid, required }) => (
+                  <Input
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    required={required}
+                    type="date"
+                    value={start}
+                    onChange={(e) => setStart(e.target.value)}
+                  />
+                )}
+              </Field>
+              <Field label={t("endDate")}>
+                {({ id, describedBy, invalid }) => (
+                  <Input
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    type="date"
+                    value={end}
+                    onChange={(e) => setEnd(e.target.value)}
+                  />
+                )}
+              </Field>
+              <Field label={t("time")}>
+                {({ id, describedBy, invalid }) => (
+                  <Input
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                  />
+                )}
+              </Field>
+              <Field label={t("price")}>
+                {({ id, describedBy, invalid }) => (
+                  <Input
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    type="number"
+                    min={0}
+                    value={price}
+                    onChange={(e) => setPrice(Number(e.target.value))}
+                  />
+                )}
+              </Field>
+              <Field label={t("tierName")}>
+                {({ id, describedBy, invalid }) => (
+                  <Input
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    value={tierName}
+                    onChange={(e) => setTierName(e.target.value)}
+                  />
+                )}
+              </Field>
+              <Field label={t("stock")}>
+                {({ id, describedBy, invalid }) => (
+                  <Input
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    type="number"
+                    min={1}
+                    value={stock}
+                    onChange={(e) => setStock(Number(e.target.value))}
+                  />
+                )}
+              </Field>
+              <Field label={t("earlyPct")}>
+                {({ id, describedBy, invalid }) => (
+                  <Input
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    type="number"
+                    min={0}
+                    max={90}
+                    value={earlyPct}
+                    onChange={(e) => setEarlyPct(Number(e.target.value))}
+                  />
+                )}
+              </Field>
+              <Field label={t("earlyCount")}>
+                {({ id, describedBy, invalid }) => (
+                  <Input
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    type="number"
+                    min={0}
+                    value={earlyCount}
+                    onChange={(e) => setEarlyCount(Number(e.target.value))}
+                  />
+                )}
+              </Field>
               <label className="flex items-center gap-2 text-sm md:col-span-2">
                 <input type="checkbox" checked={vipOn} onChange={(e) => setVipOn(e.target.checked)} />
                 {t("vipOn")}
               </label>
               {vipOn ? (
                 <>
-                  <label className="text-sm">
-                    VIP
-                    <input className="field mt-1" value={vipName} onChange={(e) => setVipName(e.target.value)} />
-                  </label>
-                  <label className="text-sm">
-                    {t("price")}
-                    <input className="field mt-1" type="number" min={0} value={vipPrice} onChange={(e) => setVipPrice(Number(e.target.value))} />
-                  </label>
-                  <label className="text-sm">
-                    {t("stock")}
-                    <input className="field mt-1" type="number" min={1} value={vipStock} onChange={(e) => setVipStock(Number(e.target.value))} />
-                  </label>
+                  <Field label="VIP">
+                    {({ id, describedBy, invalid }) => (
+                      <Input
+                        id={id}
+                        describedBy={describedBy}
+                        invalid={invalid}
+                        value={vipName}
+                        onChange={(e) => setVipName(e.target.value)}
+                      />
+                    )}
+                  </Field>
+                  <Field label={t("price")}>
+                    {({ id, describedBy, invalid }) => (
+                      <Input
+                        id={id}
+                        describedBy={describedBy}
+                        invalid={invalid}
+                        type="number"
+                        min={0}
+                        value={vipPrice}
+                        onChange={(e) => setVipPrice(Number(e.target.value))}
+                      />
+                    )}
+                  </Field>
+                  <Field label={t("stock")}>
+                    {({ id, describedBy, invalid }) => (
+                      <Input
+                        id={id}
+                        describedBy={describedBy}
+                        invalid={invalid}
+                        type="number"
+                        min={1}
+                        value={vipStock}
+                        onChange={(e) => setVipStock(Number(e.target.value))}
+                      />
+                    )}
+                  </Field>
                 </>
               ) : null}
-              <label className="text-sm md:col-span-2">
-                {t("about")}
-                <textarea className="field field-area mt-1" value={about} onChange={(e) => setAbout(e.target.value)} />
-              </label>
+              <Field label={t("about")} className="md:col-span-2">
+                {({ id, describedBy, invalid }) => (
+                  <Textarea id={id} describedBy={describedBy} invalid={invalid} value={about} onChange={(e) => setAbout(e.target.value)} />
+                )}
+              </Field>
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold">{t("cover")}</p>

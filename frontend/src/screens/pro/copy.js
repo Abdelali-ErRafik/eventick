@@ -224,6 +224,9 @@ export const text = {
     newUser: "Nouvel utilisateur",
 
 
+    globalPromoAdminOnly: "Un code valable sur toutes les dates ne peut être créé que par un administrateur. Choisissez un événement.",
+
+
     required: "Ce champ est requis.",
 
 
@@ -500,6 +503,9 @@ export const text = {
     newUser: "New user",
 
 
+    globalPromoAdminOnly: "Only an administrator can create a code that works on every date. Pick an event.",
+
+
     required: "This field is required.",
 
 
@@ -773,6 +779,9 @@ export const text = {
     noUsersFilter: "لا يوجد مستخدمون يطابقون هذه الفلاتر.",
 
     newUser: "مستخدم جديد",
+
+
+    globalPromoAdminOnly: "لا يمكن إنشاء كود صالح لكل التواريخ إلا من قبل مدير. اختر حدثًا.",
 
 
     required: "هذا الحقل مطلوب.",

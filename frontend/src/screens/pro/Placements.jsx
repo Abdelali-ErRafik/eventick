@@ -7,6 +7,7 @@ import { useConfirm } from "./ConfirmContext";
 import { EventSwitcher } from "./EventSwitcher";
 import { Badge, Btn, EmptyState, IconBtn, Modal, PageHead } from "./ui";
 import { text } from "./copy";
+import { Field, Input } from "../../ui";
 
 const BLANK = {
   nameFr: "",
@@ -191,64 +192,82 @@ export default function Placements() {
         }
       >
         <form id="tier-form" className="grid gap-4 sm:grid-cols-2" onSubmit={save}>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {t.zoneName} (FR)
-            <input className="field" value={form.nameFr} onChange={(e) => field("nameFr", e.target.value)} required minLength={1} />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {t.zoneName} (AR)
-            <input className="field" dir="rtl" value={form.nameAr} onChange={(e) => field("nameAr", e.target.value)} required minLength={1} />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {t.zone} (FR)
-            <input className="field" value={form.zoneFr} onChange={(e) => field("zoneFr", e.target.value)} required />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {t.zone} (AR)
-            <input className="field" dir="rtl" value={form.zoneAr} onChange={(e) => field("zoneAr", e.target.value)} required />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {t.gateCol} (FR)
-            <input className="field" value={form.gateFr} onChange={(e) => field("gateFr", e.target.value)} required />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {t.gateCol} (AR)
-            <input className="field" dir="rtl" value={form.gateAr} onChange={(e) => field("gateAr", e.target.value)} required />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {t.price} (MAD)
-            <input
-              className="field"
-              type="number"
-              min={0}
-              step="0.01"
-              value={form.priceCents / 100}
-              onChange={(e) => field("priceCents", Math.round(Number(e.target.value) * 100))}
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {t.capacityCol}
-            <input className="field" type="number" min={1} value={form.capacity} onChange={(e) => field("capacity", Number(e.target.value))} />
-            {editing && editing !== "new" && editing.sold > 0 ? (
-              <span className="text-xs font-medium text-muted">{t.capacityLocked.replace("{n}", String(editing.sold))}</span>
-            ) : null}
-          </label>
+          {/* The Arabic halves carry dir="rtl" so the text reads the right
+              way round while the form itself stays in the page direction. */}
+          <Field label={`${t.zoneName} (FR)`} required>
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} describedBy={describedBy} invalid={invalid} value={form.nameFr} onChange={(e) => field("nameFr", e.target.value)} required minLength={1} />
+            )}
+          </Field>
+          <Field label={`${t.zoneName} (AR)`} required>
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} describedBy={describedBy} invalid={invalid} dir="rtl" value={form.nameAr} onChange={(e) => field("nameAr", e.target.value)} required minLength={1} />
+            )}
+          </Field>
+          <Field label={`${t.zone} (FR)`} required>
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} describedBy={describedBy} invalid={invalid} value={form.zoneFr} onChange={(e) => field("zoneFr", e.target.value)} required />
+            )}
+          </Field>
+          <Field label={`${t.zone} (AR)`} required>
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} describedBy={describedBy} invalid={invalid} dir="rtl" value={form.zoneAr} onChange={(e) => field("zoneAr", e.target.value)} required />
+            )}
+          </Field>
+          <Field label={`${t.gateCol} (FR)`} required>
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} describedBy={describedBy} invalid={invalid} value={form.gateFr} onChange={(e) => field("gateFr", e.target.value)} required />
+            )}
+          </Field>
+          <Field label={`${t.gateCol} (AR)`} required>
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} describedBy={describedBy} invalid={invalid} dir="rtl" value={form.gateAr} onChange={(e) => field("gateAr", e.target.value)} required />
+            )}
+          </Field>
+          <Field label={`${t.price} (MAD)`}>
+            {({ id, describedBy, invalid }) => (
+              <Input
+                id={id}
+                describedBy={describedBy}
+                invalid={invalid}
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.priceCents / 100}
+                onChange={(e) => field("priceCents", Math.round(Number(e.target.value) * 100))}
+              />
+            )}
+          </Field>
+          {/* The sold-tickets floor was a loose <span> under the input, which
+              a screen reader never tied to it. As Field's `hint` it is wired
+              to aria-describedby, so it is read with the field. */}
+          <Field
+            label={t.capacityCol}
+            hint={editing && editing !== "new" && editing.sold > 0 ? t.capacityLocked.replace("{n}", String(editing.sold)) : undefined}
+          >
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} describedBy={describedBy} invalid={invalid} type="number" min={1} value={form.capacity} onChange={(e) => field("capacity", Number(e.target.value))} />
+            )}
+          </Field>
           <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
             <input type="checkbox" checked={form.numbered} onChange={(e) => field("numbered", e.target.checked)} />
             {t.numbered}
           </label>
           {form.numbered ? (
-            <label className="grid gap-1.5 text-sm font-semibold">
-              {t.seatsPerRow}
-              <input
-                className="field"
-                type="number"
-                min={1}
-                max={100}
-                value={form.seatsPerRow}
-                onChange={(e) => field("seatsPerRow", Number(e.target.value))}
-              />
-            </label>
+            <Field label={t.seatsPerRow}>
+              {({ id, describedBy, invalid }) => (
+                <Input
+                  id={id}
+                  describedBy={describedBy}
+                  invalid={invalid}
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={form.seatsPerRow}
+                  onChange={(e) => field("seatsPerRow", Number(e.target.value))}
+                />
+              )}
+            </Field>
           ) : null}
         </form>
       </Modal>

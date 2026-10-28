@@ -8,6 +8,7 @@ import { useI18n } from "../i18n";
 import { emailOk } from "../payment";
 import { cn } from "../utils";
 import { DEMO_ACCOUNTS } from "../demoAccounts";
+import { Field, Input } from "../ui";
 
 const SHOW_DEMO_ACCOUNTS = process.env.NODE_ENV !== "production";
 
@@ -21,7 +22,18 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Two kinds of error, because they have two different homes. `fieldErrors`
+  // is what the user typed wrong, and belongs ON the input so a screen reader
+  // reads it when focus lands there. `error` is what the SERVER refused —
+  // wrong password, email already taken — which belongs to the form as a
+  // whole, because no single input is at fault.
+  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState(null);
+
+  const clearErrors = () => {
+    setFieldErrors({});
+    setError(null);
+  };
 
   useEffect(() => {
     if (!loading && user) navigate("/");
@@ -37,20 +49,21 @@ export default function Login() {
     e.preventDefault();
     if (busy) return;
     const cleanEmail = email.trim().toLowerCase();
-    if (!emailOk(cleanEmail)) {
-      setError(t("errEmail"));
+
+    // All of them, not just the first: returning on the earliest failure
+    // makes the user submit three times to discover three problems.
+    const next = {};
+    if (!emailOk(cleanEmail)) next.email = t("errEmail");
+    if (password.length < 8) next.password = t("passwordHint");
+    if (mode === "up" && name.trim().length < 2) next.name = t("errName");
+    if (Object.keys(next).length) {
+      setFieldErrors(next);
+      setError(null);
       return;
     }
-    if (password.length < 8) {
-      setError(t("passwordHint"));
-      return;
-    }
-    if (mode === "up" && name.trim().length < 2) {
-      setError(t("errName"));
-      return;
-    }
+
     setBusy(true);
-    setError(null);
+    clearErrors();
     try {
       if (mode === "up") {
         await register(name.trim(), cleanEmail, password);
@@ -70,7 +83,7 @@ export default function Login() {
   async function quickLogin(account) {
     if (busy) return;
     setBusy(true);
-    setError(null);
+    clearErrors();
     try {
       await login(account.email, account.password);
       toast.success(t("welcomeBack"));
@@ -121,7 +134,7 @@ export default function Login() {
                   disabled={busy}
                   onClick={() => {
                     setMode(value);
-                    setError(null);
+                    clearErrors();
                   }}
                   className={cn("h-11 rounded-full transition disabled:opacity-50", mode === value ? "bg-card text-ink shadow-card" : "text-muted hover:text-ink")}
                 >
@@ -131,38 +144,65 @@ export default function Login() {
             </div>
             <form className="mt-6 grid gap-4" onSubmit={onSubmit}>
               {mode === "up" ? (
-                <label className="grid gap-1.5 text-sm font-semibold">
-                  {t("fullName")}
-                  <input className="field" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Yasmine El Fassi" />
-                </label>
+                <Field label={t("fullName")} error={fieldErrors.name}>
+                  {({ id, describedBy, invalid }) => (
+                    <Input
+                      id={id}
+                      describedBy={describedBy}
+                      invalid={invalid}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      autoComplete="name"
+                      placeholder="Yasmine El Fassi"
+                    />
+                  )}
+                </Field>
               ) : null}
-              <label className="grid gap-1.5 text-sm font-semibold">
-                {t("email")}
-                <input className="field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder={t("emailPh")} />
-              </label>
-              <label className="grid gap-1.5 text-sm font-semibold">
-                <span className="flex items-center justify-between gap-2">
-                  {t("password")}
-                  {mode === "up" ? <span className="text-xs font-medium text-muted">{t("passwordHint")}</span> : null}
-                </span>
-                <span className="relative block">
-                  <input
-                    className="field pe-12"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete={mode === "up" ? "new-password" : "current-password"}
+              <Field label={t("email")} error={fieldErrors.email}>
+                {({ id, describedBy, invalid }) => (
+                  <Input
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    placeholder={t("emailPh")}
                   />
-                  <button
-                    type="button"
-                    aria-label={showPassword ? t("hidePwd") : t("showPwd")}
-                    onClick={() => setShowPassword((value) => !value)}
-                    className="absolute end-2 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-full text-muted hover:text-ink"
-                  >
-                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  </button>
-                </span>
-              </label>
+                )}
+              </Field>
+              {/* The 8-character rule only applies when signing up — on
+                  sign-in the password is whatever it already is, so showing
+                  the hint there would read as a new requirement. */}
+              <Field
+                label={t("password")}
+                error={fieldErrors.password}
+                hint={mode === "up" ? t("passwordHint") : undefined}
+              >
+                {({ id, describedBy, invalid }) => (
+                  <span className="relative block">
+                    <Input
+                      id={id}
+                      describedBy={describedBy}
+                      invalid={invalid}
+                      className="pe-12"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete={mode === "up" ? "new-password" : "current-password"}
+                    />
+                    <button
+                      type="button"
+                      aria-label={showPassword ? t("hidePwd") : t("showPwd")}
+                      onClick={() => setShowPassword((value) => !value)}
+                      className="absolute end-2 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-full text-muted hover:text-ink"
+                    >
+                      {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </span>
+                )}
+              </Field>
               {error ? (
                 <p role="alert" className="rounded-card bg-danger/10 px-4 py-3 text-sm font-semibold text-danger">
                   {error}
@@ -190,7 +230,7 @@ export default function Login() {
                 type="button"
                 onClick={() => {
                   setMode(mode === "in" ? "up" : "in");
-                  setError(null);
+                  clearErrors();
                 }}
                 className="font-bold text-primary underline-offset-4 hover:underline"
               >

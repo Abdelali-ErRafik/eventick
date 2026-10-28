@@ -364,31 +364,12 @@
 }
 
 @layer components {
-  .field {
-    display: block;
-    height: 3rem;
-    width: 100%;
-    border-radius: var(--radius-control);
-    border: 1px solid color-mix(in srgb, var(--color-line) calc(var(--et-line-alpha) * 100%), transparent);
-    background: var(--color-card);
-    padding-inline: 1rem;
-    color: var(--color-ink);
-    font: inherit;
-    transition: border-color 160ms ease, box-shadow 160ms ease;
-  }
-
-  .field:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
-  }
-
-  .field-area {
-    height: auto;
-    min-height: 7rem;
-    padding-block: 0.75rem;
-    resize: vertical;
-  }
+  /* `.field` / `.field-area` lived here and styled a bare <input>. They are
+     gone because styling was never the hard part: the class could not wire
+     aria-invalid or aria-describedby, so every form that used it announced
+     its fields as valid while showing an error on screen. The Field + Input
+     components in src/ui carry the markup and the wiring together, which is
+     why there is no replacement class to reach for. */
 
   /* A thin, theme-matched scrollbar for popover/dropdown panels -- the
      browser default (a thick grey bar, light even in dark mode) was the

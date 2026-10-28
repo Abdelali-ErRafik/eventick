@@ -256,11 +256,12 @@ export default function Users() {
         {form ? (
           <form id="user-form" className="grid gap-4" onSubmit={submit}>
             <Field label={t.fullName} required error={errors.name}>
-              {({ id, describedBy, invalid }) => (
+              {({ id, describedBy, invalid, required }) => (
                 <Input
                   id={id}
                   describedBy={describedBy}
                   invalid={invalid}
+                  required={required}
                   value={form.name}
                   onChange={set("name")}
                   autoComplete="off"
@@ -269,11 +270,12 @@ export default function Users() {
             </Field>
 
             <Field label={t.email} required error={errors.email}>
-              {({ id, describedBy, invalid }) => (
+              {({ id, describedBy, invalid, required }) => (
                 <Input
                   id={id}
                   describedBy={describedBy}
                   invalid={invalid}
+                  required={required}
                   type="email"
                   value={form.email}
                   onChange={set("email")}
@@ -283,7 +285,7 @@ export default function Users() {
             </Field>
 
             <Field label={t.password} required error={errors.password} hint={t.passwordHint}>
-              {({ id, describedBy, invalid }) => (
+              {({ id, describedBy, invalid, required }) => (
                 <div className="flex items-center gap-2">
                   {/* Shown in clear text on purpose: the admin has to pass it
                       on, and a masked field they cannot read is only a hazard
@@ -292,6 +294,7 @@ export default function Users() {
                     id={id}
                     describedBy={describedBy}
                     invalid={invalid}
+                    required={required}
                     className="font-mono"
                     value={form.password}
                     onChange={set("password")}
@@ -309,7 +312,7 @@ export default function Users() {
             </Field>
 
             <Field label={t.roleField} required hint={roleHint(form.role)}>
-              {({ id, describedBy }) => (
+              {({ id, describedBy, required }) => (
                 <Select id={id} describedBy={describedBy} value={form.role} onChange={set("role")}>
                   {ROLES.map((value) => (
                     <option key={value} value={value}>

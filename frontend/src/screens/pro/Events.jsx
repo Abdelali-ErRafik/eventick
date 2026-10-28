@@ -9,6 +9,7 @@ import { useConfirm } from "./ConfirmContext";
 import { useOrganisers } from "./useOrganisers";
 import { Badge, Btn, EmptyState, FilterBar, IconBtn, Modal, PageHead } from "./ui";
 import { text } from "./copy";
+import { Field, Input, Select, Textarea } from "../../ui";
 
 export default function Events() {
   const { locale } = useI18n();
@@ -286,29 +287,42 @@ export default function Events() {
         }
       >
         <form id="event-edit" className="grid gap-4" onSubmit={save}>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {t.titleFrLabel}
-            <input className="field" value={titleFr} onChange={(e) => setTitleFr(e.target.value)} required minLength={3} />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {t.titleArLabel}
-            <input
-              className="field"
-              dir="rtl"
-              value={titleAr}
-              onChange={(e) => setTitleAr(e.target.value)}
-              required
-              minLength={3}
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            {t.cityLabel}
-            <select className="field" value={editCity} onChange={(e) => setEditCity(e.target.value)}>
-              {CITIES.map((name) => (
-                <option key={name}>{name}</option>
-              ))}
-            </select>
-          </label>
+          <Field label={t.titleFrLabel} required>
+            {({ id, describedBy, invalid, required }) => (
+              <Input
+                id={id}
+                describedBy={describedBy}
+                invalid={invalid}
+                required={required}
+                value={titleFr}
+                onChange={(e) => setTitleFr(e.target.value)}
+                minLength={3}
+              />
+            )}
+          </Field>
+          <Field label={t.titleArLabel} required>
+            {({ id, describedBy, invalid, required }) => (
+              <Input
+                id={id}
+                describedBy={describedBy}
+                invalid={invalid}
+                required={required}
+                dir="rtl"
+                value={titleAr}
+                onChange={(e) => setTitleAr(e.target.value)}
+                minLength={3}
+              />
+            )}
+          </Field>
+          <Field label={t.cityLabel}>
+            {({ id, describedBy, invalid }) => (
+              <Select id={id} describedBy={describedBy} invalid={invalid} value={editCity} onChange={(e) => setEditCity(e.target.value)}>
+                {CITIES.map((name) => (
+                  <option key={name}>{name}</option>
+                ))}
+              </Select>
+            )}
+          </Field>
         </form>
       </Modal>
 
@@ -342,21 +356,34 @@ export default function Events() {
           <EmptyState icon="📭" title={t.contactNone} />
         ) : (
           <form id="broadcast-form" className="grid gap-4" onSubmit={sendBroadcast}>
-            <label className="grid gap-1.5 text-sm font-semibold">
-              {t.subject}
-              <input className="field" value={subject} onChange={(e) => setSubject(e.target.value)} minLength={3} maxLength={150} required />
-            </label>
-            <label className="grid gap-1.5 text-sm font-semibold">
-              {t.message}
-              <textarea
-                className="field field-area"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                minLength={10}
-                maxLength={5000}
-                required
-              />
-            </label>
+            <Field label={t.subject} required>
+              {({ id, describedBy, invalid, required }) => (
+                <Input
+                  id={id}
+                  describedBy={describedBy}
+                  invalid={invalid}
+                  required={required}
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  minLength={3}
+                  maxLength={150}
+                />
+              )}
+            </Field>
+            <Field label={t.message} required>
+              {({ id, describedBy, invalid }) => (
+                <Textarea
+                  id={id}
+                  describedBy={describedBy}
+                  invalid={invalid}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  minLength={10}
+                  maxLength={5000}
+                  required
+                />
+              )}
+            </Field>
           </form>
         )}
       </Modal>
