@@ -12,8 +12,13 @@ import { cn } from "../../../utils";
  * and the groups are always visible rather than hidden behind a search box
  * seven items did not need.
  *
- * Shape v2: the active item is a solid primary fill, not a soft tint plus a
- * start bar — one unambiguous "you are here" instead of two weak signals.
+ * Shape v3: every item carries its own icon tile instead of a bare glyph
+ * sitting in the text colour, so the rail reads as a set of distinct
+ * destinations rather than a plain link list — the same "give each thing
+ * its own visual weight" move used on the card-grid screens. The active
+ * tile still gets the solid violet fill; the rest get a neutral tile that
+ * only lifts to brand colour on hover, so the active state stays the one
+ * unambiguous signal.
  */
 
 export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed, labels }) {
@@ -72,31 +77,34 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
           open ? "translate-x-0" : "-translate-x-full rtl:translate-x-full lg:rtl:translate-x-0",
         )}
       >
-        {/* Brand. Squared-off mark (was rounded-xl/soft) with a hard-edged
-            accent underline on the wordmark instead of a tinted word — more
-            Linear/Vercel-lockup than the old soft pill treatment. */}
-        <div className={cn("flex h-16 shrink-0 items-center gap-2 border-b border-line/10 px-4", collapsed && "justify-center px-0")}>
-          <Link
-            to="/pro"
-            className={cn("flex min-w-0 items-center gap-2.5 font-display font-bold tracking-tight", collapsed && "justify-center")}
-          >
-            <span
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-control bg-primary text-[15px] text-primary-fg"
-              aria-hidden
+        {/* Brand. A taller block than a plain header row, with the mark
+            on its own line from the wordmark on desktop — closer to a
+            masthead than a logo-plus-name strip. */}
+        <div className={cn("flex shrink-0 flex-col gap-3 border-b border-line/10 px-4 py-4", collapsed && "items-center px-0")}>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/pro"
+              className={cn("flex min-w-0 items-center gap-2.5 font-display font-bold tracking-tight", collapsed && "justify-center")}
             >
-              E
-            </span>
-            {!collapsed ? (
-              <span className="min-w-0 truncate text-[17px]">
-                Eventick<span className="border-b-2 border-accent pb-px">.ma</span>
+              <span
+                className="inline-flex size-10 shrink-0 items-center justify-center rounded-card bg-primary text-[17px] text-primary-fg"
+                aria-hidden
+              >
+                E
               </span>
+              {!collapsed ? (
+                <span className="min-w-0 truncate text-[18px]">
+                  Eventick<span className="border-b-2 border-accent pb-px">.ma</span>
+                </span>
+              ) : null}
+            </Link>
+            {!collapsed ? (
+              <IconButton label={labels.close} size="sm" className="ms-auto lg:hidden" onClick={onClose}>
+                <X className="size-5" />
+              </IconButton>
             ) : null}
-          </Link>
-          {!collapsed ? (
-            <IconButton label={labels.close} size="sm" className="ms-auto lg:hidden" onClick={onClose}>
-              <X className="size-5" />
-            </IconButton>
-          ) : null}
+          </div>
+          {!collapsed ? <p className="truncate text-[11px] font-bold uppercase tracking-[0.09em] text-muted">{labels.brand}</p> : null}
         </div>
 
         {/* Nav */}
@@ -109,7 +117,7 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
                 <p className="px-3 pb-2 text-[11px] font-extrabold uppercase tracking-[0.09em] text-muted">{group.name}</p>
               )}
 
-              <ul className="grid gap-0.5">
+              <ul className="grid gap-1">
                 {group.items.map((item, itemIndex) => (
                   <li key={item.to}>
                     <NavLink
@@ -120,8 +128,8 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
                       title={collapsed ? item.label : undefined}
                       className={({ isActive }) =>
                         cn(
-                          "group relative flex items-center gap-3 rounded-control py-2.5 text-sm font-semibold transition",
-                          collapsed ? "justify-center px-0" : "px-3",
+                          "group relative flex items-center gap-2.5 rounded-control py-2 text-sm font-semibold transition",
+                          collapsed ? "justify-center px-0" : "px-2",
                           // Solid violet fill for the active row — matches the
                           // reference dashboard's nav exactly (pink is kept
                           // for the brand mark/avatar so the two read as
@@ -133,7 +141,13 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
                     >
                       {({ isActive }) => (
                         <>
-                          <span className="shrink-0" aria-hidden>
+                          <span
+                            className={cn(
+                              "flex size-8 shrink-0 items-center justify-center rounded-control transition",
+                              isActive ? "bg-secondary-fg/15" : "bg-sunken text-muted group-hover:bg-card group-hover:text-primary",
+                            )}
+                            aria-hidden
+                          >
                             {item.icon}
                           </span>
                           {!collapsed ? <span className="min-w-0 flex-1 truncate">{item.label}</span> : null}

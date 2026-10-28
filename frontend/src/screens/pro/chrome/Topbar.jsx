@@ -13,12 +13,14 @@ import { cn } from "../../../utils";
  * avatar with nothing to stop a mis-tap.
  *
  * Now the per-session controls (theme, language, sign out) live behind the
- * account button, which is where people look for them, and the bar itself
- * carries the page title so there is a fixed place to orient from while
- * scrolling a long table.
+ * account button, which is where people look for them. The bar itself got
+ * taller and the title sits on an eyebrow line, so it reads as a masthead
+ * for the page rather than a thin strip of controls with a label squeezed
+ * between them — matching the bigger, bolder type used on the card-grid
+ * screens below it.
  */
 
-export function Topbar({ title, onOpenNav, user, onLogout, theme, onToggleTheme, locales, locale, onSetLocale, localeShort, labels }) {
+export function Topbar({ eyebrow, title, onOpenNav, user, onLogout, theme, onToggleTheme, locales, locale, onSetLocale, localeShort, labels }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const buttonRef = useRef(null);
@@ -47,13 +49,17 @@ export function Topbar({ title, onOpenNav, user, onLogout, theme, onToggleTheme,
   const initial = (user?.name ?? "?").trim().slice(0, 1).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-line/10 bg-card/85 px-4 backdrop-blur-md md:px-6">
+    <header className="sticky top-0 z-40 flex h-18 shrink-0 items-center gap-3 border-b border-line/10 bg-card/85 px-4 backdrop-blur-md md:px-6">
       <IconButton label={labels.openMenu} size="sm" className="lg:hidden" onClick={onOpenNav}>
         <Menu className="size-5" />
       </IconButton>
 
-      {/* A fixed anchor while scrolling a long table. */}
-      <p className="min-w-0 flex-1 truncate font-display text-subhead font-extrabold">{title}</p>
+      {/* A fixed anchor while scrolling a long table — an eyebrow over the
+          title gives the bar a masthead feel instead of a single flat line. */}
+      <div className="min-w-0 flex-1">
+        {eyebrow ? <p className="truncate text-[11px] font-bold uppercase tracking-[0.09em] text-muted">{eyebrow}</p> : null}
+        <p className="truncate font-display text-subhead font-extrabold leading-tight">{title}</p>
+      </div>
 
       <Link
         to="/"

@@ -76,11 +76,13 @@ export default function DashboardShell({ sections, children }) {
           collapse: collapsed ? t.expand : t.collapse,
           expand: t.expand,
           pending: t.pendingItems,
+          brand: t.brand,
         }}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
+          eyebrow={current?.group}
           title={current?.label ?? t.brand}
           onOpenNav={() => setNavOpen(true)}
           user={user}
