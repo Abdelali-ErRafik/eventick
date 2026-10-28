@@ -374,17 +374,47 @@ export default function EventDetail() {
             </section>
           ) : null}
 
+          {/* Three flat solid-colour bars, stacked with no shape logic
+              connecting them -- redrawn as an actual stage-and-zones
+              illustration: a curved stage element up front, zones widening
+              as they get further from it (the way a real crowd fans out),
+              each one tagged with its own colour-coded legend dot instead
+              of relying on the fill colour alone to say "this is a
+              different zone". */}
           <section className="rounded-card border border-line/10 bg-card p-4 shadow-card md:p-6">
             <h2 className="font-display text-2xl font-extrabold">{t("plan")}</h2>
             <p className="text-sm text-muted">{venue}</p>
-            <div className="mx-auto mt-4 max-w-lg rounded-card bg-paper p-4">
-              <div className="mx-auto flex h-14 max-w-xs items-center justify-center rounded-t-xl bg-primary text-sm font-bold text-primary-fg">{t("stage")}</div>
-              <div className="mx-auto mt-2 flex h-16 max-w-sm items-center justify-center bg-accent/80 text-sm font-bold text-accent-fg">{t("vipZone")}</div>
-              <div className="mx-auto mt-2 flex h-24 max-w-lg items-center justify-center bg-brume-deep text-sm font-bold text-primary">{t("lawn")}</div>
-              <p className="mt-3 text-center text-xs text-muted">
-                {t("capacity")} · {groupNumber(event.tiers.reduce((sum, tier) => sum + tier.capacity, 0))}
-              </p>
+            <div className="mx-auto mt-5 max-w-lg rounded-card bg-paper p-5">
+              <div
+                className="mx-auto flex h-12 w-[55%] items-center justify-center rounded-t-[999px] bg-primary text-xs font-bold uppercase tracking-wide text-primary-fg"
+                style={{ clipPath: "ellipse(50% 100% at 50% 100%)" }}
+              >
+                {t("stage")}
+              </div>
+              <div className="mx-auto mt-3 flex h-16 w-[75%] items-center justify-center bg-accent text-sm font-bold text-accent-fg [clip-path:polygon(8%_0,92%_0,100%_100%,0_100%)]">
+                {t("vipZone")}
+              </div>
+              <div className="mx-auto -mt-px flex h-24 w-full items-center justify-center bg-brume-deep text-sm font-bold text-ink [clip-path:polygon(4%_0,96%_0,100%_100%,0_100%)]">
+                {t("lawn")}
+              </div>
             </div>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-semibold text-muted">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-2.5 rounded-full bg-primary" aria-hidden />
+                {t("stage")}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-2.5 rounded-full bg-accent" aria-hidden />
+                {t("vipZone")}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-2.5 rounded-full bg-brume-deep" aria-hidden />
+                {t("lawn")}
+              </span>
+            </div>
+            <p className="mt-3 text-center text-xs text-muted">
+              {t("capacity")} · {groupNumber(event.tiers.reduce((sum, tier) => sum + tier.capacity, 0))}
+            </p>
           </section>
 
           <section>
