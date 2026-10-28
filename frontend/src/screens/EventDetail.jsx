@@ -260,7 +260,14 @@ export default function EventDetail() {
               </span>
             </div>
 
-            <ul className="divide-y divide-line/10">
+            {/* A divided list read as one continuous block, with the
+                "recommended" tier only a faint tint apart from the rest --
+                each tier is now its own bordered card with real spacing
+                between them, and the recommended one gets a solid left
+                accent stripe instead of a low-contrast background tint, so
+                it reads as a deliberately different product rather than a
+                slightly-different shade of the same row. */}
+            <ul className="grid gap-3 p-5">
               {event.tiers.map((tier) => {
                 const left = leftFor(tier);
                 const value = qty[tier.id] ?? 0;
@@ -274,9 +281,9 @@ export default function EventDetail() {
                   <li
                     key={tier.id}
                     className={cn(
-                      "p-5 transition",
-                      tier.recommended && "bg-brume/30",
-                      value > 0 && "bg-brume/50",
+                      "rounded-card border p-5 transition",
+                      tier.recommended ? "border-primary/40 bg-brume/40 ring-1 ring-primary/20" : "border-line/10 bg-card",
+                      value > 0 && !tier.recommended && "border-primary/30 bg-brume/30",
                       gone && "opacity-55",
                     )}
                   >
