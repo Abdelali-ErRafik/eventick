@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { SearchX, SlidersHorizontal } from "lucide-react";
+import { Calendar, Flame, MapPin, SearchX, SlidersHorizontal, Ticket } from "lucide-react";
 import { Shell } from "../components/Shell";
 import { EventCard } from "../components/EventCard";
 import { useCatalog } from "../useCatalog";
@@ -210,11 +210,15 @@ export default function Explorer() {
           </h1>
           <p className="mt-2 max-w-xl text-stage-muted">{t("exploreSub")}</p>
 
-          <dl className="mt-6 grid grid-cols-2 gap-4 rounded-panel border border-stage-fg/10 bg-stage-fg/5 p-4 sm:grid-cols-4 sm:p-5">
-            <Stat value={String(live.length)} label={t("eventsWord")} />
-            <Stat value={String(new Set(live.map((event) => event.city)).size)} label={t("activeCities")} />
-            <Stat value={String(thisWeek)} label={t("thisWeek")} />
-            <Stat value={String(almost)} label={t("almost")} accent />
+          {/* Icon per stat + real dividers (divide-x), not just grid gaps --
+              same pattern as Home's hero stats. The old row was four bare
+              numbers with a lot of empty horizontal space between them and
+              nothing to anchor the eye. */}
+          <dl className="mt-6 grid grid-cols-2 divide-y divide-stage-fg/10 rounded-panel border border-stage-fg/10 bg-stage-fg/5 sm:grid-cols-4 sm:divide-x sm:divide-y-0 rtl:sm:divide-x-reverse">
+            <Stat icon={<Calendar className="size-4" />} value={String(live.length)} label={t("eventsWord")} />
+            <Stat icon={<MapPin className="size-4" />} value={String(new Set(live.map((event) => event.city)).size)} label={t("activeCities")} />
+            <Stat icon={<Ticket className="size-4" />} value={String(thisWeek)} label={t("thisWeek")} />
+            <Stat icon={<Flame className="size-4" />} value={String(almost)} label={t("almost")} accent />
           </dl>
         </div>
       </section>
@@ -342,7 +346,7 @@ function compare(a, b, tri) {
   return b.popularity - a.popularity;
 }
 
-function Stat({ value, label, accent = false }) {
+function Stat({ icon, value, label, accent = false }) {
   // Rendered inside the always-dark header band (bg-stage), same pattern as
   // Home's HeroStat -- stage-fg text, not encre/ink, which would flip
   // light-on-light depending on app theme since the band itself never
@@ -353,9 +357,14 @@ function Stat({ value, label, accent = false }) {
   // identical hex in both themes, which is exactly what a fixed-dark
   // surface needs.
   return (
-    <div>
-      <dt className={`font-display text-2xl font-extrabold tabular-nums md:text-3xl ${accent ? "text-accent" : ""}`}>{value}</dt>
-      <dd className="mt-0.5 text-xs font-semibold text-stage-muted">{label}</dd>
+    <div className="flex items-center gap-3 p-4 sm:p-5">
+      <span className={`flex size-9 shrink-0 items-center justify-center rounded-control bg-stage-fg/10 ${accent ? "text-accent" : "text-stage-muted"}`}>
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <dt className={`font-display text-2xl font-extrabold tabular-nums md:text-3xl ${accent ? "text-accent" : ""}`}>{value}</dt>
+        <dd className="mt-0.5 truncate text-xs font-semibold text-stage-muted">{label}</dd>
+      </div>
     </div>
   );
 }
