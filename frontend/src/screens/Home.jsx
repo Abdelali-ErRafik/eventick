@@ -354,7 +354,13 @@ export default function Home() {
             its own flex wrapper can centre the ticket card inside that real
             height, rather than the cell shrink-wrapping to the card's own
             (shorter) content size. */}
-        <div className="relative grid items-stretch gap-8 overflow-hidden rounded-panel bg-stage px-5 py-12 text-stage-fg md:px-8 lg:grid-cols-2 lg:py-16">
+        {/* pt noticeably bigger than pb (not matching numbers) -- Space
+            Grotesk's own glyph metrics sit text closer to the top of its
+            line box than the bottom, so equal CSS padding still rendered
+            visibly tighter above the kicker than below the buttons. This
+            compensates by eye against a real screenshot, not just by
+            matching numbers that look equal in the markup. */}
+        <div className="relative grid items-stretch gap-8 overflow-hidden rounded-panel bg-stage px-5 pb-10 pt-14 text-stage-fg md:px-8 md:pb-12 md:pt-16 lg:grid-cols-2 lg:pb-14 lg:pt-18">
           <div
             className="pointer-events-none absolute -inset-e-24 -top-24 size-96 rounded-full bg-accent/15 blur-3xl"
             aria-hidden
