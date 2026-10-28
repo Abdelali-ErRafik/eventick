@@ -316,9 +316,12 @@ function compare(a, b, tri) {
 }
 
 function Stat({ value, label, accent = false }) {
+  // A plain figure (event count, city count), not a CTA or a brand moment --
+  // was text-primary, so it glowed pink the same way StockCell's healthy
+  // numbers did. Neutral ink, matching Home's identical header stats.
   return (
     <div className="px-3">
-      <dt className={`font-display text-2xl font-extrabold ${accent ? "text-danger" : "text-primary"}`}>{value}</dt>
+      <dt className={`font-display text-2xl font-extrabold ${accent ? "text-danger" : "text-encre"}`}>{value}</dt>
       <dd className="text-xs text-muted">{label}</dd>
     </div>
   );

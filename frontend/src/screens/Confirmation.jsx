@@ -24,7 +24,7 @@ export default function Confirmation() {
       <Shell>
         <div className="mx-auto max-w-3xl px-4 py-10 text-center md:px-8">
           <h1 className="font-display text-3xl font-extrabold">{t("notFound")}</h1>
-          <Link to="/billets" className="mt-4 inline-flex h-12 items-center rounded-full bg-primary px-5 font-semibold text-primary-fg transition hover:bg-primary-hover">
+          <Link to="/billets" className="mt-4 inline-flex h-12 items-center rounded-full bg-action px-5 font-semibold text-action-fg transition hover:bg-action-hover">
             {t("seeTickets")}
           </Link>
         </div>
@@ -62,7 +62,7 @@ export default function Confirmation() {
           ))}
         </div>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <Link to="/billets" className="inline-flex h-12 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover">
+          <Link to="/billets" className="inline-flex h-12 items-center rounded-full bg-action px-5 text-sm font-semibold text-action-fg transition hover:bg-action-hover">
             {t("seeTickets")}
           </Link>
           <Link to="/explorer" className="inline-flex h-12 items-center rounded-full border border-line/20 bg-card px-5 text-sm font-semibold transition hover:bg-paper">

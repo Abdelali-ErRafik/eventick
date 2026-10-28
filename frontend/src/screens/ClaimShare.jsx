@@ -73,7 +73,7 @@ export default function ClaimShare() {
           <p className="mt-4 text-sm text-muted">{t("claimKeepLink")}</p>
           <Link
             to={`/billet/${claimed.ticketId}`}
-            className="mt-6 inline-flex h-12 items-center rounded-full bg-primary px-6 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover"
+            className="mt-6 inline-flex h-12 items-center rounded-full bg-action px-6 text-sm font-semibold text-action-fg transition hover:bg-action-hover"
           >
             {t("viewTicket")}
           </Link>

@@ -110,7 +110,9 @@ export function EventCard({ event, variant = "grid" }) {
                 aria-label={t("soldWord")}
               >
                 <div
-                  className={cn("h-full rounded-full transition-[width]", ratio > 0.82 ? "bg-danger" : "bg-primary")}
+                  // "% sold" is a status, not a brand moment -- same bug as
+                  // StockCell's healthy-stock bar, fixed the same way.
+                  className={cn("h-full rounded-full transition-[width]", ratio > 0.82 ? "bg-danger" : "bg-success")}
                   style={{ width: `${Math.min(100, Math.round(ratio * 100))}%` }}
                 />
               </div>
@@ -122,8 +124,9 @@ export function EventCard({ event, variant = "grid" }) {
               <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted">{t("from")}</span>
               <span className="font-display text-heading font-extrabold tabular-nums">{money(priceCents)} MAD</span>
             </p>
-            {/* Styled as a button, but it is the card's own link — see below. */}
-            <span className="inline-flex h-11 shrink-0 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-fg transition group-hover:bg-primary-hover">
+            {/* Styled as a button, but it is the card's own link — see below.
+                A real CTA, so the action pill, not the brand colour. */}
+            <span className="inline-flex h-11 shrink-0 items-center rounded-full bg-action px-5 text-sm font-semibold text-action-fg transition group-hover:bg-action-hover">
               {t("reserve")}
             </span>
           </div>
