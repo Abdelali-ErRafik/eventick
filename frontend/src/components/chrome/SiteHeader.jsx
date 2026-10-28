@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, LogOut, MapPin, Menu, Moon, Search, Sun, Ticket, User, X } from "lucide-react";
 import { useAuth } from "../../AuthContext";
 import { useCart } from "../../CartContext";
@@ -28,6 +28,13 @@ import { cn, CITIES } from "../../utils";
  * unit (a shared pill-shaped surface) instead of sitting as two independent
  * controls of equal weight next to the nav links — same "give the identity
  * its own space" move the dashboard's sidebar brand block got.
+ *
+ * Shape v4: the nav gets a real active state (a filled pill, not just a
+ * hover), "Create" becomes the header's one deliberate brand-pink moment
+ * (Button's `brand` variant — the one case that intentionally breaks the
+ * "action pill, not brand colour" rule), and the account trigger grew a
+ * ring + bolder avatar so it reads as a real identity control rather than
+ * a bare initial in a circle.
  */
 
 const NAV = [
@@ -45,6 +52,7 @@ export function SiteHeader({ overlay = false }) {
   const { cart } = useCart();
   const { events } = useCatalog();
   const navigate = useNavigate();
+  const { pathname, search } = useLocation();
 
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -167,35 +175,58 @@ export function SiteHeader({ overlay = false }) {
         </div>
 
         <nav aria-label={t("explore")} className="ms-2 hidden items-center gap-1 lg:flex">
-          {NAV.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={cn(
-                "rounded-full px-3 py-2 text-sm font-semibold transition",
-                onImage ? "hover:bg-stage-fg/15" : "hover:bg-paper",
-              )}
-            >
-              {t(item.key)}
-            </Link>
-          ))}
+          {NAV.map((item) => {
+            const active = `${pathname}${search}` === item.to || (item.to === "/explorer" && pathname === "/explorer" && !search);
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "rounded-full px-3.5 py-2 text-sm font-semibold transition",
+                  active
+                    ? onImage
+                      ? "bg-stage-fg/15 text-stage-fg"
+                      : "bg-paper text-ink"
+                    : onImage
+                      ? "text-stage-fg/80 hover:bg-stage-fg/10 hover:text-stage-fg"
+                      : "text-muted hover:bg-paper hover:text-ink",
+                )}
+              >
+                {t(item.key)}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="ms-auto flex items-center gap-1.5">
-          {/* Search */}
+          {/* Search — a real pill with its own placeholder text on desktop,
+              not just a bare icon, so it reads as "search this site" rather
+              than a mystery button you have to click to find out. */}
           <Popover
             label={t("searchPh")}
             align="end"
             width="w-80"
             trigger={
-              <span
-                className={cn(
-                  "inline-flex size-10 items-center justify-center rounded-full transition",
-                  onImage ? "bg-stage-fg/15 hover:bg-stage-fg/25" : "bg-paper hover:bg-brume",
-                )}
-              >
-                <Search className="size-4" aria-hidden />
-              </span>
+              <>
+                <span
+                  className={cn(
+                    "hidden items-center gap-2 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition md:inline-flex",
+                    onImage ? "bg-stage-fg/10 text-stage-fg/70 hover:bg-stage-fg/15" : "bg-paper text-muted hover:bg-brume",
+                  )}
+                >
+                  <Search className="size-4 shrink-0" aria-hidden />
+                  {t("searchPh")}
+                </span>
+                <span
+                  className={cn(
+                    "inline-flex size-10 items-center justify-center rounded-full transition md:hidden",
+                    onImage ? "bg-stage-fg/15 hover:bg-stage-fg/25" : "bg-paper hover:bg-brume",
+                  )}
+                >
+                  <Search className="size-4" aria-hidden />
+                </span>
+              </>
             }
           >
             {({ close }) => (
@@ -248,25 +279,31 @@ export function SiteHeader({ overlay = false }) {
             ) : null}
           </Link>
 
-          <Button
-            variant={onImage ? "inverse" : "secondary"}
-            size="sm"
-            className="hidden sm:inline-flex"
-            onClick={() => navigate("/organiser")}
-          >
+          {/* The header's one deliberate brand-pink moment — everywhere else
+              a CTA is the neutral action pill, but this is the single button
+              that should pull the eye on every page, so it keeps the brand
+              fill instead of blending into the rest of the bar. */}
+          <Button variant="brand" size="sm" className="hidden sm:inline-flex" onClick={() => navigate("/organiser")}>
             {t("create")}
           </Button>
 
-          {/* Account — holds the session settings that used to crowd the bar. */}
+          {/* Account — holds the session settings that used to crowd the bar.
+              The avatar got a ring and a bit more size so it reads as the
+              anchor for "your account" rather than a plain coloured circle,
+              and the identity card inside gets a matching large avatar
+              plus a role badge instead of two lines of bare text. */}
           {!loading && user ? (
             <Popover
               label={t("account")}
               align="end"
-              width="w-60"
+              width="w-64"
               trigger={({ open }) => (
                 <span className={cn("flex items-center gap-1.5 rounded-full p-0.5 transition", onImage ? "hover:bg-stage-fg/10" : "hover:bg-paper")}>
                   <span
-                    className="inline-flex size-9 items-center justify-center rounded-full bg-primary font-display text-sm font-extrabold text-primary-fg"
+                    className={cn(
+                      "inline-flex size-9 items-center justify-center rounded-full bg-primary font-display text-sm font-extrabold text-primary-fg ring-2",
+                      onImage ? "ring-stage-fg/25" : "ring-card",
+                    )}
                     aria-hidden
                   >
                     {(user.name ?? user.email ?? "?").charAt(0).toUpperCase()}
@@ -277,9 +314,17 @@ export function SiteHeader({ overlay = false }) {
             >
               {({ close }) => (
                 <>
-                  <div className="border-b border-line/10 px-4 py-3">
-                    <p className="truncate text-sm font-bold">{user.name}</p>
-                    <p className="truncate text-xs text-muted">{user.email}</p>
+                  <div className="flex items-center gap-3 border-b border-line/10 px-4 py-4">
+                    <span
+                      className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-primary font-display text-base font-extrabold text-primary-fg"
+                      aria-hidden
+                    >
+                      {(user.name ?? user.email ?? "?").charAt(0).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold">{user.name}</p>
+                      <p className="truncate text-xs text-muted">{user.email}</p>
+                    </div>
                   </div>
                   <div className="py-1.5">
                     <PopoverItem as={Link} to="/billets" onClick={close}>
