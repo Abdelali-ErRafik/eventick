@@ -70,6 +70,51 @@ model User {
 }
 
 // ---------------------------------------------------------------------------
+// Permissions
+//
+// A user still has exactly ONE role (User.role above). What a role may DO is
+// data, not code: RolePermission rows. Adding a capability to organisers is
+// an INSERT, not a deploy.
+//
+// Deliberately NOT modelled:
+//   - per-user permission overrides. One role per user, permissions per role.
+//     A user needing a different set needs a different role.
+//   - row ownership. "Which rows may I touch" stays an ownership check in the
+//     route (event.organiserId === user.id). Permissions answer "may I do
+//     this kind of thing at all", never "to whose data" — conflating the two
+//     is how one organiser ends up able to edit another's events.
+// ---------------------------------------------------------------------------
+
+model Permission {
+  /// The permission string itself is the primary key (e.g. "events.manage").
+  /// Not a cuid: the key is already unique, stable, and human-readable, and a
+  /// surrogate id would let a re-seed mint a new id and orphan every
+  /// RolePermission row pointing at the old one.
+  key         String   @id
+  description String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id            String     @id @default(cuid())
+  role          Role
+  permissionKey String     @map("permission_key")
+  permission    Permission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  /// Makes seeding idempotent: upsert needs a unique to target, and without
+  /// this every re-seed would duplicate the grant rows.
+  @@unique([role, permissionKey])
+  /// Authorisation reads this by role on (nearly) every authenticated
+  /// request, so it gets its own index.
+  @@index([role])
+  @@map("role_permissions")
+}
+
+// ---------------------------------------------------------------------------
 // Catalog
 // ---------------------------------------------------------------------------
 
