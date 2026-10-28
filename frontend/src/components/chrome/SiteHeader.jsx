@@ -174,7 +174,7 @@ export function SiteHeader({ overlay = false }) {
             )}
           >
             {({ close }) => (
-              <div className="max-h-80 overflow-y-auto py-1.5">
+              <div className="scroll-thin max-h-80 overflow-y-auto py-1.5">
                 <PopoverItem onClick={() => goCity("", close)}>{t("allMorocco")}</PopoverItem>
                 {CITIES.map((city) => (
                   <PopoverItem key={city} onClick={() => goCity(city, close)}>

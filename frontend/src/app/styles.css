@@ -390,6 +390,27 @@
     resize: vertical;
   }
 
+  /* A thin, theme-matched scrollbar for popover/dropdown panels -- the
+     browser default (a thick grey bar, light even in dark mode) was the
+     one element left that ignored the app's styling entirely. */
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line) transparent;
+  }
+
+  .scroll-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scroll-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scroll-thin::-webkit-scrollbar-thumb {
+    background-color: var(--color-line);
+    border-radius: 999px;
+  }
+
   input[type="range"] {
     accent-color: var(--color-primary);
     width: 100%;

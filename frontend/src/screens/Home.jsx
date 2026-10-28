@@ -85,7 +85,13 @@ export default function Home() {
           content-hugging band: this is the one moment on the page meant to
           feel like a poster, not a card, so the headline gets room the rest
           of the page deliberately doesn't give anything else. */}
-      <section className="relative -mt-16 flex min-h-[min(92vh,56rem)] flex-col overflow-hidden bg-stage pt-16 text-stage-fg">
+      {/* No overflow-hidden here on purpose -- the background image below is
+          already pixel-matched to the section via inset-0 + h-full w-full,
+          so clipping was never load-bearing, and it was clipping the search
+          card's custom Dropdown panels (position: absolute) at the section
+          edge, cutting their tops off instead of letting them float over
+          the hero like any other popover in the app. */}
+      <section className="relative -mt-16 flex min-h-[min(92vh,56rem)] flex-col bg-stage pt-16 text-stage-fg">
         <img src="/events/mawazine.jpg" alt="" className="absolute inset-0 h-full w-full object-cover opacity-45" />
         <div className="absolute inset-0 bg-gradient-to-t from-stage via-stage/75 to-stage/35" />
         <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col justify-center px-4 py-16 md:px-8">

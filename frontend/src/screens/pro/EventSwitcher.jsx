@@ -66,7 +66,7 @@ export function EventSwitcher({ events, value, onChange, locale, labels }) {
             </div>
           </div>
 
-          <div className="max-h-80 overflow-y-auto py-1.5">
+          <div className="scroll-thin max-h-80 overflow-y-auto py-1.5">
             {filtered.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-muted">{labels.noMatch}</p>
             ) : (

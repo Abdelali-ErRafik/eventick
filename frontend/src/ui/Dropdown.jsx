@@ -41,7 +41,7 @@ export function Dropdown({ value, onChange, options, placeholder, label, trigger
       )}
     >
       {({ close }) => (
-        <div className="max-h-72 overflow-y-auto py-1.5">
+        <div className="scroll-thin max-h-72 overflow-y-auto py-1.5">
           {options.map((option) => (
             <PopoverItem
               key={option.value}
