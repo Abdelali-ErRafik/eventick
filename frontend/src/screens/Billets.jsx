@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Send } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Heart, Search, Send, Ticket as TicketIcon } from "lucide-react";
 import { toast } from "sonner";
 import { TicketPass, toTicketPassProps } from "../components/TicketPass";
 import { EventCard } from "../components/EventCard";
@@ -10,12 +10,13 @@ import { api, money } from "../api";
 import { useAuth } from "../AuthContext";
 import { useFavorites } from "../FavoritesContext";
 import { useCatalog } from "../useCatalog";
-import { Button, Field, Input, Modal } from "../ui";
+import { Button, EmptyState, Field, Input, Modal } from "../ui";
 import { useI18n } from "../i18n";
 import { daysUntil, longDate, todayKey } from "../utils";
 
 function BilletsInner() {
   const { locale, t, tf } = useI18n();
+  const navigate = useNavigate();
   const { user, refresh } = useAuth();
   const { favorites } = useFavorites();
   const { events } = useCatalog();
@@ -161,7 +162,19 @@ function BilletsInner() {
                 </Link>
               </div>
             ) : (
-              <p className="text-muted">{t("noActive")}</p>
+              // A plain line of text used to be the whole empty state --
+              // no way to act on it. Someone with zero tickets is exactly
+              // who should be pointed at the catalogue, not left reading
+              // "the season is open" with nothing to click.
+              <EmptyState
+                icon={<TicketIcon className="size-6" />}
+                title={t("noActive")}
+                action={
+                  <Button icon={<Search className="size-4" />} onClick={() => navigate("/explorer")}>
+                    {t("exploreMore")}
+                  </Button>
+                }
+              />
             )}
             {active[0] ? <TicketPass {...toTicketPassProps(active[0].ticket)} /> : null}
             {active.length > 1 ? (
@@ -219,7 +232,17 @@ function BilletsInner() {
         {tab === "saved" ? (
           <div className="mt-6">
             <p className="text-sm text-muted">{t("alertsOn")}</p>
-            {savedEvents.length === 0 ? <p className="mt-4 text-muted">{t("noSaved")}</p> : null}
+            {savedEvents.length === 0 ? (
+              <EmptyState
+                icon={<Heart className="size-6" />}
+                title={t("noSaved")}
+                action={
+                  <Button icon={<Search className="size-4" />} onClick={() => navigate("/explorer")}>
+                    {t("exploreMore")}
+                  </Button>
+                }
+              />
+            ) : null}
             <div className="mt-4 grid gap-4 md:grid-cols-3">
               {savedEvents.map((event) => (
                 <EventCard key={event.slug} event={event} />
