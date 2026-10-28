@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
+import { isPlatformAdmin, organiserScope } from "../domain/auth.js";
 import { publicEvent, publicOrderWithContext } from "../lib/serialize.js";
 import { committedForTier, remainingByTier } from "../lib/availability.js";
 import { broadcastRateLimit } from "../middleware/rateLimit.js";
@@ -16,11 +17,24 @@ export const organiserRouter = Router();
 
 organiserRouter.use(authenticate, requireRole("ORGANISER", "ADMIN"));
 
+/**
+ * The `?organiserId=` override on the list routes below. Only ever honoured
+ * for an ADMIN — organiserScope() itself enforces that by ignoring the
+ * argument for a plain ORGANISER, but the query param is read here, once,
+ * rather than at each call site, so there is exactly one place a future
+ * change could get this wrong.
+ */
+function requestedOrganiserId(req: { query: { organiserId?: unknown }; user?: { role: string } }): string | undefined {
+  if (!req.user || !isPlatformAdmin(req.user.role)) return undefined;
+  const value = req.query.organiserId;
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 organiserRouter.get(
   "/events",
   asyncHandler(async (req, res) => {
     const events = await prisma.event.findMany({
-      where: { organiserId: req.user!.id },
+      where: organiserScope(req.user!, requestedOrganiserId(req)),
       include: { tiers: true, lineup: true },
       orderBy: { createdAt: "desc" },
     });
@@ -180,7 +194,7 @@ organiserRouter.get(
   "/orders",
   asyncHandler(async (req, res) => {
     const orders = await prisma.order.findMany({
-      where: { event: { organiserId: req.user!.id } },
+      where: { event: organiserScope(req.user!, requestedOrganiserId(req)) },
       include: { tickets: true, event: { select: { titleFr: true, titleAr: true, slug: true } } },
       orderBy: { createdAt: "desc" },
     });
@@ -229,7 +243,7 @@ organiserRouter.get(
   "/orders/detailed",
   asyncHandler(async (req, res) => {
     const orders = await prisma.order.findMany({
-      where: { event: { organiserId: req.user!.id } },
+      where: { event: organiserScope(req.user!, requestedOrganiserId(req)) },
       include: { tickets: { include: { tier: { include: { event: true } } } } },
       orderBy: { createdAt: "desc" },
     });
@@ -368,8 +382,7 @@ organiserRouter.post(
 organiserRouter.get(
   "/stats",
   asyncHandler(async (req, res) => {
-    const scope = req.user!.role === "ADMIN" ? {} : { organiserId: req.user!.id };
-    const events = await prisma.event.findMany({ where: scope, select: { id: true } });
+    const events = await prisma.event.findMany({ where: organiserScope(req.user!, requestedOrganiserId(req)), select: { id: true } });
     const eventIds = events.map((event) => event.id);
 
     if (eventIds.length === 0) {
