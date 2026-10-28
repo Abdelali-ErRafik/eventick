@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, Flame, Headphones, MapPin, Music, QrCode, RefreshCcw, Theater, Trophy, Utensils, MoonStar } from "lucide-react";
+import { Calendar, Flame, Headphones, MapPin, Music, QrCode, RefreshCcw, Theater, Ticket, Trophy, Utensils, MoonStar } from "lucide-react";
 import { QrMark } from "../components/QrMark";
 import { Shell } from "../components/Shell";
 import { EventCard } from "../components/EventCard";
@@ -188,11 +188,18 @@ export default function Home() {
         {/* Stats, folded into the hero's own footer instead of a separate
             flat band right after it — one less "card after card" beat,
             and the numbers read as proof sitting under the headline rather
-            than a standalone section with nothing else going on. */}
-        <dl className="relative mx-auto grid w-full max-w-7xl grid-cols-3 gap-4 border-t border-stage-fg/10 px-4 py-6 md:px-8">
-          <HeroStat value={live.length} label={t("eventsWord")} />
-          <HeroStat value={cityCount} label={t("activeCities")} />
-          <HeroStat value={seatsAvailable.toLocaleString(locale === "ar" ? "ar-MA" : "fr-MA")} label={t("seatsAvailable")} />
+            than a standalone section with nothing else going on. Each stat
+            now carries its own icon and a real divider between items
+            (border, not just a grid gap) instead of three bare numbers
+            floating in a lot of empty space. */}
+        <dl className="relative mx-auto grid w-full max-w-7xl grid-cols-3 divide-x divide-stage-fg/10 border-t border-stage-fg/10 px-4 py-7 md:px-8 rtl:divide-x-reverse">
+          <HeroStat icon={<Calendar className="size-5" />} value={live.length} label={t("eventsWord")} />
+          <HeroStat icon={<MapPin className="size-5" />} value={cityCount} label={t("activeCities")} />
+          <HeroStat
+            icon={<Ticket className="size-5" />}
+            value={seatsAvailable.toLocaleString(locale === "ar" ? "ar-MA" : "fr-MA")}
+            label={t("seatsAvailable")}
+          />
         </dl>
       </section>
 
@@ -362,13 +369,17 @@ function SearchField({ icon, label, children }) {
   );
 }
 
-function HeroStat({ value, label }) {
-  // The hero's own stat row — plain numbers under the headline, not a tile,
-  // so they read as a caption to the poster rather than another card.
+function HeroStat({ icon, value, label }) {
+  // The hero's own stat row — not a tile, so it still reads as a caption to
+  // the poster rather than another card, but an icon chip and bigger type
+  // give each number the weight the surrounding empty space was asking for.
   return (
-    <div>
-      <dd className="font-display text-2xl font-extrabold tabular-nums md:text-3xl">{value}</dd>
-      <dt className="mt-1 text-xs font-semibold text-stage-muted md:text-sm">{label}</dt>
+    <div className="flex items-center gap-3 px-4 first:ps-0 last:pe-0 sm:gap-4">
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-control bg-stage-fg/10 text-accent">{icon}</span>
+      <div className="min-w-0">
+        <dd className="font-display text-2xl font-extrabold tabular-nums sm:text-3xl md:text-4xl">{value}</dd>
+        <dt className="mt-0.5 truncate text-xs font-semibold text-stage-muted sm:text-sm">{label}</dt>
+      </div>
     </div>
   );
 }
