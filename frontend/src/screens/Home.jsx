@@ -10,11 +10,11 @@ import { categoryLabel, useI18n } from "../i18n";
 import { CITIES, addDays, dateKey, todayKey } from "../utils";
 
 const CATS = [
-  { id: "festivals", icon: Music },
-  { id: "humour", icon: Theater },
-  { id: "sport", icon: Trophy },
-  { id: "nightlife", icon: MoonStar },
-  { id: "culture", icon: Utensils },
+  { id: "festivals", icon: Music, tone: "bg-primary text-primary-fg" },
+  { id: "humour", icon: Theater, tone: "bg-secondary text-secondary-fg" },
+  { id: "sport", icon: Trophy, tone: "bg-accent text-accent-fg" },
+  { id: "nightlife", icon: MoonStar, tone: "bg-stage text-stage-fg" },
+  { id: "culture", icon: Utensils, tone: "bg-info text-info-fg" },
 ];
 
 const TRENDS = [
@@ -177,6 +177,10 @@ export default function Home() {
             {t("seeAll")}
           </Button>
         </div>
+        {/* Solid colour tiles instead of identical white cards with a small
+            icon chip -- each category gets its own block of colour, so the
+            rail reads as five distinct destinations rather than five copies
+            of the same card with different text. */}
         <div className="mt-6 grid snap-x snap-mandatory auto-cols-[72%] grid-flow-col gap-3 overflow-x-auto pb-2 sm:auto-cols-[45%] lg:auto-cols-auto lg:grid-flow-row lg:grid-cols-5 lg:overflow-visible lg:pb-0">
           {CATS.map((item) => {
             const count = live.filter((event) => event.category === item.id).length;
@@ -186,13 +190,11 @@ export default function Home() {
                 key={item.id}
                 type="button"
                 onClick={() => navigate(`/explorer?cat=${item.id}`)}
-                className="rounded-card border border-line/10 bg-card p-4 text-start shadow-card transition snap-start hover:border-primary/40 hover:shadow-pop"
+                className={`${item.tone} group rounded-card p-4 text-start shadow-card transition snap-start hover:-translate-y-0.5 hover:shadow-pop`}
               >
-                <span className="inline-flex size-11 items-center justify-center rounded-control bg-brume text-primary">
-                  <Icon className="size-5" />
-                </span>
-                <p className="mt-3 font-display text-lg font-bold">{categoryLabel(item.id, t)}</p>
-                <p className="text-sm text-muted">{t("eventsCount").replace("{n}", String(count))}</p>
+                <Icon className="size-6 opacity-90" />
+                <p className="mt-4 font-display text-lg font-bold">{categoryLabel(item.id, t)}</p>
+                <p className="mt-0.5 text-sm opacity-75">{t("eventsCount").replace("{n}", String(count))}</p>
               </button>
             );
           })}
@@ -220,35 +222,44 @@ export default function Home() {
         </section>
       ) : null}
 
-      <section className="mx-auto max-w-7xl px-4 py-12 md:px-8">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="font-mono text-xs font-bold tracking-widest text-danger">{t("weekendTitle")}</p>
-            <h2 className="font-display text-3xl font-extrabold">{t("weekendSub")}</h2>
+      {/* A near-black band for the urgency section -- "happening soon"
+          reads as a ticker/alert moment, not another paper-background list,
+          and it is the one place besides the hero and the promo band that
+          goes dark, so the page now alternates light/tint/dark/light/dark
+          instead of staying on paper from the fold down. */}
+      <section className="bg-stage py-14 text-stage-fg">
+        <div className="mx-auto max-w-7xl px-4 md:px-8">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="font-mono text-xs font-bold tracking-widest text-accent">{t("weekendTitle")}</p>
+              <h2 className="font-display text-3xl font-extrabold">{t("weekendSub")}</h2>
+            </div>
+            <Button variant="inverse" onClick={() => navigate("/explorer?quand=month")}>
+              {t("allCities")}
+            </Button>
           </div>
-          <Button variant="ghost" onClick={() => navigate("/explorer?quand=month")}>
-            {t("allCities")}
-          </Button>
-        </div>
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          {imminent.map((event) => (
-            <EventCard key={event.slug} event={event} variant="weekend" />
-          ))}
-        </div>
-        <div className="mt-6 text-center">
-          <Button variant="secondary" size="lg" onClick={() => navigate("/explorer")}>
-            {t("exploreMore")}
-          </Button>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            {imminent.map((event) => (
+              <EventCard key={event.slug} event={event} variant="weekend" />
+            ))}
+          </div>
+          <div className="mt-6 text-center">
+            <Button variant="inverse" size="lg" onClick={() => navigate("/explorer")}>
+              {t("exploreMore")}
+            </Button>
+          </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 pb-14 md:px-8">
-        <p className="text-center font-mono text-xs font-bold tracking-widest text-primary">{t("calmKicker")}</p>
-        <h2 className="mt-2 text-center font-display text-3xl font-extrabold">{t("calmTitle")}</h2>
-        <div className="mx-auto mt-8 grid max-w-5xl gap-8 sm:grid-cols-3 sm:gap-0">
-          <Trust icon={<QrCode className="size-5" />} title={t("perkQr")} body={t("perkQrBody")} />
-          <Trust icon={<RefreshCcw className="size-5" />} title={t("perkRefund")} body={t("perkRefundBody")} />
-          <Trust icon={<Headphones className="size-5" />} title={t("perkLocal")} body={t("perkLocalBody")} />
+      <section className="border-b border-line/10 bg-brume/30 py-14">
+        <div className="mx-auto max-w-7xl px-4 md:px-8">
+          <p className="text-center font-mono text-xs font-bold tracking-widest text-primary">{t("calmKicker")}</p>
+          <h2 className="mt-2 text-center font-display text-3xl font-extrabold">{t("calmTitle")}</h2>
+          <div className="mx-auto mt-8 grid max-w-5xl gap-8 sm:grid-cols-3 sm:gap-0">
+            <Trust icon={<QrCode className="size-5" />} title={t("perkQr")} body={t("perkQrBody")} />
+            <Trust icon={<RefreshCcw className="size-5" />} title={t("perkRefund")} body={t("perkRefundBody")} />
+            <Trust icon={<Headphones className="size-5" />} title={t("perkLocal")} body={t("perkLocalBody")} />
+          </div>
         </div>
       </section>
 
@@ -329,7 +340,7 @@ function Stat({ value, label }) {
 function Trust({ icon, title, body }) {
   return (
     <article className="flex gap-4 sm:flex-col sm:gap-0 sm:border-s sm:border-line/10 sm:px-8 sm:text-center sm:first:border-s-0 sm:first:ps-0 sm:[&:last-child]:pe-0">
-      <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-control bg-brume text-primary sm:mx-auto">
+      <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-control bg-card text-primary shadow-card sm:mx-auto">
         {icon}
       </span>
       <div className="sm:mt-3">
