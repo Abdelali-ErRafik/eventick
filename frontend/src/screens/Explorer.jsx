@@ -231,7 +231,15 @@ export default function Explorer() {
           ))}
         </div>
         <div className="mt-6 grid gap-6 lg:grid-cols-[16rem_1fr]">
-          <aside className="hidden rounded-card border border-line/10 bg-card p-4 shadow-card lg:block">{filters}</aside>
+          {/* h-fit + sticky, not a stretched full-height box -- the sidebar
+              used to end wherever its own content stopped while the grid
+              row (set by the results column) kept going, leaving a tall
+              gap of bare page background below it. Sticky means the filter
+              panel now follows the scroll instead of just sitting in dead
+              space once the results column runs past it. */}
+          <aside className="hidden h-fit rounded-card border border-line/10 bg-card p-4 shadow-card lg:sticky lg:top-20 lg:block">
+            {filters}
+          </aside>
           <div>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-muted">{tf("showing", { n: slice.length, total: filtered.length })}</p>
