@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, LogOut, MapPin, Menu, Moon, Search, Sun, Ticket, User, X } from "lucide-react";
+import { ChevronDown, LayoutDashboard, LogOut, MapPin, Menu, Moon, Search, Sun, Ticket, User, X } from "lucide-react";
 import { useAuth } from "../../AuthContext";
 import { useCart } from "../../CartContext";
 import { useCatalog } from "../../useCatalog";
@@ -35,14 +35,22 @@ import { cn, CITIES } from "../../utils";
  * "action pill, not brand colour" rule), and the account trigger grew a
  * ring + bolder avatar so it reads as a real identity control rather than
  * a bare initial in a circle.
+ *
+ * Shape v5: NAV dropped from 5 items to 3 — "Culture & Théâtre" and
+ * "Espace Pro" were long enough to wrap onto a second line at common
+ * laptop widths, which broke the header's fixed height. Pro moved into
+ * the account popover and the mobile drawer instead of fighting the
+ * other four items for room in a bar that was already full.
  */
 
+// Trimmed from 5 to 3: "Culture & Théâtre" and "Espace Pro" were long enough
+// to wrap onto a second line at common laptop widths, which broke the
+// header's height. Pro is still reachable from the account menu and the
+// mobile drawer below — just not fighting for room in the top bar.
 const NAV = [
   { to: "/explorer", key: "explore" },
   { to: "/explorer?cat=festivals", key: "festivals" },
   { to: "/explorer?cat=humour", key: "concerts" },
-  { to: "/explorer?cat=culture", key: "culture" },
-  { to: "/pro", key: "pro" },
 ];
 
 export function SiteHeader({ overlay = false }) {
@@ -183,7 +191,7 @@ export function SiteHeader({ overlay = false }) {
                 to={item.to}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "rounded-full px-3.5 py-2 text-sm font-semibold transition",
+                  "whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-semibold transition",
                   active
                     ? onImage
                       ? "bg-stage-fg/15 text-stage-fg"
@@ -331,6 +339,14 @@ export function SiteHeader({ overlay = false }) {
                       <Ticket className="size-4 shrink-0 text-muted" aria-hidden />
                       {t("account")}
                     </PopoverItem>
+                    {/* Pro moved here from the top nav, which had no room
+                        left for it once the header got trimmed to 3 items
+                        to stop "Culture & Théâtre" / "Espace Pro" wrapping
+                        onto a second line. */}
+                    <PopoverItem as={Link} to="/pro" onClick={close}>
+                      <LayoutDashboard className="size-4 shrink-0 text-muted" aria-hidden />
+                      {t("pro")}
+                    </PopoverItem>
                     <PopoverItem onClick={toggle}>
                       {resolved === "dark" ? (
                         <Sun className="size-4 shrink-0 text-muted" aria-hidden />
@@ -438,6 +454,15 @@ export function SiteHeader({ overlay = false }) {
                     className="block rounded-control px-3 py-3 text-[15px] font-semibold transition hover:bg-paper"
                   >
                     {t("account")}
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/pro"
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-control px-3 py-3 text-[15px] font-semibold transition hover:bg-paper"
+                  >
+                    {t("pro")}
                   </Link>
                 </li>
               </ul>
