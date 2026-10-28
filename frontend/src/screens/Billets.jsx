@@ -346,10 +346,21 @@ function Mini({ value, label }) {
 function SmallTicket({ ticket, locale, t, onTransfer }) {
   return (
     <article className="flex gap-3 rounded-card border border-line/10 bg-card p-3 shadow-card">
-      <img src={ticket.event.image} alt="" className="size-20 rounded-control object-cover" />
+      <img src={ticket.event.image} alt="" className="size-20 shrink-0 rounded-control object-cover" />
       <div className="min-w-0 flex-1">
-        <h3 className="font-display font-bold">{locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr}</h3>
-        <p className="text-sm text-muted">{ticket.event.city}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="truncate font-display font-bold">{locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr}</h3>
+            {/* Date and price were missing entirely -- the main TicketPass
+                above shows both, so these secondary cards read thinner than
+                they needed to by comparison, with nothing but a title and
+                city to go on. */}
+            <p className="text-sm text-muted">
+              {longDate(ticket.event.start, locale)} · {ticket.event.city}
+            </p>
+          </div>
+          <p className="shrink-0 font-display text-sm font-extrabold tabular-nums">{money(ticket.priceCents)} MAD</p>
+        </div>
         <div className="mt-2 flex gap-2">
           <Link to={`/billet/${ticket.id}`} className="inline-flex h-10 items-center rounded-full bg-action px-3.5 text-sm font-semibold text-action-fg transition hover:bg-action-hover">
             {t("seeQr")}
