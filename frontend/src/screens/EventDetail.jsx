@@ -185,7 +185,7 @@ export default function EventDetail() {
             </span>
           </div>
           <div className="mt-6 flex flex-wrap gap-3">
-            <a href="#billets" className="inline-flex h-12 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover">
+            <a href="#billets" className="inline-flex h-12 items-center rounded-full bg-action px-5 text-sm font-semibold text-action-fg transition hover:bg-action-hover">
               {t("choose")}
             </a>
             <a href={mapsUrl(event)} target="_blank" rel="noreferrer" className="inline-flex h-12 items-center rounded-full border border-stage-fg/30 px-5 text-sm font-semibold">

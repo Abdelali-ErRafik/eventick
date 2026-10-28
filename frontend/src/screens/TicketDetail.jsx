@@ -200,7 +200,7 @@ export default function TicketDetail() {
                 {ticket.status === "TRANSFERRED" ? t("transferred") : ticket.status === "CANCELLED" ? t("cancelled") : t("used")}
               </p>
             ) : (
-              <p className="mt-3 text-center font-bold text-primary">{t("validEntry")}</p>
+              <p className="mt-3 text-center font-bold text-success">{t("validEntry")}</p>
             )}
           </div>
         </article>

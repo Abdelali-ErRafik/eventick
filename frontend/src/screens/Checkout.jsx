@@ -218,7 +218,7 @@ export default function Checkout() {
                     step.active
                       ? "rounded-full bg-action px-3 py-1.5 text-action-fg"
                       : step.done
-                        ? "rounded-full bg-brume px-3 py-1.5 text-primary"
+                        ? "rounded-full bg-success-bg px-3 py-1.5 text-success"
                         : "rounded-full bg-paper px-3 py-1.5 text-muted"
                   }
                 >

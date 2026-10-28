@@ -156,7 +156,7 @@ function BilletsInner() {
             {next ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-card bg-brume px-4 py-3">
                 <p className="font-semibold text-primary">{nextLabel}</p>
-                <Link to={`/billet/${next.id}`} className="inline-flex h-11 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover">
+                <Link to={`/billet/${next.id}`} className="inline-flex h-11 items-center rounded-full bg-action px-4 text-sm font-semibold text-action-fg transition hover:bg-action-hover">
                   {t("showPass")}
                 </Link>
               </div>
@@ -328,7 +328,7 @@ function SmallTicket({ ticket, locale, t, onTransfer }) {
         <h3 className="font-display font-bold">{locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr}</h3>
         <p className="text-sm text-muted">{ticket.event.city}</p>
         <div className="mt-2 flex gap-2">
-          <Link to={`/billet/${ticket.id}`} className="inline-flex h-10 items-center rounded-full bg-primary px-3.5 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover">
+          <Link to={`/billet/${ticket.id}`} className="inline-flex h-10 items-center rounded-full bg-action px-3.5 text-sm font-semibold text-action-fg transition hover:bg-action-hover">
             {t("seeQr")}
           </Link>
           <button type="button" className="h-10 rounded-full border border-line/20 bg-card px-3.5 text-sm font-semibold transition hover:bg-paper" onClick={onTransfer}>

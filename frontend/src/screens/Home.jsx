@@ -278,7 +278,7 @@ export default function Home() {
           <div className="rounded-card bg-card p-4 text-ink shadow-pop">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-muted">{t("previewKicker")}</p>
-              <span className="rounded-full bg-primary px-2 py-1 text-xs font-bold text-primary-fg">{t("valid")}</span>
+              <span className="rounded-full bg-success px-2 py-1 text-xs font-bold text-success-fg">{t("valid")}</span>
             </div>
             <img src="/events/electro.jpg" alt="" className="mt-3 h-36 w-full rounded-control object-cover" />
             <h3 className="mt-3 font-display text-xl font-extrabold">Casablanca Summer Beats</h3>
