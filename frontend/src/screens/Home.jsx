@@ -105,7 +105,7 @@ export default function Home() {
             <p className="mt-6 max-w-xl text-base text-stage-muted lg:text-xl">{t("heroSub")}</p>
           </div>
 
-          <form className="mt-10 max-w-4xl" onSubmit={submitSearch}>
+          <form className="mt-10 w-full" onSubmit={submitSearch}>
             {/* The search card used to be a plain white rectangle of three
                 bare <select> elements -- functional, but it looked like any
                 admin form, not the one thing on the page meant to invite a
