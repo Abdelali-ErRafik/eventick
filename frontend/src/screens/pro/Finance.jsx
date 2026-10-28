@@ -17,7 +17,7 @@ const PLANS = [
 export default function Finance() {
   const { locale } = useI18n();
   const t = text[locale];
-  const { isAdmin, organisers } = useOrganisers();
+  const { maySeeAllOrganisers, organisers } = useOrganisers();
   const [orders, setOrders] = useState(null);
   const [plan, setPlan] = useState("starter");
   const [organiserId, setOrganiserId] = useState("");
@@ -57,7 +57,7 @@ export default function Finance() {
         title={t.finance}
         sub={t.financeSub}
         actions={
-          isAdmin ? (
+          maySeeAllOrganisers ? (
             <label className="flex flex-col gap-1.5">
               <span className="ps-0.5 text-[11px] font-bold uppercase tracking-wide text-muted">{t.allOrganisers}</span>
               <select

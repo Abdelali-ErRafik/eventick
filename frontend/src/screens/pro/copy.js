@@ -220,6 +220,60 @@ export const text = {
     cannotChangeOwnRole: "Vous ne pouvez pas modifier votre propre rôle.",
     noUsersYet: "Aucun utilisateur.",
     noUsersFilter: "Aucun utilisateur ne correspond à ces filtres.",
+
+    newUser: "Nouvel utilisateur",
+
+
+    required: "Ce champ est requis.",
+
+
+    invalidEmail: "Adresse e-mail invalide.",
+
+    newUserSub: "Le compte est actif immédiatement. Communiquez le mot de passe à la personne, elle pourra le changer ensuite.",
+
+    fullName: "Nom complet",
+
+    email: "E-mail",
+
+    password: "Mot de passe",
+
+    passwordHint: "8 caractères minimum.",
+
+    roleField: "Rôle",
+
+    roleHintCustomer: "Achète des billets. Aucun accès à l'espace pro.",
+
+    roleHintOrganiser: "Crée des événements, vend et contrôle l'entrée — sur ses propres dates uniquement.",
+
+    roleHintAdmin: "Accès complet à la plateforme, y compris la gestion des utilisateurs et des permissions.",
+
+    createUser: "Créer le compte",
+
+    userCreated: "Compte créé.",
+
+    generate: "Générer",
+
+    permissions: "Permissions",
+
+    permissionsSub: "Ce que chaque rôle peut faire. Les changements s'appliquent immédiatement, à tous les comptes du rôle.",
+
+    permission: "Permission",
+
+    permGranted: "Permission accordée.",
+
+    permRevoked: "Permission retirée.",
+
+    permLocked: "Cette permission ne peut pas être retirée aux administrateurs : sans elle, plus personne ne pourrait gérer les permissions.",
+
+    permScopeWarn: "Donne accès aux données de tous les organisateurs, pas seulement aux siennes.",
+
+    confirmPermTitle: "Modifier les permissions ?",
+
+    confirmPermRevoke: "Retirer « {perm} » à {role} affectera tous les comptes de ce rôle, immédiatement.",
+
+    apply: "Appliquer",
+
+    yourRole: "Votre rôle",
     allOrganisers: "Tous les organisateurs",
     organiser: "Organisateur",
     scopeAdmin: "Vous voyez les données de tous les organisateurs.",
@@ -442,6 +496,60 @@ export const text = {
     cannotChangeOwnRole: "You cannot change your own role.",
     noUsersYet: "No users.",
     noUsersFilter: "No users match these filters.",
+
+    newUser: "New user",
+
+
+    required: "This field is required.",
+
+
+    invalidEmail: "That is not a valid email address.",
+
+    newUserSub: "The account works right away. Pass the password on to the person — they can change it afterwards.",
+
+    fullName: "Full name",
+
+    email: "Email",
+
+    password: "Password",
+
+    passwordHint: "8 characters minimum.",
+
+    roleField: "Role",
+
+    roleHintCustomer: "Buys tickets. No access to the pro area.",
+
+    roleHintOrganiser: "Creates events, sells and checks people in — on their own dates only.",
+
+    roleHintAdmin: "Full platform access, including managing users and permissions.",
+
+    createUser: "Create account",
+
+    userCreated: "Account created.",
+
+    generate: "Generate",
+
+    permissions: "Permissions",
+
+    permissionsSub: "What each role can do. Changes apply immediately, to every account with that role.",
+
+    permission: "Permission",
+
+    permGranted: "Permission granted.",
+
+    permRevoked: "Permission revoked.",
+
+    permLocked: "This one cannot be taken from admins: without it nobody could manage permissions any more.",
+
+    permScopeWarn: "Grants access to every organiser's data, not just their own.",
+
+    confirmPermTitle: "Change permissions?",
+
+    confirmPermRevoke: "Taking “{perm}” from {role} affects every account with that role, immediately.",
+
+    apply: "Apply",
+
+    yourRole: "Your role",
     allOrganisers: "All organisers",
     organiser: "Organiser",
     scopeAdmin: "You are viewing every organiser's data.",
@@ -663,6 +771,60 @@ export const text = {
     cannotChangeOwnRole: "لا يمكنك تغيير دورك الخاص.",
     noUsersYet: "لا يوجد مستخدمون.",
     noUsersFilter: "لا يوجد مستخدمون يطابقون هذه الفلاتر.",
+
+    newUser: "مستخدم جديد",
+
+
+    required: "هذا الحقل مطلوب.",
+
+
+    invalidEmail: "عنوان البريد الإلكتروني غير صالح.",
+
+    newUserSub: "الحساب يعمل فورًا. أعطِ كلمة المرور للشخص، ويمكنه تغييرها بعد ذلك.",
+
+    fullName: "الاسم الكامل",
+
+    email: "البريد الإلكتروني",
+
+    password: "كلمة المرور",
+
+    passwordHint: "٨ أحرف على الأقل.",
+
+    roleField: "الدور",
+
+    roleHintCustomer: "يشتري التذاكر. لا وصول إلى مساحة المنظم.",
+
+    roleHintOrganiser: "ينشئ الأحداث ويبيع ويتحقق من الدخول — في تواريخه الخاصة فقط.",
+
+    roleHintAdmin: "وصول كامل إلى المنصة، بما في ذلك إدارة المستخدمين والصلاحيات.",
+
+    createUser: "إنشاء الحساب",
+
+    userCreated: "تم إنشاء الحساب.",
+
+    generate: "توليد",
+
+    permissions: "الصلاحيات",
+
+    permissionsSub: "ما يمكن لكل دور فعله. التغييرات تُطبَّق فورًا على كل الحسابات التي تحمل هذا الدور.",
+
+    permission: "الصلاحية",
+
+    permGranted: "تم منح الصلاحية.",
+
+    permRevoked: "تم سحب الصلاحية.",
+
+    permLocked: "لا يمكن سحب هذه الصلاحية من المديرين: بدونها لن يستطيع أحد إدارة الصلاحيات.",
+
+    permScopeWarn: "يمنح الوصول إلى بيانات جميع المنظمين، وليس بياناته فقط.",
+
+    confirmPermTitle: "تغيير الصلاحيات؟",
+
+    confirmPermRevoke: "سحب «{perm}» من {role} سيؤثر على كل الحسابات التي تحمل هذا الدور، فورًا.",
+
+    apply: "تطبيق",
+
+    yourRole: "دورك",
     allOrganisers: "كل المنظمين",
     organiser: "المنظم",
     scopeAdmin: "أنت تشاهد بيانات جميع المنظمين.",

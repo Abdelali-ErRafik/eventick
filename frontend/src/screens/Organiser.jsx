@@ -418,7 +418,7 @@ function OrganiserInner() {
 
 export default function Organiser() {
   return (
-    <Protected roles={["ORGANISER", "ADMIN"]}>
+    <Protected permission="events.manage">
       <OrganiserInner />
     </Protected>
   );

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Route, Routes } from "react-router-dom";
-import { CalendarDays, LayoutDashboard, LayoutGrid, QrCode, ReceiptText, ShieldCheck, Tags, Wallet } from "lucide-react";
+import { CalendarDays, KeyRound, LayoutDashboard, LayoutGrid, QrCode, ReceiptText, ShieldCheck, Tags, Wallet } from "lucide-react";
 import { Protected } from "../../components/Protected";
 import { useAuth } from "../../AuthContext";
 import { api } from "../../api";
@@ -16,13 +16,14 @@ import Finance from "./Finance";
 import Offers from "./Offers";
 import Placements from "./Placements";
 import Users from "./Users";
+import Permissions from "./Permissions";
 
 const ic = (Icon) => <Icon size={19} strokeWidth={2} aria-hidden />;
 
 function ProInner() {
   const { locale } = useI18n();
   const t = text[locale];
-  const { isAdmin } = useAuth();
+  const { canManageUsers } = useAuth();
   const [todayCount, setTodayCount] = useState(0);
 
   // Badge on Réservations: tickets still to be scanned for events happening today.
@@ -44,10 +45,14 @@ function ProInner() {
     };
   }, []);
 
-  // The Administration group only exists for isAdmin -- this is the actual
-  // fix for "ORGANISER and ADMIN see the same pages": every other section
-  // here is shown to both, so a distinct capability needed its own group an
-  // organiser never sees, not just a new item folded into an existing one.
+  // The Administration group only appears for whoever holds users.manage --
+  // this is the actual fix for "ORGANISER and ADMIN see the same pages":
+  // every other section here is shown to both, so a distinct capability
+  // needed its own group, not a new item folded into an existing one.
+  //
+  // Gated on the permission rather than the role so that granting
+  // users.manage to ORGANISER from the permissions screen reveals this item
+  // without a code change -- which is the whole point of the table.
   const sections = [
     { group: t.grpPilotage, to: "/pro", end: true, label: t.overview, icon: ic(LayoutDashboard) },
     { group: t.grpPilotage, to: "/pro/orders", label: t.orders, icon: ic(ReceiptText), badge: todayCount },
@@ -56,7 +61,12 @@ function ProInner() {
     { group: t.grpCatalogue, to: "/pro/offers", label: t.offers, icon: ic(Tags) },
     { group: t.grpOperations, to: "/pro/gate", label: t.gate, icon: ic(QrCode) },
     { group: t.grpFinances, to: "/pro/finance", label: t.finance, icon: ic(Wallet) },
-    ...(isAdmin ? [{ group: t.grpAdmin, to: "/pro/users", label: t.team, icon: ic(ShieldCheck) }] : []),
+    ...(canManageUsers
+      ? [
+          { group: t.grpAdmin, to: "/pro/users", label: t.team, icon: ic(ShieldCheck) },
+          { group: t.grpAdmin, to: "/pro/permissions", label: t.permissions, icon: ic(KeyRound) },
+        ]
+      : []),
   ];
 
   return (
@@ -76,8 +86,16 @@ function ProInner() {
         <Route
           path="users"
           element={
-            <Protected roles={["ADMIN"]}>
+            <Protected permission="users.manage">
               <Users />
+            </Protected>
+          }
+        />
+        <Route
+          path="permissions"
+          element={
+            <Protected permission="users.manage">
+              <Permissions />
             </Protected>
           }
         />
@@ -88,7 +106,7 @@ function ProInner() {
 
 export default function Pro() {
   return (
-    <Protected roles={["ORGANISER", "ADMIN"]}>
+    <Protected permission="events.manage">
       <ConfirmProvider>
         <ProInner />
       </ConfirmProvider>

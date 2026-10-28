@@ -15,7 +15,7 @@ export default function Events() {
   const t = text[locale];
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const { isAdmin, organisers } = useOrganisers();
+  const { maySeeAllOrganisers, organisers } = useOrganisers();
   const [events, setEvents] = useState(null);
   const [orders, setOrders] = useState(null);
   const [query, setQuery] = useState("");
@@ -202,7 +202,7 @@ export default function Events() {
       <FilterBar
         search={{ value: query, onChange: setQuery, placeholder: t.search }}
         controls={[
-          ...(isAdmin
+          ...(maySeeAllOrganisers
             ? [
                 {
                   key: "organiser",

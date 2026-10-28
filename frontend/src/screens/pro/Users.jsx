@@ -1,16 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
-import { ShieldCheck } from "lucide-react";
+import { RefreshCw, ShieldCheck, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { useAuth } from "../../AuthContext";
 import { useI18n } from "../../i18n";
 import { longDate } from "../../utils";
 import { useConfirm } from "./ConfirmContext";
-import { Badge, EmptyState, FilterBar, InfoTip, PageHead, Pager, PersonCell } from "./ui";
+import { Badge, Btn, EmptyState, FilterBar, InfoTip, PageHead, Pager, PersonCell } from "./ui";
+import { Field, Input, Modal, Select } from "../../ui";
 import { text } from "./copy";
 
 const PAGE_SIZE_DEFAULT = 20;
 const ROLES = ["CUSTOMER", "ORGANISER", "ADMIN"];
+
+/**
+ * A readable throwaway password for the account the admin is creating.
+ *
+ * The admin has to read this out or paste it into a message, so it avoids
+ * the characters that get misread when retyped (O/0, l/1, I). It is a
+ * first password, not a secret to keep: the backend hashes it with the
+ * same bcrypt cost as a self-registered one, and the holder can change it.
+ */
+function suggestPassword() {
+  const alphabet = "abcdefghijkmnpqrstuvwxyzACDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = new Uint32Array(14);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (n) => alphabet[n % alphabet.length]).join("");
+}
 
 /**
  * Administration — the users directory, ADMIN-only (both at the route via
@@ -37,6 +53,21 @@ export default function Users() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(PAGE_SIZE_DEFAULT);
   const [busyId, setBusyId] = useState(null);
+
+  // Create-user form. Kept in this screen rather than on its own route: it
+  // is one POST, and landing back on the directory with the new row visible
+  // is the confirmation that it worked.
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState(null);
+  const [errors, setErrors] = useState({});
+
+  const openCreate = () => {
+    setForm({ name: "", email: "", password: suggestPassword(), role: "ORGANISER" });
+    setErrors({});
+    setOpen(true);
+  };
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const load = () => api.get("/auth/users").then((data) => setUsers(data.users));
 
@@ -86,9 +117,46 @@ export default function Users() {
     }
   };
 
+  // Validated here as well as server-side so the message lands on the field
+  // rather than arriving as a toast that does not say which input is wrong.
+  const submit = async (e) => {
+    e.preventDefault();
+    const next = {};
+    if (!form.name.trim()) next.name = t.required;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) next.email = t.invalidEmail;
+    if (form.password.length < 8) next.password = t.passwordHint;
+    setErrors(next);
+    if (Object.keys(next).length) return;
+
+    setSaving(true);
+    try {
+      await api.post("/auth/users", { ...form, name: form.name.trim(), email: form.email.trim() });
+      await load();
+      setOpen(false);
+      toast.success(t.userCreated);
+    } catch (err) {
+      // 422 is the duplicate-email case, which belongs on the email field.
+      if (err.status === 422) setErrors({ email: err.message });
+      else toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const roleHint = (value) =>
+    value === "ADMIN" ? t.roleHintAdmin : value === "ORGANISER" ? t.roleHintOrganiser : t.roleHintCustomer;
+
   return (
     <div>
-      <PageHead title={t.team} sub={t.teamSub} />
+      <PageHead
+        title={t.team}
+        sub={t.teamSub}
+        actions={
+          <Btn icon={<UserPlus className="size-4" />} onClick={openCreate}>
+            {t.newUser}
+          </Btn>
+        }
+      />
 
       <FilterBar
         search={{ value: query, onChange: setQuery, placeholder: t.search }}
@@ -167,6 +235,93 @@ export default function Users() {
       )}
 
       <Pager page={page} pages={pages} onPage={setPage} limit={limit} onLimit={setLimit} labels={{ rows: t.rows, prev: t.prev, next: t.next }} />
+
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={t.newUser}
+        sub={t.newUserSub}
+        icon={<UserPlus className="size-5" />}
+        footer={
+          <>
+            <Btn variant="secondary" onClick={() => setOpen(false)}>
+              {t.close}
+            </Btn>
+            <Btn type="submit" form="user-form" loading={saving}>
+              {t.createUser}
+            </Btn>
+          </>
+        }
+      >
+        {form ? (
+          <form id="user-form" className="grid gap-4" onSubmit={submit}>
+            <Field label={t.fullName} required error={errors.name}>
+              {({ id, describedBy, invalid }) => (
+                <Input
+                  id={id}
+                  describedBy={describedBy}
+                  invalid={invalid}
+                  value={form.name}
+                  onChange={set("name")}
+                  autoComplete="off"
+                />
+              )}
+            </Field>
+
+            <Field label={t.email} required error={errors.email}>
+              {({ id, describedBy, invalid }) => (
+                <Input
+                  id={id}
+                  describedBy={describedBy}
+                  invalid={invalid}
+                  type="email"
+                  value={form.email}
+                  onChange={set("email")}
+                  autoComplete="off"
+                />
+              )}
+            </Field>
+
+            <Field label={t.password} required error={errors.password} hint={t.passwordHint}>
+              {({ id, describedBy, invalid }) => (
+                <div className="flex items-center gap-2">
+                  {/* Shown in clear text on purpose: the admin has to pass it
+                      on, and a masked field they cannot read is only a hazard
+                      here -- there is no secret of their own to shoulder-surf. */}
+                  <Input
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    className="font-mono"
+                    value={form.password}
+                    onChange={set("password")}
+                    autoComplete="off"
+                  />
+                  <Btn
+                    variant="secondary"
+                    icon={<RefreshCw className="size-4" />}
+                    onClick={() => setForm((f) => ({ ...f, password: suggestPassword() }))}
+                  >
+                    {t.generate}
+                  </Btn>
+                </div>
+              )}
+            </Field>
+
+            <Field label={t.roleField} required hint={roleHint(form.role)}>
+              {({ id, describedBy }) => (
+                <Select id={id} describedBy={describedBy} value={form.role} onChange={set("role")}>
+                  {ROLES.map((value) => (
+                    <option key={value} value={value}>
+                      {roleLabel(value)}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+          </form>
+        ) : null}
+      </Modal>
     </div>
   );
 }

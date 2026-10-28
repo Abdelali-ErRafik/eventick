@@ -66,10 +66,7 @@ export function AuthProvider({ children }) {
   //
   // `can(permission)` is the seam every call site should use: it reads the
   // permission list the server sends on /auth/me, so when a role's powers
-  // change in the database no frontend code has to change with it. isAdmin
-  // and canUsePro remain for the two cases that are genuinely about *who
-  // you are* rather than *what you may do* — reaching the admin area at
-  // all, and seeing the staff dashboard link.
+  // change in the database no frontend code has to change with it.
   const permissions = user?.permissions ?? [];
   const can = useCallback(
     (permission) => permissions.includes(permission),
@@ -78,12 +75,25 @@ export function AuthProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [user?.id, permissions.join(",")],
   );
-  const isAdmin = user?.role === "ADMIN";
-  const canUsePro = user?.role === "ORGANISER" || user?.role === "ADMIN";
+
+  // Derived from capability, not role. If an admin revokes events.manage
+  // from ORGANISER, the dashboard link has to disappear with it — gating
+  // this on the role name instead would leave the link visible pointing at
+  // a screen that now 403s on every call it makes.
+  const canUsePro = permissions.includes("events.manage");
+
+  // No `isAdmin` here on purpose. Every UI question that looked like "is
+  // this person an admin" turned out to be a capability question with a
+  // different answer: the pro area is events.manage, the admin section is
+  // users.manage, and the cross-organiser filters are scope.any. Exposing a
+  // role flag alongside those just invites the next guard to reach for the
+  // role name and drift from what the server actually enforces. Anything
+  // that genuinely needs the role itself can read `user.role`.
+  const canManageUsers = permissions.includes("users.manage");
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, register, logout, refresh, isAdmin, canUsePro, can, permissions }}
+      value={{ user, loading, login, register, logout, refresh, canUsePro, canManageUsers, can, permissions }}
     >
       {children}
     </AuthContext.Provider>

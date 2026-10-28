@@ -153,6 +153,11 @@ async function main() {
     "/pro/finance",
     "/pro/placements",
     "/pro/offers",
+    // Admin-only screens. The guard is client-side, so the HOST must
+    // still serve them on a cold load -- a 404 here would mean an admin
+    // reloading the page lands on nothing.
+    "/pro/users",
+    "/pro/permissions",
     "/aide",
     "/legal",
     // Dynamic routes, hit directly as a deep link or a reload would.
@@ -569,10 +574,24 @@ async function main() {
     const key = ["promoCodes", "promos", "codes"].find((k) => Array.isArray(promos.data?.[k]));
     record("the promo list is under a key Offers can read", !!key, key ?? JSON.stringify(Object.keys(promos.data ?? {})));
 
-    const promo = await check("POST /promo creates a code", "POST", "/promo", 201, {
+    // Scoped to an event the organiser owns: allowed, and the only kind
+    // Offers.jsx lets a non-admin create.
+    const promo = await check("POST /promo creates a code on your own event", "POST", "/promo", 201, {
       token: tokens.organiser,
-      body: { code: `FETEST${SUFFIX}`.slice(0, 20), kind: "PERCENT", value: 10, maxUses: 5 },
+      body: { code: `FETEST${SUFFIX}`.slice(0, 20), kind: "PERCENT", value: 10, maxUses: 5, eventSlug: slug },
       shape: (d) => typeof (d?.promoCode?.id ?? d?.promo?.id ?? d?.id) === "string",
+    });
+    // Omitting eventSlug asks for a PLATFORM-WIDE code, valid on every
+    // event including other organisers'. That is a discount on other
+    // people's sales, so it needs scope.any.
+    await check("an organiser cannot create a platform-wide code", "POST", "/promo", 403, {
+      token: tokens.organiser,
+      body: { code: `FEGLOBAL${SUFFIX}`.slice(0, 20), kind: "PERCENT", value: 10, maxUses: 5 },
+    });
+    const globalPromo = await check("an admin can create a platform-wide code", "POST", "/promo", 201, {
+      token: tokens.admin,
+      body: { code: `FEADMIN${SUFFIX}`.slice(0, 20), kind: "PERCENT", value: 10, maxUses: 5 },
+      shape: (d) => (d?.promo ?? d?.promoCode)?.eventId === null,
     });
     const promoId = promo.data?.promoCode?.id ?? promo.data?.promo?.id ?? promo.data?.id;
     // Offers.jsx's "bump" button raises the usage cap; maxUses is the only
@@ -590,6 +609,22 @@ async function main() {
       token: tokens.organiser,
     });
 
+    // PATCH and DELETE had no ownership check at all before 8bac36d: any
+    // organiser could bump the cap on, or delete, a platform-wide code.
+    const globalId = globalPromo.data?.promo?.id ?? globalPromo.data?.promoCode?.id;
+    if (globalId) {
+      await check("an organiser cannot bump a platform-wide code", "PATCH", `/promo/${globalId}`, 403, {
+        token: tokens.organiser,
+        body: { maxUses: 999 },
+      });
+      await check("an organiser cannot delete a platform-wide code", "DELETE", `/promo/${globalId}`, 403, {
+        token: tokens.organiser,
+      });
+      await check("the admin who made it can delete it", "DELETE", `/promo/${globalId}`, [200, 204], {
+        token: tokens.admin,
+      });
+    }
+
     // Audience + broadcast (Events.jsx contact modal)
     await check("GET audience fills the contact modal", "GET", `/organiser/events/${slug}/audience`, 200, {
       token: tokens.organiser,
@@ -600,6 +635,107 @@ async function main() {
     await check("a CUSTOMER cannot read /organiser/stats", "GET", "/organiser/stats", 403, { token: tokens.customer });
     await check("a CUSTOMER cannot read /organiser/orders", "GET", "/organiser/orders", 403, { token: tokens.customer });
     await check("anonymous cannot read /organiser/events", "GET", "/organiser/events", 401);
+  }
+
+  // ── Users.jsx + Permissions.jsx ───────────────────────────────────────
+  setGroup("ADMIN  Users.jsx, Permissions.jsx");
+  {
+    // Permissions.jsx reads data.permissions[].{key,description,locked} and
+    // data.roles[ROLE][] directly, so the shape is the contract.
+    await check("GET /auth/permissions fills the matrix", "GET", "/auth/permissions", 200, {
+      token: tokens.admin,
+      shape: (d) =>
+        Array.isArray(d?.permissions) &&
+        d.permissions.length > 0 &&
+        d.permissions.every((x) => typeof x.key === "string" && typeof x.description === "string" && typeof x.locked === "boolean") &&
+        ["CUSTOMER", "ORGANISER", "ADMIN"].every((r) => Array.isArray(d?.roles?.[r])),
+    });
+
+    await check("GET /auth/users fills the directory", "GET", "/auth/users", 200, {
+      token: tokens.admin,
+      shape: (d) =>
+        Array.isArray(d?.users) &&
+        d.users.every((u) => "role" in u && "eventCount" in u && "orderCount" in u && "createdAt" in u),
+    });
+
+    // The create-user form. A fresh address each run so re-runs stay green.
+    const email = `fe-admin-${SUFFIX}@eventick.ma`;
+    const made = await check("POST /auth/users creates an account with a role", "POST", "/auth/users", 201, {
+      token: tokens.admin,
+      body: { name: "Frontend Test Organiser", email, password: "fe-test-password-2026", role: "ORGANISER" },
+      shape: (d) => d?.user?.role === "ORGANISER" && typeof d?.user?.id === "string",
+    });
+    await check("a duplicate email is a 422 the form pins on the field", "POST", "/auth/users", 422, {
+      token: tokens.admin,
+      body: { name: "Dupe", email, password: "fe-test-password-2026", role: "CUSTOMER" },
+      shape: (d) => typeof d?.error === "string" && d.error.length > 0,
+    });
+    await check("a password under 8 characters is refused", "POST", "/auth/users", [400, 422], {
+      token: tokens.admin,
+      body: { name: "Weak", email: `fe-weak-${SUFFIX}@eventick.ma`, password: "short", role: "CUSTOMER" },
+    });
+
+    // The new account must actually work, with exactly the role it was given.
+    const fresh = await api("POST", "/auth/login", { body: { email, password: "fe-test-password-2026" } });
+    record("the created account can log in", fresh.status === 200, `${fresh.status}`);
+    if (fresh.status === 200) {
+      await check("it holds events.manage, so canUsePro shows Espace Pro", "GET", "/auth/me", 200, {
+        token: fresh.data.token,
+        shape: (d) =>
+          Array.isArray(d?.user?.permissions) &&
+          d.user.permissions.includes("events.manage") &&
+          !d.user.permissions.includes("users.manage"),
+      });
+    }
+
+    // Toggling a grant. CUSTOMER/promo.manage is safe to move: nothing in
+    // this suite depends on a customer holding it.
+    await check("granting a permission returns the new list", "POST", "/auth/roles/CUSTOMER/permissions", 200, {
+      token: tokens.admin,
+      body: { permission: "promo.manage" },
+      shape: (d) => (d?.permissions ?? []).includes("promo.manage"),
+    });
+    // Liveness: permissions resolve per request, so the customer's existing
+    // token must reflect the change without re-logging in.
+    await check("an existing token picks the grant up immediately", "GET", "/auth/me", 200, {
+      token: tokens.customer,
+      shape: (d) => (d?.user?.permissions ?? []).includes("promo.manage"),
+    });
+    await check("revoking it returns the trimmed list", "DELETE", "/auth/roles/CUSTOMER/permissions/promo.manage", 200, {
+      token: tokens.admin,
+      shape: (d) => !(d?.permissions ?? []).includes("promo.manage"),
+    });
+    await check("and the token loses it again", "GET", "/auth/me", 200, {
+      token: tokens.customer,
+      shape: (d) => !(d?.user?.permissions ?? []).includes("promo.manage"),
+    });
+
+    // The guard Permissions.jsx renders as a disabled, padlocked button.
+    await check("ADMIN cannot lose users.manage", "DELETE", "/auth/roles/ADMIN/permissions/users.manage", 422, {
+      token: tokens.admin,
+    });
+
+    // Both screens must be closed to everyone else. 403, never 401 -- the
+    // SPA signs the user out on a 401, so a wrong code here logs an
+    // organiser out of the dashboard they are entitled to.
+    for (const [who, token] of [["an ORGANISER", tokens.organiser], ["a CUSTOMER", tokens.customer]]) {
+      await check(`${who} cannot read the permissions matrix`, "GET", "/auth/permissions", 403, { token });
+      await check(`${who} cannot read the user directory`, "GET", "/auth/users", 403, { token });
+      await check(`${who} cannot create a user`, "POST", "/auth/users", 403, {
+        token,
+        body: { name: "Nope", email: `nope-${SUFFIX}-${who.length}@eventick.ma`, password: "nope-password-2026", role: "ADMIN" },
+      });
+      await check(`${who} cannot grant themselves a permission`, "POST", "/auth/roles/ORGANISER/permissions", 403, {
+        token,
+        body: { permission: "scope.any" },
+      });
+    }
+    await check("anonymous cannot read the permissions matrix", "GET", "/auth/permissions", 401);
+
+    // There is no DELETE /auth/users/:id, so the account this suite creates
+    // cannot be removed over the API. Named here rather than left as silent
+    // litter in the very directory this screen lists.
+    record("the test account is left behind (no delete endpoint)", made.status === 201, made.status === 201 ? email : "not created");
   }
 
   // ── Gate.jsx + QrScanner.jsx + offlineGate.js ─────────────────────────
