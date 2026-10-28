@@ -294,22 +294,28 @@ export function SiteHeader({ overlay = false }) {
             )}
           </Popover>
 
-          {/* Cart */}
-          <Link
-            to="/paiement"
-            aria-label={cartCount > 0 ? `${t("cart")} (${cartCount})` : t("cart")}
-            className={cn(
-              "relative inline-flex size-10 items-center justify-center rounded-full transition",
-              onImage ? "bg-stage-fg/15 hover:bg-stage-fg/25" : "bg-paper hover:bg-brume",
-            )}
-          >
-            <Ticket className="size-4" aria-hidden />
-            {cartCount > 0 ? (
+          {/* Cart — only once there is something in it.
+              NOT gated on being logged in: guest checkout is deliberate here
+              (Order.customerId is nullable, "null = guest checkout" in
+              schema.prisma, and the checkout routes use optionalAuth), so
+              hiding this from signed-out visitors would strand a guest who
+              picked tickets and leave them no way to pay. An empty cart has
+              nothing to show either way, logged in or not. */}
+          {cartCount > 0 ? (
+            <Link
+              to="/paiement"
+              aria-label={`${t("cart")} (${cartCount})`}
+              className={cn(
+                "relative inline-flex size-10 items-center justify-center rounded-full transition",
+                onImage ? "bg-stage-fg/15 hover:bg-stage-fg/25" : "bg-paper hover:bg-brume",
+              )}
+            >
+              <Ticket className="size-4" aria-hidden />
               <span className="absolute -end-0.5 -top-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-extrabold text-accent-fg tabular-nums">
                 {cartCount}
               </span>
-            ) : null}
-          </Link>
+            </Link>
+          ) : null}
 
           {/* The header's one deliberate brand-pink moment — everywhere else
               a CTA is the neutral action pill, but this is the single button
