@@ -9,11 +9,16 @@ import { Button, Container, Dropdown, ErrorState, LoadingState } from "../ui";
 import { categoryLabel, useI18n } from "../i18n";
 import { CITIES, addDays, dateKey, todayKey } from "../utils";
 
+// nightlife used to fill bg-stage (near-black) with text-stage-fg -- fine on
+// the old light-page version of this rail, but once the section sits on the
+// app's own dark paper background that tile nearly vanished into it. Danger
+// (a warm red) reads clearly against both the light and dark page background,
+// same as every other tile here.
 const CATS = [
   { id: "festivals", icon: Music, tone: "bg-primary text-primary-fg" },
   { id: "humour", icon: Theater, tone: "bg-secondary text-secondary-fg" },
   { id: "sport", icon: Trophy, tone: "bg-accent text-accent-fg" },
-  { id: "nightlife", icon: MoonStar, tone: "bg-stage text-stage-fg" },
+  { id: "nightlife", icon: MoonStar, tone: "bg-danger text-danger-fg" },
   { id: "culture", icon: Utensils, tone: "bg-info text-info-fg" },
 ];
 
@@ -216,7 +221,10 @@ export default function Home() {
         {/* Solid colour tiles instead of identical white cards with a small
             icon chip -- each category gets its own block of colour, so the
             rail reads as five distinct destinations rather than five copies
-            of the same card with different text. */}
+            of the same card with different text. The icon now sits in its
+            own translucent chip rather than floating loose on the fill, and
+            a soft diagonal highlight gives the flat colour some depth
+            instead of reading as a plain swatch. */}
         <div className="mt-6 grid snap-x snap-mandatory auto-cols-[72%] grid-flow-col gap-3 overflow-x-auto pb-2 sm:auto-cols-[45%] lg:auto-cols-auto lg:grid-flow-row lg:grid-cols-5 lg:overflow-visible lg:pb-0">
           {CATS.map((item) => {
             const count = live.filter((event) => event.category === item.id).length;
@@ -226,11 +234,14 @@ export default function Home() {
                 key={item.id}
                 type="button"
                 onClick={() => navigate(`/explorer?cat=${item.id}`)}
-                className={`${item.tone} group rounded-card p-4 text-start shadow-card transition snap-start hover:-translate-y-0.5 hover:shadow-pop`}
+                className={`${item.tone} group relative overflow-hidden rounded-card p-4 text-start shadow-card transition snap-start hover:-translate-y-0.5 hover:shadow-pop`}
               >
-                <Icon className="size-6 opacity-90" />
-                <p className="mt-4 font-display text-lg font-bold">{categoryLabel(item.id, t)}</p>
-                <p className="mt-0.5 text-sm opacity-75">{t("eventsCount").replace("{n}", String(count))}</p>
+                <span className="pointer-events-none absolute inset-0 bg-linear-to-br from-white/15 via-transparent to-black/10" aria-hidden />
+                <span className="relative flex size-11 items-center justify-center rounded-control bg-white/20 backdrop-blur-sm">
+                  <Icon className="size-5" />
+                </span>
+                <p className="relative mt-4 font-display text-lg font-bold">{categoryLabel(item.id, t)}</p>
+                <p className="relative mt-0.5 text-sm opacity-80">{t("eventsCount").replace("{n}", String(count))}</p>
               </button>
             );
           })}
