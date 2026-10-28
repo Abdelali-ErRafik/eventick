@@ -85,15 +85,20 @@ export default function EventDetail() {
 
   const total = lines.reduce((sum, line) => sum + line.qty * line.tier.priceCents, 0);
   const count = lines.reduce((sum, line) => sum + line.qty, 0);
-  // Strict same-category matching left this grid (sized for 3 cards) with
-  // just 1 some days -- the same "hardcoded/over-narrow candidate list,
-  // visible empty space" bug fixed on Home's feature-section side column.
-  // Same category is still preferred (sorted first), but a thin category
-  // is topped up with other live events rather than leaving the grid short.
-  const sameCat = events.filter((item) => item.category === event.category && item.slug !== event.slug && item.end >= event.start);
-  const otherCat = events
-    .filter((item) => item.category !== event.category && item.slug !== event.slug && item.end >= event.start)
-    .sort((a, b) => a.start.localeCompare(b.start));
+  // Two bugs, not one. First: `item.end >= event.start` compared every
+  // candidate's end date against the VIEWED event's own start date, not
+  // today's date -- so viewing anything dated mid-2027 (Mawazine, Gnaoua)
+  // filtered out literally every 2026 event in the catalog, leaving at
+  // most the other 2027 listing. Second, the same "strict same-category
+  // match can be too thin" issue fixed on Home's side column: even with
+  // the date bug fixed, a category can still have only one other live
+  // event. Same category is preferred (sorted first) but topped up with
+  // other live events, nearest date first, rather than leaving the grid
+  // (sized for 3 cards) short.
+  const todayIso = new Date().toISOString();
+  const isLive = (item) => item.slug !== event.slug && item.end >= todayIso;
+  const sameCat = events.filter((item) => isLive(item) && item.category === event.category);
+  const otherCat = events.filter((item) => isLive(item) && item.category !== event.category).sort((a, b) => a.start.localeCompare(b.start));
   const related = [...sameCat, ...otherCat].slice(0, 3);
   const title = locale === "ar" ? event.titleAr : event.titleFr;
   const venue = locale === "ar" ? event.venueAr : event.venueFr;
@@ -513,12 +518,19 @@ export default function EventDetail() {
         </div>
       ) : null}
 
-      <section className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-        <h2 className="font-display text-2xl font-extrabold">{t("alsoSub")}</h2>
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
-          {related.map((item) => (
-            <EventCard key={item.slug} event={item} />
-          ))}
+      {/* A tinted band instead of sitting on bare page background -- same
+          "give the page's closing content section its own surface"
+          treatment already used for the practical-info/trust-row areas
+          elsewhere, rather than this being the one section left floating
+          directly on the page. */}
+      <section className="mt-8 border-t border-line/10 bg-brume/30 py-10">
+        <div className="mx-auto max-w-7xl px-4 md:px-8">
+          <h2 className="font-display text-2xl font-extrabold">{t("alsoSub")}</h2>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            {related.map((item) => (
+              <EventCard key={item.slug} event={item} />
+            ))}
+          </div>
         </div>
       </section>
     </Shell>
