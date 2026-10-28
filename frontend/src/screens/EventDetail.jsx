@@ -414,14 +414,21 @@ export default function EventDetail() {
               {lines.length === 0 ? (
                 <p className="text-sm text-stage-muted">{t("emptyCart")}</p>
               ) : (
-                <ul className="grid gap-2 text-sm">
+                <ul className="grid gap-3 text-sm">
                   {lines.map((line) => (
-                    <li key={line.tier.id} className="flex justify-between gap-3">
-                      <span className="min-w-0">
-                        <span className="font-semibold tabular-nums">{line.qty}×</span>{" "}
-                        {locale === "ar" ? line.tier.nameAr : line.tier.nameFr}
+                    <li key={line.tier.id} className="flex items-center justify-between gap-3">
+                      <span className="flex min-w-0 items-center gap-2">
+                        {/* A colour dot tying each line back to its tier --
+                            the cart used to be plain text with nothing
+                            connecting a line item to the card it came from
+                            above. */}
+                        <span className={cn("size-2 shrink-0 rounded-full", line.tier.recommended ? "bg-primary" : "bg-accent")} aria-hidden />
+                        <span className="min-w-0 truncate">
+                          <span className="font-semibold tabular-nums">{line.qty}×</span>{" "}
+                          {locale === "ar" ? line.tier.nameAr : line.tier.nameFr}
+                        </span>
                       </span>
-                      <span className="shrink-0 tabular-nums">{money(line.qty * line.tier.priceCents)}</span>
+                      <span className="shrink-0 font-semibold tabular-nums">{money(line.qty * line.tier.priceCents)}</span>
                     </li>
                   ))}
                 </ul>
@@ -432,9 +439,12 @@ export default function EventDetail() {
                 <Row label={t("vat")} value={t("included")} />
               </dl>
 
-              {/* The total is the biggest thing in the panel — it is what the
-                  buyer is deciding about. */}
-              <div className="mt-4 border-t border-stage-fg/15 pt-4">
+              {/* The total is the biggest thing in the panel — it is what
+                  the buyer is deciding about. A tinted panel instead of
+                  plain inline text gives it a surface of its own, like the
+                  rest of the page's numbers (hero stats, tier prices)
+                  already have. */}
+              <div className="mt-4 rounded-control border border-primary/20 bg-primary/10 p-4">
                 <p className="text-sm text-stage-muted">{t("total")}</p>
                 <p className="font-display text-display font-extrabold leading-none tabular-nums">
                   {money(total)} <span className="text-heading font-bold text-stage-muted">MAD</span>
