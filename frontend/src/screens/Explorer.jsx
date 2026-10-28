@@ -4,7 +4,7 @@ import { SearchX, SlidersHorizontal } from "lucide-react";
 import { Shell } from "../components/Shell";
 import { EventCard } from "../components/EventCard";
 import { useCatalog } from "../useCatalog";
-import { Badge, Button, Card, Container, EmptyState, ErrorState, LoadingState, Modal } from "../ui";
+import { Badge, Button, Card, Container, Dropdown, EmptyState, ErrorState, LoadingState, Modal } from "../ui";
 import { categoryLabel, useI18n } from "../i18n";
 import { CATEGORIES, CITIES, addDays, dateKey, minPriceCents, overlaps, todayKey, weekendRange } from "../utils";
 
@@ -240,15 +240,27 @@ export default function Explorer() {
                 <Button variant="secondary" className="lg:hidden" icon={<SlidersHorizontal className="size-4" />} onClick={() => setMobileFilters(true)}>
                   {t("openFilters")}
                 </Button>
-                <label className="text-sm">
-                  <span className="me-2 text-muted">{t("sort")}</span>
-                  <select className="field h-11 w-auto" value={search.tri} onChange={(e) => setSearch({ tri: e.target.value, page: search.page })}>
-                    <option value="popular">{t("popular")}</option>
-                    <option value="date">{t("dateSoon")}</option>
-                    <option value="priceAsc">{t("priceAsc")}</option>
-                    <option value="priceDesc">{t("priceDesc")}</option>
-                  </select>
-                </label>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="shrink-0 text-muted">{t("sort")}</span>
+                  {/* Custom Dropdown (ui/Dropdown.jsx), not a native <select>
+                      -- a native popup ignores the app's theme entirely and
+                      breaks into the browser's own unstyled list the moment
+                      it opens, same bug already fixed on Home's search
+                      card. */}
+                  <Dropdown
+                    value={search.tri}
+                    onChange={(tri) => setSearch({ tri, page: search.page })}
+                    width="w-56"
+                    label={t("sort")}
+                    triggerClassName="h-11 rounded-control border border-line/15 bg-card px-3.5 text-sm font-semibold"
+                    options={[
+                      { value: "popular", label: t("popular") },
+                      { value: "date", label: t("dateSoon") },
+                      { value: "priceAsc", label: t("priceAsc") },
+                      { value: "priceDesc", label: t("priceDesc") },
+                    ]}
+                  />
+                </div>
               </div>
             </div>
             {slice.length === 0 ? (
