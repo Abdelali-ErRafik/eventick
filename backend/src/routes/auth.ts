@@ -6,7 +6,7 @@ import { signToken } from "../lib/jwt.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { authRateLimit } from "../middleware/rateLimit.js";
 import { authenticate, requirePermission } from "../middleware/auth.js";
-import { isRole, PUBLIC_SIGNUP_ROLE, ROLES, type Role } from "../domain/auth.js";
+import { ADMIN_CREATABLE_ROLES, isRole, PUBLIC_SIGNUP_ROLE, ROLES, type Role } from "../domain/auth.js";
 import { isLockedGrant, isPermission, PERMISSION_KEYS, PERMISSIONS } from "../domain/permissions.js";
 import { invalidatePermissionCache, permissionListForRole } from "../lib/permissions.js";
 
@@ -164,13 +164,20 @@ authRouter.get(
   }),
 );
 
-const promoteSchema = z.object({ role: z.enum(ROLES) });
+const promoteSchema = z.object({ role: z.enum(ADMIN_CREATABLE_ROLES) });
 
 /**
- * The only way a user ever becomes an ORGANISER or ADMIN: an existing admin
- * promotes them. Public registration always creates CUSTOMER (see
- * PUBLIC_SIGNUP_ROLE above) so self-service signup can't grant organiser
- * access to /pro. The very first admin has to come from the seed script.
+ * The only way a user ever becomes an ORGANISER: an existing admin promotes
+ * them. Public registration always creates CUSTOMER (see PUBLIC_SIGNUP_ROLE
+ * above) so self-service signup can't grant organiser access to /pro.
+ *
+ * ADMIN is not a reachable target here, same restriction and same reasoning
+ * as POST /users above — minting a new admin, by promotion or by creation,
+ * stays exclusive to the seed/CLI, so a single compromised admin account
+ * cannot cascade into creating or appointing more of itself. A role that is
+ * already ADMIN is unaffected: this only constrains the role being SET, so
+ * demoting an admin down to ORGANISER or CUSTOMER still works exactly as
+ * before — only promotion TO admin is closed off.
  */
 authRouter.patch(
   "/users/:id/role",
@@ -199,7 +206,7 @@ const createUserSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(8),
-  role: z.enum(ROLES),
+  role: z.enum(ADMIN_CREATABLE_ROLES),
 });
 
 /**
@@ -208,10 +215,15 @@ const createUserSchema = z.object({
  * Deliberately NOT a variant of /register: that route is public and must
  * always produce a CUSTOMER (PUBLIC_SIGNUP_ROLE), or self-service signup
  * would be a way to mint organisers. This one is admin-only and takes an
- * explicit role, which also means it widens how an ADMIN can come into
- * existence — previously only the seed could create one. That is the point
- * of the endpoint, but it is a real change to the bootstrap story, so it is
- * gated on users.manage and nothing weaker.
+ * explicit role — but ADMIN is not one of the choices. The database seed
+ * stays the only way an admin account comes into being; this endpoint
+ * widens who can create ORGANISER/CUSTOMER accounts, not who can create
+ * ADMIN ones. Letting any admin mint another admin would mean a single
+ * compromised admin account could cascade into as many more as it wanted.
+ *
+ * ADMIN_CREATABLE_ROLES is the enforcement, not a UI convention to trust:
+ * zod rejects "ADMIN" here before this handler ever sees it, independent of
+ * whatever the frontend's role picker happens to offer.
  *
  * Mirrors /register's hardening: same bcrypt cost, same 8-character
  * minimum, same duplicate-email 422.

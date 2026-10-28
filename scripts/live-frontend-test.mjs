@@ -744,6 +744,27 @@ async function main() {
       });
     }
 
+    // ADMIN is not an assignable role, by creation OR by promotion. The seed
+    // stays the only way an admin account comes into being, so one
+    // compromised admin cannot mint or appoint more of itself. Enforced by
+    // the schema (ADMIN_CREATABLE_ROLES), not by the role picker hiding it.
+    await check("an admin cannot CREATE another admin", "POST", "/auth/users", 400, {
+      token: tokens.admin,
+      body: { name: "Second Admin", email: `fe-admin2-${SUFFIX}@eventick.ma`, password: "fe-test-password-2026", role: "ADMIN" },
+    });
+    if (made.status === 201) {
+      await check("an admin cannot PROMOTE someone to admin either", "PATCH", `/auth/users/${made.data.user.id}/role`, 400, {
+        token: tokens.admin,
+        body: { role: "ADMIN" },
+      });
+      // Demotion must still work, or an admin could never be removed.
+      await check("but demoting still works", "PATCH", `/auth/users/${made.data.user.id}/role`, 200, {
+        token: tokens.admin,
+        body: { role: "CUSTOMER" },
+        shape: (d) => d?.user?.role === "CUSTOMER",
+      });
+    }
+
     // Toggling a grant. CUSTOMER/promo.manage is safe to move: nothing in
     // this suite depends on a customer holding it.
     await check("granting a permission returns the new list", "POST", "/auth/roles/CUSTOMER/permissions", 200, {
@@ -779,7 +800,9 @@ async function main() {
       await check(`${who} cannot read the user directory`, "GET", "/auth/users", 403, { token });
       await check(`${who} cannot create a user`, "POST", "/auth/users", 403, {
         token,
-        body: { name: "Nope", email: `nope-${SUFFIX}-${who.length}@eventick.ma`, password: "nope-password-2026", role: "ADMIN" },
+        // A role the schema ACCEPTS, so this proves the permission gate
+        // refused them -- not that the body failed validation first.
+        body: { name: "Nope", email: `nope-${SUFFIX}-${who.length}@eventick.ma`, password: "nope-password-2026", role: "ORGANISER" },
       });
       await check(`${who} cannot grant themselves a permission`, "POST", "/auth/roles/ORGANISER/permissions", 403, {
         token,

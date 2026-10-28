@@ -11,7 +11,18 @@ import { Field, Input, Modal, Select } from "../../ui";
 import { text } from "./copy";
 
 const PAGE_SIZE_DEFAULT = 20;
-const ROLES = ["CUSTOMER", "ORGANISER", "ADMIN"];
+
+/**
+ * The roles this screen may ASSIGN — deliberately not every role that
+ * exists. ADMIN is absent and the server enforces it (see
+ * ADMIN_CREATABLE_ROLES in backend/src/domain/auth.ts): an admin account can
+ * only come from the seed, so a single compromised admin cannot mint or
+ * appoint more of itself. Offering the option here anyway would just produce
+ * a 400 from the schema with no useful explanation. Existing admins still
+ * show up in the list and the filter, and demoting one works — only
+ * reaching ADMIN is closed.
+ */
+const ASSIGNABLE_ROLES = ["CUSTOMER", "ORGANISER"];
 
 /**
  * A readable throwaway password for the account the admin is creating.
@@ -220,7 +231,17 @@ export default function Users() {
                     title={isSelf ? t.cannotChangeOwnRole : t.changeRole}
                     className="h-10 rounded-control border border-line/20 bg-card px-2.5 text-sm outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {ROLES.map((value) => (
+                    {/* An existing ADMIN still needs its own option present,
+                        or the select would render blank against a value it
+                        cannot show. It is disabled, so this row reads
+                        correctly and can be demoted, while nobody can be
+                        promoted INTO admin from here. */}
+                    {u.role === "ADMIN" ? (
+                      <option value="ADMIN" disabled>
+                        {roleLabel("ADMIN")}
+                      </option>
+                    ) : null}
+                    {ASSIGNABLE_ROLES.map((value) => (
                       <option key={value} value={value}>
                         {roleLabel(value)}
                       </option>
@@ -313,8 +334,8 @@ export default function Users() {
 
             <Field label={t.roleField} required hint={roleHint(form.role)}>
               {({ id, describedBy, required }) => (
-                <Select id={id} describedBy={describedBy} value={form.role} onChange={set("role")}>
-                  {ROLES.map((value) => (
+                <Select id={id} describedBy={describedBy} required={required} value={form.role} onChange={set("role")}>
+                  {ASSIGNABLE_ROLES.map((value) => (
                     <option key={value} value={value}>
                       {roleLabel(value)}
                     </option>

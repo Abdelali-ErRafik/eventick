@@ -4,6 +4,19 @@ export type Role = (typeof ROLES)[number];
 /** Self-registration may only create customer accounts. */
 export const PUBLIC_SIGNUP_ROLE: Role = "CUSTOMER";
 
+/**
+ * Roles an admin may hand out through POST /auth/users.
+ *
+ * Deliberately excludes ADMIN. Before this endpoint existed, the database
+ * seed was the only way an admin account ever came into being — this is the
+ * line that keeps that true. Letting any admin mint another admin would mean
+ * a single compromised admin account could cascade into as many more as it
+ * wanted, each one capable of minting further admins in turn. A new admin
+ * still has a path to exist (the seed, or a direct database operation by
+ * someone with that access), it just isn't a button in the product.
+ */
+export const ADMIN_CREATABLE_ROLES = ["ORGANISER", "CUSTOMER"] as const satisfies readonly [Role, ...Role[]];
+
 export function isRole(value: string): value is Role {
   return (ROLES as readonly string[]).includes(value);
 }
