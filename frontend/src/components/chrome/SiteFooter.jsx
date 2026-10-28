@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Headphones, Mail, QrCode, ShieldCheck } from "lucide-react";
 import { categoryLabel, useI18n } from "../../i18n";
 import { Button } from "../../ui";
-import { CITIES } from "../../utils";
+import { CITIES, cn } from "../../utils";
 
 const CATEGORIES = ["festivals", "humour", "sport", "nightlife", "culture", "salons"];
 
@@ -16,6 +16,12 @@ const CATEGORIES = ["festivals", "humour", "sport", "nightlife", "culture", "sal
  * The newsletter form is deliberately marked as not yet wired: it previously
  * showed a tick and silently dropped the address, which is worse than not
  * offering it. See the note on the input below.
+ *
+ * Shape v2: the trust-row icon chip was bg-stage-fg/10 on a bg-stage footer
+ * — the same low-contrast dark-on-dark pattern fixed on the Home page's own
+ * trust row and the category tiles — so it read as a near-invisible dark
+ * square. Each perk now gets a distinct colour chip, same language used
+ * everywhere else on the page.
  */
 export function SiteFooter() {
   const { t } = useI18n();
@@ -28,9 +34,9 @@ export function SiteFooter() {
       {/* Trust */}
       <div className="border-b border-stage-fg/10">
         <div className="mx-auto grid max-w-7xl gap-6 px-4 py-10 md:grid-cols-3 md:px-8">
-          <Trust icon={<ShieldCheck className="size-5" />} title={t("trustPay")} body={t("trustPayBody")} />
-          <Trust icon={<QrCode className="size-5" />} title={t("trustQr")} body={t("trustQrBody")} />
-          <Trust icon={<Headphones className="size-5" />} title={t("trustHelp")} body={t("trustHelpBody")} />
+          <Trust tone="bg-primary text-primary-fg" icon={<ShieldCheck className="size-5" />} title={t("trustPay")} body={t("trustPayBody")} />
+          <Trust tone="bg-accent text-accent-fg" icon={<QrCode className="size-5" />} title={t("trustQr")} body={t("trustQrBody")} />
+          <Trust tone="bg-secondary text-secondary-fg" icon={<Headphones className="size-5" />} title={t("trustHelp")} body={t("trustHelpBody")} />
         </div>
       </div>
 
@@ -60,12 +66,21 @@ export function SiteFooter() {
         </FooterColumn>
 
         <div>
-          <p className="text-sm font-bold">{t("stay")}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-bold">{t("stay")}</p>
+            {/* An explicit "coming soon" badge instead of leaning on the
+                form's disabled opacity alone to say "this doesn't work yet"
+                — the badge says so directly, so it reads as a deliberate
+                preview rather than a broken control. */}
+            <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
+              {t("comingSoon")}
+            </span>
+          </div>
           <p className="mt-2 text-sm leading-relaxed text-stage-muted">{t("stayBody")}</p>
           {/* Disabled on purpose. There is no subscribe endpoint, and the old
               version showed a success tick while discarding the address —
               a confirmation for something that did not happen. */}
-          <label className="mt-4 flex items-center gap-2 rounded-full bg-stage-fg/10 ps-3.5 pe-1 opacity-60">
+          <label className="mt-4 flex items-center gap-2 rounded-full border border-stage-fg/10 bg-stage-fg/5 ps-3.5 pe-1 opacity-70">
             <Mail className="size-4 shrink-0 text-stage-muted" aria-hidden />
             <input
               type="email"
@@ -102,10 +117,10 @@ export function SiteFooter() {
   );
 }
 
-function Trust({ icon, title, body }) {
+function Trust({ tone, icon, title, body }) {
   return (
     <div className="flex gap-3.5">
-      <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-control bg-stage-fg/10 text-accent" aria-hidden>
+      <span className={cn("inline-flex size-11 shrink-0 items-center justify-center rounded-control", tone)} aria-hidden>
         {icon}
       </span>
       <div className="min-w-0">
