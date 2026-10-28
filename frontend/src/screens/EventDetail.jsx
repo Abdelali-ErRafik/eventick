@@ -8,9 +8,9 @@ import { api, money } from "../api";
 import { useCart } from "../CartContext";
 import { useFavorites } from "../FavoritesContext";
 import { useCatalog } from "../useCatalog";
-import { useI18n } from "../i18n";
+import { categoryLabel, useI18n } from "../i18n";
 import { Badge, Button, Card, Container, ErrorState, LoadingState } from "../ui";
-import { cn, dateRange, groupNumber, mapsUrl, totalRemaining } from "../utils";
+import { cn, dateRange, groupNumber, mapsUrl, minPriceCents, totalCapacity, totalRemaining } from "../utils";
 
 const MAX_QTY_PER_TIER = 8;
 
@@ -166,12 +166,20 @@ export default function EventDetail() {
   return (
     <Shell overlay>
       {/* Deliberately always dark, so the photo stays legible regardless of
-          app theme — see the note on --et-stage in styles.css. */}
+          app theme — see the note on --et-stage in styles.css. Image
+          opacity bumped from 0.5 -> 0.7 (with a stronger bottom-only
+          gradient instead of a wash over the whole frame) so the photo
+          actually reads as a backdrop instead of a dim smudge -- this hero
+          is much shorter than Home's, so the same opacity that worked over
+          a full-viewport canvas just looked washed out here. */}
       <section className="relative -mt-16 overflow-hidden bg-stage pt-16 text-stage-fg">
-        <img src={event.image} alt="" className="absolute inset-0 h-full w-full object-cover opacity-50" />
-        <div className="absolute inset-0 bg-gradient-to-t from-stage via-stage/80 to-stage/40" />
+        <img src={event.image} alt="" className="absolute inset-0 h-full w-full object-cover opacity-70" />
+        <div className="absolute inset-0 bg-gradient-to-t from-stage via-stage/70 to-stage/10" />
         <div className="relative mx-auto max-w-7xl px-4 py-12 md:px-8 md:py-16">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-primary px-3 py-1 text-xs font-bold uppercase tracking-wide text-primary-fg">
+              {categoryLabel(event.category, t)}
+            </span>
             <span className="rounded-full bg-stage-fg/15 px-3 py-1 text-xs font-bold">{t("official")}</span>
             {event.badge === "last" || event.badge === "hot" ? (
               <span className="rounded-full bg-danger px-3 py-1 text-xs font-bold">{t("limited")}</span>
@@ -197,6 +205,25 @@ export default function EventDetail() {
               {venue}, {event.city}
             </span>
           </div>
+
+          {/* A quick price/capacity anchor right in the hero -- previously
+              the price was invisible until scrolling down to the tier
+              picker, so there was nothing here to help someone decide
+              whether to keep reading before committing to the scroll. */}
+          <div className="mt-6 flex flex-wrap items-center gap-6 border-t border-stage-fg/10 pt-6">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-stage-muted">{t("from")}</p>
+              <p className="font-display text-2xl font-extrabold tabular-nums">
+                {money(minPriceCents(event))} <span className="text-sm font-bold text-stage-muted">MAD</span>
+              </p>
+            </div>
+            <div className="h-10 w-px bg-stage-fg/10" aria-hidden />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-stage-muted">{t("capacity")}</p>
+              <p className="font-display text-2xl font-extrabold tabular-nums">{groupNumber(totalCapacity(event))}</p>
+            </div>
+          </div>
+
           <div className="mt-6 flex flex-wrap gap-3">
             <a href="#billets" className="inline-flex h-12 items-center rounded-full bg-action px-5 text-sm font-semibold text-action-fg transition hover:bg-action-hover">
               {t("choose")}
