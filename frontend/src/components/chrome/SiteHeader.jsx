@@ -23,6 +23,11 @@ import { cn, CITIES } from "../../utils";
  * account popover, which is where people look for them. The "MAD" badge is
  * gone: every price on the site is already labelled MAD, so it was a
  * permanent pixel cost for information shown at the point of use.
+ *
+ * Shape v3: the brand lockup and the city picker are grouped as one visual
+ * unit (a shared pill-shaped surface) instead of sitting as two independent
+ * controls of equal weight next to the nav links — same "give the identity
+ * its own space" move the dashboard's sidebar brand block got.
  */
 
 const NAV = [
@@ -109,41 +114,59 @@ export function SiteHeader({ overlay = false }) {
           <Menu className="size-5" />
         </IconButton>
 
-        <Link to="/" className="shrink-0 font-display text-xl font-extrabold tracking-tight">
-          Eventick<span className={onImage ? "text-accent" : "text-primary"}>.ma</span>
-        </Link>
-
-        {/* City */}
-        <Popover
-          label={t("allMorocco")}
-          className="hidden md:block"
-          width="w-56"
-          trigger={({ open }) => (
-            <span
-              className={cn(
-                "inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-sm font-semibold transition",
-                onImage ? "bg-stage-fg/15 hover:bg-stage-fg/25" : "bg-paper hover:bg-brume",
-              )}
-            >
-              <MapPin className={cn("size-4", onImage ? "text-accent" : "text-primary")} aria-hidden />
-              {t("allMorocco")}
-              <ChevronDown className={cn("size-4 transition", open && "rotate-180")} aria-hidden />
-            </span>
+        {/* Brand + city as one visual unit, not two independent pills of
+            equal weight — the mark gets a tile, the city rides inside the
+            same rounded surface as a quiet second control. */}
+        <div
+          className={cn(
+            "flex items-center gap-1 rounded-full py-1 ps-1 pe-1.5 transition",
+            onImage ? "bg-stage-fg/10" : "bg-paper",
           )}
         >
-          {({ close }) => (
-            <div className="max-h-80 overflow-y-auto py-1.5">
-              <PopoverItem onClick={() => goCity("", close)}>{t("allMorocco")}</PopoverItem>
-              {CITIES.map((city) => (
-                <PopoverItem key={city} onClick={() => goCity(city, close)}>
-                  {city}
-                </PopoverItem>
-              ))}
-            </div>
-          )}
-        </Popover>
+          <Link to="/" className="flex shrink-0 items-center gap-2 rounded-full px-2.5 py-1.5 font-display text-lg font-extrabold tracking-tight">
+            <span
+              className={cn(
+                "inline-flex size-7 shrink-0 items-center justify-center rounded-full text-[13px]",
+                onImage ? "bg-accent text-accent-fg" : "bg-primary text-primary-fg",
+              )}
+              aria-hidden
+            >
+              E
+            </span>
+            <span className="hidden sm:inline">Eventick.ma</span>
+          </Link>
 
-        <nav aria-label={t("explore")} className="ms-3 hidden items-center gap-1 lg:flex">
+          <Popover
+            label={t("allMorocco")}
+            className="hidden md:block"
+            width="w-56"
+            trigger={({ open }) => (
+              <span
+                className={cn(
+                  "inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-sm font-semibold transition",
+                  onImage ? "hover:bg-stage-fg/15" : "hover:bg-brume",
+                )}
+              >
+                <MapPin className={cn("size-4", onImage ? "text-accent" : "text-primary")} aria-hidden />
+                {t("allMorocco")}
+                <ChevronDown className={cn("size-4 transition", open && "rotate-180")} aria-hidden />
+              </span>
+            )}
+          >
+            {({ close }) => (
+              <div className="max-h-80 overflow-y-auto py-1.5">
+                <PopoverItem onClick={() => goCity("", close)}>{t("allMorocco")}</PopoverItem>
+                {CITIES.map((city) => (
+                  <PopoverItem key={city} onClick={() => goCity(city, close)}>
+                    {city}
+                  </PopoverItem>
+                ))}
+              </div>
+            )}
+          </Popover>
+        </div>
+
+        <nav aria-label={t("explore")} className="ms-2 hidden items-center gap-1 lg:flex">
           {NAV.map((item) => (
             <Link
               key={item.to}
