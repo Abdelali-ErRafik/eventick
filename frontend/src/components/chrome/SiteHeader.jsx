@@ -58,7 +58,7 @@ const NAV = [
 export function SiteHeader({ overlay = false }) {
   const { t, locale, setLocale } = useI18n();
   const { resolved, toggle } = useTheme();
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, canUsePro } = useAuth();
   const { cart } = useCart();
   const { events } = useCatalog();
   const navigate = useNavigate();
@@ -366,11 +366,17 @@ export function SiteHeader({ overlay = false }) {
                     {/* Pro moved here from the top nav, which had no room
                         left for it once the header got trimmed to 3 items
                         to stop "Culture & Théâtre" / "Espace Pro" wrapping
-                        onto a second line. */}
-                    <PopoverItem as={Link} to="/pro" onClick={close}>
-                      <LayoutDashboard className="size-4 shrink-0 text-muted" aria-hidden />
-                      {t("pro")}
-                    </PopoverItem>
+                        onto a second line.
+
+                        Only for staff: a CUSTOMER who clicked this was
+                        bounced straight back to / by Protected, with no
+                        explanation — a door with no handle behind it. */}
+                    {canUsePro ? (
+                      <PopoverItem as={Link} to="/pro" onClick={close}>
+                        <LayoutDashboard className="size-4 shrink-0 text-muted" aria-hidden />
+                        {t("pro")}
+                      </PopoverItem>
+                    ) : null}
                     <PopoverItem onClick={toggle}>
                       {resolved === "dark" ? (
                         <Sun className="size-4 shrink-0 text-muted" aria-hidden />
@@ -480,15 +486,19 @@ export function SiteHeader({ overlay = false }) {
                     {t("account")}
                   </Link>
                 </li>
-                <li>
-                  <Link
-                    to="/pro"
-                    onClick={() => setMenuOpen(false)}
-                    className="block rounded-control px-3 py-3 text-[15px] font-semibold transition hover:bg-paper"
-                  >
-                    {t("pro")}
-                  </Link>
-                </li>
+                {/* Staff only — same reasoning as the account popover's copy
+                    of this link above. */}
+                {canUsePro ? (
+                  <li>
+                    <Link
+                      to="/pro"
+                      onClick={() => setMenuOpen(false)}
+                      className="block rounded-control px-3 py-3 text-[15px] font-semibold transition hover:bg-paper"
+                    >
+                      {t("pro")}
+                    </Link>
+                  </li>
+                ) : null}
               </ul>
 
               <p className="mt-5 px-3 pb-2 text-[11px] font-extrabold uppercase tracking-wide text-muted">{t("allMorocco")}</p>

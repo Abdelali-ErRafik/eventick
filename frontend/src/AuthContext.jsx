@@ -61,12 +61,30 @@ export function AuthProvider({ children }) {
     return me;
   }, []);
 
-  // Derived, not stored — there is nowhere this can drift from `user.role`,
-  // so a plain boolean computed on every render is simpler than a memo.
+  // All derived from `user` — nowhere for these to drift from it, so plain
+  // values computed each render beat memoising.
+  //
+  // `can(permission)` is the seam every call site should use: it reads the
+  // permission list the server sends on /auth/me, so when a role's powers
+  // change in the database no frontend code has to change with it. isAdmin
+  // and canUsePro remain for the two cases that are genuinely about *who
+  // you are* rather than *what you may do* — reaching the admin area at
+  // all, and seeing the staff dashboard link.
+  const permissions = user?.permissions ?? [];
+  const can = useCallback(
+    (permission) => permissions.includes(permission),
+    // permissions is a fresh array each render; keying on the user identity
+    // and the joined list avoids re-creating `can` when nothing changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user?.id, permissions.join(",")],
+  );
   const isAdmin = user?.role === "ADMIN";
+  const canUsePro = user?.role === "ORGANISER" || user?.role === "ADMIN";
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refresh, isAdmin }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, register, logout, refresh, isAdmin, canUsePro, can, permissions }}
+    >
       {children}
     </AuthContext.Provider>
   );
