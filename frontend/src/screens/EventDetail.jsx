@@ -85,7 +85,16 @@ export default function EventDetail() {
 
   const total = lines.reduce((sum, line) => sum + line.qty * line.tier.priceCents, 0);
   const count = lines.reduce((sum, line) => sum + line.qty, 0);
-  const related = events.filter((item) => item.category === event.category && item.slug !== event.slug && item.end >= event.start).slice(0, 3);
+  // Strict same-category matching left this grid (sized for 3 cards) with
+  // just 1 some days -- the same "hardcoded/over-narrow candidate list,
+  // visible empty space" bug fixed on Home's feature-section side column.
+  // Same category is still preferred (sorted first), but a thin category
+  // is topped up with other live events rather than leaving the grid short.
+  const sameCat = events.filter((item) => item.category === event.category && item.slug !== event.slug && item.end >= event.start);
+  const otherCat = events
+    .filter((item) => item.category !== event.category && item.slug !== event.slug && item.end >= event.start)
+    .sort((a, b) => a.start.localeCompare(b.start));
+  const related = [...sameCat, ...otherCat].slice(0, 3);
   const title = locale === "ar" ? event.titleAr : event.titleFr;
   const venue = locale === "ar" ? event.venueAr : event.venueFr;
   const soldOut = totalRemaining(event) === 0;
@@ -170,16 +179,20 @@ export default function EventDetail() {
           </div>
           <h1 className="mt-4 max-w-4xl font-display text-4xl font-extrabold leading-none md:text-hero">{title}</h1>
           <p className="mt-4 max-w-2xl text-stage-muted">{locale === "ar" ? event.aboutAr : event.aboutFr}</p>
-          <div className="mt-6 flex flex-wrap gap-4 text-sm">
-            <span className="inline-flex items-center gap-2">
+          {/* Pill chips instead of loose icon-plus-text pairs floating in a
+              row -- matches the trust-row/stat-chip language used
+              everywhere else in the app rather than being the one part of
+              the hero with no surface of its own. */}
+          <div className="mt-6 flex flex-wrap gap-2 text-sm">
+            <span className="inline-flex items-center gap-2 rounded-full bg-stage-fg/10 px-3.5 py-2">
               <Calendar className="size-4 text-accent" />
               {dateRange(event.start, event.end, locale)}
             </span>
-            <span className="inline-flex items-center gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full bg-stage-fg/10 px-3.5 py-2">
               <Clock className="size-4 text-accent" />
               {t("doors")} {new Date(event.doors).toLocaleTimeString(locale === "ar" ? "ar-MA" : "fr-FR", { hour: "2-digit", minute: "2-digit" })}
             </span>
-            <span className="inline-flex items-center gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full bg-stage-fg/10 px-3.5 py-2">
               <MapPin className="size-4 text-accent" />
               {venue}, {event.city}
             </span>
