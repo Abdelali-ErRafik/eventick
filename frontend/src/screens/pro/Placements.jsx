@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
 import { useConfirm } from "./ConfirmContext";
-import { Badge, Btn, DataTable, EmptyState, IconBtn, Modal, MoneyCell, PageHead, StockCell, Td, Th } from "./ui";
+import { EventSwitcher } from "./EventSwitcher";
+import { Badge, Btn, EmptyState, IconBtn, Modal, PageHead } from "./ui";
 import { text } from "./copy";
 
 const BLANK = {
@@ -22,6 +23,13 @@ const BLANK = {
 
 /**
  * Placements — the seating zones of an event.
+ *
+ * Rebuilt from a plain HTML table into a card grid: a zone has a name, a
+ * price, a jauge bar and an action pair, which a table forced into five
+ * cramped cells with almost no breathing room. A tile gives each of those
+ * its own visual weight — the jauge bar in particular reads as a bar now,
+ * not a thin hairline squeezed under two numbers — and the grid reflows
+ * naturally on a phone instead of forcing a table to scroll sideways.
  *
  * Tiers used to be fixed at creation, so a wrong price or a missing zone
  * meant deleting the event. This edits them in place, with the guards that
@@ -131,18 +139,13 @@ export default function Placements() {
         sub={t.placementsSub}
         actions={
           <>
-            <select
-              className="h-11 rounded-control border border-line/20 bg-card px-3 text-sm outline-none focus:border-primary"
+            <EventSwitcher
+              events={events}
               value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-            >
-              <option value="">{t.pickEvent}</option>
-              {events.map((event) => (
-                <option key={event.slug} value={event.slug}>
-                  {locale === "ar" ? event.titleAr : event.titleFr}
-                </option>
-              ))}
-            </select>
+              onChange={setSlug}
+              locale={locale}
+              labels={{ pick: t.pickEvent, search: t.searchEvents, noMatch: t.noNavResults }}
+            />
             <Btn onClick={openNew} disabled={!slug}>
               <Plus className="size-4" />
               {t.addZone}
@@ -153,66 +156,21 @@ export default function Placements() {
 
       {!slug ? (
         <EmptyState icon="🎫" title={t.selectEventFirst} />
+      ) : tiers && tiers.length === 0 ? (
+        <EmptyState icon="🎪" title={t.noTiers} />
       ) : (
-        <DataTable minWidth={900}>
-          <thead>
-            <tr>
-              <Th className="text-start">{t.zone}</Th>
-              <Th>{t.price}</Th>
-              <Th>{t.capacityCol}</Th>
-              <Th>{t.soldCol}</Th>
-              <Th>{t.seating}</Th>
-              <Th>
-                <span className="sr-only">{t.actions}</span>
-              </Th>
-            </tr>
-          </thead>
-          <tbody>
-            {tiers && tiers.length === 0 ? (
-              <tr>
-                <td colSpan={6}>
-                  <EmptyState icon="🎪" title={t.noTiers} />
-                </td>
-              </tr>
-            ) : null}
-            {(tiers ?? []).map((tier) => (
-              <tr key={tier.id} className="transition hover:bg-brume/40">
-                <Td>
-                  <p className="text-sm font-bold">{locale === "ar" ? tier.nameAr : tier.nameFr}</p>
-                  <p className="text-xs text-muted">
-                    {locale === "ar" ? tier.zoneAr : tier.zoneFr} · {t.gateCol} {locale === "ar" ? tier.gateAr : tier.gateFr}
-                  </p>
-                </Td>
-                <Td className="text-center">
-                  <MoneyCell unit="MAD">{money(tier.priceCents)}</MoneyCell>
-                </Td>
-                <Td className="text-center">
-                  <StockCell left={tier.remaining} total={tier.capacity} />
-                </Td>
-                <Td className="text-center tabular-nums">{tier.sold}</Td>
-                <Td className="text-center">
-                  {tier.numbered ? (
-                    <Badge tone="info">
-                      {t.numbered} · {tier.seatsPerRow ?? 12}/{t.seatsPerRow.toLowerCase()}
-                    </Badge>
-                  ) : (
-                    <Badge tone="neutral">{t.freeSeating}</Badge>
-                  )}
-                </Td>
-                <Td className="w-px whitespace-nowrap pe-4">
-                  <div className="flex justify-end gap-1.5">
-                    <IconBtn label={t.edit} onClick={() => openEdit(tier)}>
-                      <Pencil className="size-4" />
-                    </IconBtn>
-                    <IconBtn tone="danger" label={t.remove} onClick={() => remove(tier)} disabled={tier.sold > 0}>
-                      <Trash2 className="size-4" />
-                    </IconBtn>
-                  </div>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </DataTable>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {(tiers ?? []).map((tier) => (
+            <ZoneCard
+              key={tier.id}
+              tier={tier}
+              locale={locale}
+              t={t}
+              onEdit={() => openEdit(tier)}
+              onRemove={() => remove(tier)}
+            />
+          ))}
+        </div>
       )}
 
       <Modal
@@ -295,5 +253,78 @@ export default function Placements() {
         </form>
       </Modal>
     </div>
+  );
+}
+
+/** One zone. Price and the jauge bar get a full row each rather than being
+ * squeezed into fixed-width table cells, so the bar actually reads as a bar. */
+function ZoneCard({ tier, locale, t, onEdit, onRemove }) {
+  const left = tier.remaining;
+  const total = tier.capacity;
+  const ratio = total > 0 ? left / total : 0;
+  const tone = ratio <= 0 ? "out" : ratio < 0.2 ? "low" : "ok";
+  const barColor = { ok: "bg-success", low: "bg-accent", out: "bg-danger/40" }[tone];
+  const textColor = { ok: "text-success", low: "text-accent", out: "text-danger" }[tone];
+
+  return (
+    <article className="flex flex-col gap-4 rounded-card border border-line/10 bg-card p-5 shadow-card">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate font-display text-subhead font-bold">{locale === "ar" ? tier.nameAr : tier.nameFr}</h3>
+          <p className="mt-0.5 truncate text-xs text-muted">
+            {locale === "ar" ? tier.zoneAr : tier.zoneFr} · {t.gateCol} {locale === "ar" ? tier.gateAr : tier.gateFr}
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-1">
+          <IconBtn label={t.edit} size="sm" onClick={onEdit}>
+            <Pencil className="size-4" />
+          </IconBtn>
+          <IconBtn tone="danger" size="sm" label={t.remove} onClick={onRemove} disabled={tier.sold > 0}>
+            <Trash2 className="size-4" />
+          </IconBtn>
+        </div>
+      </div>
+
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted">{t.price}</p>
+          <p className="mt-0.5 font-display text-heading font-bold tabular-nums">
+            {money(tier.priceCents)} <span className="text-xs font-semibold text-muted">MAD</span>
+          </p>
+        </div>
+        {tier.numbered ? (
+          <Badge tone="info">
+            {t.numbered} · {tier.seatsPerRow ?? 12}/{t.seatsPerRow.toLowerCase()}
+          </Badge>
+        ) : (
+          <Badge tone="neutral">{t.freeSeating}</Badge>
+        )}
+      </div>
+
+      <div>
+        <div className="mb-1.5 flex items-baseline justify-between gap-2">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted">{t.capacityCol}</p>
+          <p className="text-sm font-bold tabular-nums">
+            <span className={textColor}>{left}</span>
+            <span className="text-muted">/{total}</span>
+          </p>
+        </div>
+        <div
+          className="h-2 overflow-hidden rounded-full bg-sunken"
+          role="progressbar"
+          aria-valuenow={total > 0 ? Math.round((1 - ratio) * 100) : 0}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={t.capacityCol}
+        >
+          <div className={`h-full rounded-full transition-[width] ${barColor}`} style={{ width: `${Math.round((1 - ratio) * 100)}%` }} />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between border-t border-line/10 pt-3 text-xs">
+        <span className="text-muted">{t.soldCol}</span>
+        <span className="font-bold tabular-nums">{tier.sold}</span>
+      </div>
+    </article>
   );
 }
