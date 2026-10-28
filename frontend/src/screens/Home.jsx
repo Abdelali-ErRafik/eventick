@@ -95,11 +95,11 @@ export default function Home() {
               {t("kicker")}
             </p>
             <p className="mt-5 text-sm font-semibold text-accent">{t("secureMad")}</p>
-            {/* The one colossal type moment on the whole site — every other
-                headline uses text-hero/text-display, this one alone reaches
-                for text-colossal so it reads as the page's visual climax
-                rather than one more section title at the top of a list. */}
-            <h1 className="mt-4 font-display text-6xl font-extrabold leading-none tracking-tight sm:text-7xl lg:text-colossal">
+            {/* text-hero is the biggest headline size used anywhere on the
+                site (EventDetail, Explorer use it too), so this still reads
+                as the page's visual climax without pushing the subtitle and
+                search card below the fold the way a larger size did. */}
+            <h1 className="mt-4 font-display text-4xl font-extrabold leading-none tracking-tight sm:text-5xl lg:text-hero">
               {t("heroA")} <span className="text-accent">{t("heroB")}</span> {t("heroC")}
             </h1>
             <p className="mt-6 max-w-xl text-base text-stage-muted lg:text-xl">{t("heroSub")}</p>

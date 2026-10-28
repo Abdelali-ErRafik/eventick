@@ -278,9 +278,6 @@
   --shadow-pop: 0 8px 24px -4px rgb(5 5 15 / calc(var(--et-shadow-alpha) * 2.2));
   --shadow-modal: 0 24px 64px -12px rgb(5 5 15 / calc(var(--et-shadow-alpha) * 3.5));
 
-  --text-colossal: 5.5rem;
-  --text-colossal--line-height: 0.96;
-  --text-colossal--letter-spacing: -0.045em;
   --text-hero: 3.75rem;
   --text-hero--line-height: 1.02;
   --text-hero--letter-spacing: -0.04em;
