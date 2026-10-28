@@ -377,15 +377,11 @@ async function main() {
   // ── TicketDetail.jsx share panel / ClaimShare.jsx ─────────────────────
   setGroup("SHARING  TicketDetail.jsx panel, ClaimShare.jsx");
   {
-    // A real GUEST order — no bearer token anywhere — because POST /share
-    // and DELETE /share/:id take the ticket id in the body or a share id,
-    // neither of which api.js's path-based lookup can resolve on its own.
-    // This caught a real regression: the two calls worked for a logged-in
-    // customer (their session covers everything) while a guest buyer's
-    // "Offrir ce billet" button silently 403'd with "This order is not
-    // yours" — the live-guest-authz-test suite hits the backend directly
-    // and never would have seen it either, since the backend's own check
-    // was always correct.
+    // A real GUEST order — no bearer token anywhere — to pin down the line
+    // between what a confirmation link alone may do and what needs an
+    // account. The backend suites hit :4100 directly and would not catch a
+    // frontend that sends the wrong credential (or none), which is how a
+    // guest's "Offrir ce billet" button once silently 403'd.
     const guestHold = await api("POST", "/orders/hold", { body: { eventSlug: bought.slug, lines: [{ tierId: bought.tierId, qty: 1 }] } });
     const guestOrderToken = guestHold.data.accessToken;
     await api("POST", `/orders/${guestHold.data.order.id}/pay`, {
@@ -395,17 +391,78 @@ async function main() {
     const guestOrder = await api("GET", `/orders/${guestHold.data.order.id}`, { orderToken: guestOrderToken });
     const guestTicketId = guestOrder.data.order.tickets[0].id;
 
-    const guestShare = await check("a GUEST creates a share link with their order token (not a login)", "POST", "/share", 201, {
+    // What a guest may do with the link alone: use the ticket, not spend or
+    // dispose of it. The link travels (forwarded, screenshotted, left in a
+    // shared thread), so a copy of it must not be able to refund the
+    // buyer's money or hand their seat to a stranger.
+    const guestOpts = await check("the manage panel tells a guest it has no session", "GET", `/tickets/${guestTicketId}/options`, 200, {
       orderToken: guestOrderToken,
+      // viaSession drives whether the panel renders the destructive actions
+      // or the claim prompt; orderId is what the prompt claims.
+      shape: (d) => d?.viaSession === false && typeof d?.orderId === "string",
+    });
+    await check("a guest can still fix a typo in the holder name", "PATCH", `/tickets/${guestTicketId}/holder`, 200, {
+      orderToken: guestOrderToken,
+      body: { holderName: "Invité Corrigé" },
+    });
+    await check("a guest cannot give the ticket away", "POST", "/share", 403, {
+      orderToken: guestOrderToken,
+      body: { ticketId: guestTicketId },
+    });
+    await check("a guest cannot cancel for a refund", "POST", `/tickets/${guestTicketId}/cancel`, 403, {
+      orderToken: guestOrderToken,
+    });
+    await check("a guest cannot list it for resale", "POST", "/resale/listings", 403, {
+      orderToken: guestOrderToken,
+      body: { ticketId: guestTicketId },
+    });
+    // And with no credential at all, still refused — not silently ignored.
+    await check("the id alone is refused outright", "POST", "/share", 403, {
+      body: { ticketId: guestTicketId },
+    });
+
+    // Claiming the order is the one step that unlocks the rest. Without it
+    // "create an account" would be a dead end: /register makes an account
+    // but nothing links orders bought before it existed.
+    const claimer = await api("POST", "/auth/register", {
+      body: { name: "Invité Partage", email: `fe-claim-${SUFFIX}@example.com`, password: "fe-claim-pass-2026" },
+    });
+    const claimerToken = claimer.data?.token;
+    const beforeClaim = await api("GET", "/orders", { token: claimerToken });
+    record(
+      "a fresh account sees no tickets until it claims the order",
+      (beforeClaim.data?.orders ?? []).length === 0,
+      `${(beforeClaim.data?.orders ?? []).length}`,
+    );
+    await check("claiming attaches the guest order to the account", "POST", `/orders/${guestHold.data.order.id}/claim`, 200, {
+      token: claimerToken,
+      orderToken: guestOrderToken,
+    });
+    const afterClaim = await api("GET", "/orders", { token: claimerToken });
+    record(
+      "the order now shows in their ticket list",
+      (afterClaim.data?.orders ?? []).some((o) => o.id === guestHold.data.order.id),
+      `${(afterClaim.data?.orders ?? []).length} order(s)`,
+    );
+    await check("and the panel now reports a session", "GET", `/tickets/${guestTicketId}/options`, 200, {
+      token: claimerToken,
+      shape: (d) => d?.viaSession === true,
+    });
+    const nowShare = await check("so the ticket can now be given away", "POST", "/share", 201, {
+      token: claimerToken,
       body: { ticketId: guestTicketId },
       shape: (d) => typeof d?.token === "string" && typeof d?.id === "string",
     });
-    await check("and revokes it the same way", "DELETE", `/share/${guestShare.data.id}`, 204, {
-      orderToken: guestOrderToken,
+    if (nowShare.status === 201) {
+      await check("and the link revoked again", "DELETE", `/share/${nowShare.data.id}`, 204, { token: claimerToken });
+    }
+    // Two people can hold the same link; the first to claim owns it.
+    const other = await api("POST", "/auth/register", {
+      body: { name: "Autre", email: `fe-other-${SUFFIX}@example.com`, password: "fe-other-pass-2026" },
     });
-    // The id-only request from the actual bug report, pinned down directly.
-    await check("without the token, the same request is refused — not silently ignored", "POST", "/share", 403, {
-      body: { ticketId: guestTicketId },
+    await check("a second account cannot claim the same order", "POST", `/orders/${guestHold.data.order.id}/claim`, 409, {
+      token: other.data?.token,
+      orderToken: guestOrderToken,
     });
 
     const ticketId = bought.tickets[1].id;

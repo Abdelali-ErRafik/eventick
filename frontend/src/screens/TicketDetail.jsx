@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { Download, Pencil, Printer, Share2, Ticket as TicketIcon, XCircle } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Download, Pencil, Printer, Share2, Ticket as TicketIcon, UserPlus, XCircle } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { QrMark } from "../components/QrMark";
 import { Shell } from "../components/Shell";
 import { toast } from "sonner";
 import { Meta, seatLabel } from "../components/TicketPass";
 import { api, downloadFile, money, rememberTicketKey, tokenForTicket } from "../api";
 import { useI18n } from "../i18n";
+import { useAuth } from "../AuthContext";
 import { Badge, Button, Card, Container, ErrorState, Field, IconButton, Input, Modal } from "../ui";
 import { cn } from "../utils";
 
@@ -15,6 +16,8 @@ const STATUS_TONE = { VALID: "success", USED: "neutral", CANCELLED: "danger", TR
 export default function TicketDetail() {
   const { ticketId } = useParams();
   const { locale, t } = useI18n();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [options, setOptions] = useState(null);
@@ -43,6 +46,23 @@ export default function TicketDetail() {
   }, [ticketId]);
 
   useEffect(load, [load]);
+
+  // Attach this guest order to the signed-in account, which is what unlocks
+  // cancelling, reselling and giving the ticket away. The order token is the
+  // proof -- it is what the buyer demonstrably holds.
+  const claimOrder = async () => {
+    if (busy || !options?.orderId) return;
+    setBusy(true);
+    try {
+      await api.post(`/orders/${options.orderId}/claim`, {}, { orderToken: tokenForTicket(ticketId) });
+      toast.success(t("claimOrderDone"));
+      load();
+    } catch (err) {
+      toast.error(err.status === 409 ? t("claimTaken") : err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const cancelTicket = async () => {
     if (busy) return;
@@ -314,7 +334,7 @@ export default function TicketDetail() {
               >
                 {t("fixName")}
               </Button>
-              {options.cancel?.allowed ? (
+              {options.cancel?.allowed && options.viaSession ? (
                 <Button
                   variant="danger"
                   size="sm"
@@ -334,6 +354,32 @@ export default function TicketDetail() {
                   ? t("cancelDisabled")
                   : t("cancelClosed")}
             </p>
+
+            {/*
+              A guest reached this page with their confirmation link, which is
+              all they need to show the QR at the gate — but not enough to
+              refund the money or hand the seat to someone else, since that
+              link travels. Rather than render buttons that are now certain to
+              403, offer the one step that unlocks them.
+            */}
+            {!options.viaSession ? (
+              <div className="mt-4 rounded-control border border-line/15 bg-paper p-4">
+                <p className="flex items-center gap-2 text-sm font-bold">
+                  <UserPlus className="size-4 text-primary" />
+                  {t("claimOrderTitle")}
+                </p>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted">{t("claimBody")}</p>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="mt-3"
+                  loading={busy}
+                  onClick={user ? claimOrder : () => navigate("/login")}
+                >
+                  {user ? t("claimSignedIn") : t("claimCta")}
+                </Button>
+              </div>
+            ) : null}
 
             {options.exchange?.length ? (
               <>
@@ -374,7 +420,10 @@ export default function TicketDetail() {
 
             {/* Give it away. An open link is shown back rather than offering
                 a second "share" button the server would refuse. */}
-            {options.share ? (
+            {/* Giving the ticket away disposes of the seat, so it needs an
+                account for the same reason cancelling does. Hidden entirely
+                for a guest -- the claim prompt above is the path to it. */}
+            {!options.viaSession ? null : options.share ? (
               <>
                 <h3 className="mt-5 flex items-center gap-2 text-sm font-bold">
                   <Share2 className="size-4 text-muted" />

@@ -71,6 +71,17 @@ type OrderAuth = {
   isBuyer: boolean;
   /** True when the caller may see the buyer's own contact details. */
   maySeeContact: boolean;
+  /**
+   * True when a real signed-in account proved this, not just a link.
+   *
+   * A guest's only credential is the URL they were given, and URLs get
+   * forwarded, screenshotted and left in shared chat threads. That is an
+   * acceptable key for READING a ticket — the holder needs to open it at the
+   * gate — but not for refunding money or disposing of the seat. Routes that
+   * do either require this flag, so a leaked link cannot spend or destroy
+   * what it can show.
+   */
+  viaSession: boolean;
 };
 
 /**
@@ -83,20 +94,23 @@ export async function authoriseOrder(
   req: Request,
   order: { id: string; customerId: string | null; accessToken: string | null },
 ): Promise<OrderAuth> {
-  const token = presentedToken(req);
-  if (token && tokenMatches(token, order.accessToken)) {
-    return { isBuyer: true, maySeeContact: true };
-  }
-
+  // The signed-in owner first. Checked before the token so that a buyer who
+  // has claimed their order gets viaSession even when their browser still
+  // has the old guest token lying around in local storage.
   const userId = req.user?.id;
   if (userId && order.customerId && order.customerId === userId) {
-    return { isBuyer: true, maySeeContact: true };
+    return { isBuyer: true, maySeeContact: true, viaSession: true };
+  }
+
+  const token = presentedToken(req);
+  if (token && tokenMatches(token, order.accessToken)) {
+    return { isBuyer: true, maySeeContact: true, viaSession: false };
   }
 
   // Staff. scope.any is the capability that already means "act beyond your
   // own rows" everywhere else in this codebase, so it means that here too.
   if (await userHasPermission(req.user, "scope.any")) {
-    return { isBuyer: false, maySeeContact: true };
+    return { isBuyer: false, maySeeContact: true, viaSession: true };
   }
 
   throw new HttpError(403, "This order is not yours");
@@ -120,9 +134,41 @@ export async function authoriseOrderOrOrganiser(
       where: { id: order.eventId },
       select: { organiserId: true },
     });
-    if (event?.organiserId === userId) return { isBuyer: false, maySeeContact: true };
+    if (event?.organiserId === userId) return { isBuyer: false, maySeeContact: true, viaSession: true };
     throw err;
   }
+}
+
+/**
+ * Load a ticket for an action that spends money or disposes of the seat:
+ * cancel-for-refund, resale, giving it away.
+ *
+ * These need a real account, not just the order link. A guest buyer can view
+ * their ticket, show its QR and fix a typo with the link alone — but the link
+ * travels (forwarded, screenshotted, left in a shared thread), and anyone
+ * holding a copy would otherwise be able to refund the buyer's money or hand
+ * their seat to a stranger, with no account to recover through afterwards.
+ *
+ * 403 with a distinct message rather than 401: a 401 makes the SPA sign the
+ * user out, and a guest has no session to lose. The frontend matches on this
+ * to offer "claim this order" instead of a dead error.
+ */
+export async function requireTicketAccessWithSession(req: Request, ticketId: string) {
+  // Proves the caller may touch this ticket at all — by order token, by
+  // ticket token (a share recipient), or by session. Throws first if not.
+  const ticket = await requireTicketAccess(req, ticketId);
+
+  // Then the stricter question: was it a SESSION that proved it? Asked
+  // directly rather than by re-running authoriseOrder, because a share
+  // recipient's ticket-scoped token is not the order's and would fail that
+  // with "This order is not yours" — true of the token, misleading to
+  // someone who does legitimately hold the ticket.
+  const userId = req.user?.id;
+  const ownsIt = Boolean(userId) && ticket.order.customerId === userId;
+  if (!ownsIt && !(await userHasPermission(req.user, "scope.any"))) {
+    throw new HttpError(403, "Create an account to manage this ticket");
+  }
+  return ticket;
 }
 
 /**

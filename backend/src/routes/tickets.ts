@@ -9,7 +9,7 @@ import { committedForTier } from "../lib/availability.js";
 import { ticketPayload } from "../lib/ticket-signature.js";
 import { cancelPolicy, exchangeTicket, renameHolder, selfCancelTicket } from "../lib/ticket-admin.js";
 import { shareTicket } from "../lib/share.js";
-import { authoriseOrderOrOrganiser, requireTicketAccess } from "../lib/order-access.js";
+import { authoriseOrderOrOrganiser, requireTicketAccess, requireTicketAccessWithSession } from "../lib/order-access.js";
 
 export const ticketsRouter = Router();
 
@@ -172,6 +172,12 @@ ticketsRouter.get(
       orderBy: { createdAt: "desc" },
     });
 
+    // Whether this caller reached the ticket with a real account or just the
+    // link. The manage panel reads it to decide between showing the
+    // money/disposal actions and showing "claim this order" — without it the
+    // UI would render buttons that are now certain to 403.
+    const ownsIt = Boolean(req.user?.id) && ticket.order.customerId === req.user!.id;
+
     res.json({
       status: ticket.status,
       cancel: policy,
@@ -179,6 +185,10 @@ ticketsRouter.get(
       share: openShare ? { id: openShare.id, token: openShare.token } : null,
       shareable:
         ticket.status === "VALID" && ticket.order.event.startAt.getTime() > Date.now() && !openShare,
+      /** False for a guest holding only their confirmation link. */
+      viaSession: ownsIt,
+      /** The order to claim, so the UI can offer that in one step. */
+      orderId: ticket.orderId,
     });
   }),
 );
@@ -187,7 +197,9 @@ ticketsRouter.post(
   "/:id/cancel",
   optionalAuth,
   asyncHandler(async (req, res) => {
-    const ticket = await requireTicketAccess(req, param(req, "id"));
+    // Refunds real money, so the order link alone is not enough -- see
+    // requireTicketAccessWithSession.
+    const ticket = await requireTicketAccessWithSession(req, param(req, "id"));
     const result = await selfCancelTicket(ticket.id);
     res.json(result);
   }),

@@ -226,16 +226,33 @@ await expectStatus("transfer of a guest order by a customer → 403", "POST", `/
 // checks keep the route surface and its guards covered here.
 setGroup("SHARE  /api/share");
 
-const share = await call("POST", `/api/share${k(orderKey)}`, { body: { ticketId: ticket2?.id } });
-record("POST /share creates a link for a guest ticket", share.status === 201 && typeof share.data?.token === "string", `${share.status}`);
+// Giving a ticket away disposes of the seat, so the confirmation link alone
+// is not enough — links travel, and a copy must not be able to hand someone
+// else's seat to a stranger. The buyer claims the order into an account
+// first, which is the real path the UI offers.
+await expectStatus("giving away a ticket with only the link → 403", "POST", `/api/share${k(orderKey)}`, 403, {
+  body: { ticketId: ticket2?.id },
+});
+await expectStatus("and with no credential at all → 403", "POST", "/api/share", 403, { body: { ticketId: ticket2?.id } });
+
+await expectStatus("the buyer claims the order into an account", "POST", `/api/orders/${orderId}/claim${k(orderKey)}`, 200, {
+  token: tokens.customer,
+});
+
+const share = await call("POST", "/api/share", { token: tokens.customer, body: { ticketId: ticket2?.id } });
+record("POST /share then creates the link", share.status === 201 && typeof share.data?.token === "string", `${share.status}`);
 await expectStatus("GET /share/:token is public", "GET", `/api/share/${share.data?.token}`, 200);
 await expectStatus("GET /share/:token unknown → 410", "GET", "/api/share/nope-xyz", 410);
-await expectStatus("giving away a ticket without the token → 403", "POST", "/api/share", 403, { body: { ticketId: ticket2?.id } });
-await expectStatus("a second open link → 409", "POST", `/api/share${k(orderKey)}`, 409, { body: { ticketId: ticket2?.id } });
+await expectStatus("a second open link → 409", "POST", "/api/share", 409, {
+  token: tokens.customer,
+  body: { ticketId: ticket2?.id },
+});
 await expectStatus("claim with a too-short name → 400", "POST", `/api/share/${share.data?.token}/claim`, 400, {
   body: { holderName: "ab" },
 });
-await expectStatus("DELETE /share/:id revokes it", "DELETE", `/api/share/${share.data?.id}${k(orderKey)}`, 204);
+await expectStatus("DELETE /share/:id revokes it", "DELETE", `/api/share/${share.data?.id}`, 204, {
+  token: tokens.customer,
+});
 await expectStatus("claiming a revoked link → 410", "POST", `/api/share/${share.data?.token}/claim`, 410, {
   body: { holderName: "Too Late" },
 });

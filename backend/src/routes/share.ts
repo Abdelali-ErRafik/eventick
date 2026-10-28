@@ -5,7 +5,7 @@ import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { optionalAuth } from "../middleware/auth.js";
 import { claimShare, resolveShare, revokeShare, shareTicket } from "../lib/share.js";
 import { ticketPayload } from "../lib/ticket-signature.js";
-import { newAccessToken, requireTicketAccess } from "../lib/order-access.js";
+import { newAccessToken, requireTicketAccessWithSession } from "../lib/order-access.js";
 
 export const shareRouter = Router();
 
@@ -24,7 +24,7 @@ shareRouter.post(
   optionalAuth,
   asyncHandler(async (req, res) => {
     const body = createSchema.parse(req.body);
-    const ticket = await requireTicketAccess(req, body.ticketId);
+    const ticket = await requireTicketAccessWithSession(req, body.ticketId);
     const share = await shareTicket(ticket.id, ticket.order.customerId, body.message);
     res.status(201).json({
       id: share.id,
@@ -43,7 +43,7 @@ shareRouter.delete(
     const id = param(req, "id");
     const share = await prisma.ticketShare.findUnique({ where: { id } });
     if (!share) throw new HttpError(404, "Share not found");
-    await requireTicketAccess(req, share.ticketId);
+    await requireTicketAccessWithSession(req, share.ticketId);
     await revokeShare(id);
     res.status(204).end();
   }),

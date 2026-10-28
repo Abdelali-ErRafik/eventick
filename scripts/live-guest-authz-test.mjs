@@ -16,15 +16,20 @@
  * codebase already uses for TicketShare.token — handed to the buyer as part
  * of their confirmation link. This file pins down the resulting boundary:
  *
- *   1. A guest can still do everything with their own token. Guest checkout
- *      must not become login-only; that is the feature, not the bug.
- *   2. A stranger holding only the id can read nothing sensitive and write
+ *   1. The link alone lets a guest USE their ticket: read the order, open
+ *      the QR, download the PDF, fix a typo, change to a free zone. Guest
+ *      checkout must not become login-only; that is the feature, not the bug.
+ *   2. The link alone does NOT let anyone SPEND or DISPOSE of it — cancel
+ *      for a refund, resell, give away. Links travel (forwarded,
+ *      screenshotted, left in a shared thread), so a copy must not be able
+ *      to refund the buyer's money or hand their seat to a stranger. Those
+ *      need a real account, reached by claiming the order.
+ *   3. A stranger holding only the id can read nothing sensitive and write
  *      nothing at all.
- *   3. A registered buyer's tickets stay reachable only by that buyer, which
+ *   4. A registered buyer's tickets stay reachable only by that buyer, which
  *      already worked and must keep working.
  *
- * Written to FAIL against the pre-fix code on the write paths, and to pass
- * after. Creates its own orders and removes them at the end.
+ * Creates its own orders and removes them at the end.
  */
 
 const API = process.env.API ?? "http://localhost:4100";
@@ -117,7 +122,7 @@ async function buy(qty, token) {
 
 // ──────────────────────────────── the guest keeps their own access ──
 
-setGroup("GUEST  can still do everything with their own link");
+setGroup("GUEST  what the link alone may and may not do");
 
 const mine = await buy(3);
 record("a guest can buy with no account at all", Boolean(mine.id), mine.id?.slice(0, 10) + "…");
@@ -142,23 +147,60 @@ const rename = await call("PATCH", `/api/tickets/${t?.id}/holder${k(mine.accessT
 });
 record("renames the holder on their own ticket", rename.status === 200, `${rename.status}`);
 
+// The line between USING a ticket and SPENDING or DISPOSING of it.
+//
+// A guest's only credential is the link they were given, and links travel:
+// forwarded, screenshotted, left in a shared thread. That is an acceptable
+// key for opening a ticket at the gate, but not for refunding the money or
+// handing the seat to someone else — so those need a real account, and a
+// copy of the link cannot spend what it can show.
 const own = await call("POST", `/api/tickets/${myTickets[1]?.id}/cancel${k(mine.accessToken)}`);
-record("cancels their own ticket", own.status === 200, `${own.status}`);
+record("cannot cancel for a refund with the link alone", own.status === 403, `${own.status}`);
 
-// POST /share and DELETE /share/:id take the ticket id in the BODY (or a
-// share id that is not a ticket id at all), so the frontend cannot resolve
-// either request from the URL alone — it has to attach the token itself.
-// Regression coverage for exactly that: the frontend once silently dropped
-// it here while every /tickets/* and /orders/* call kept working, so this
-// was the one action in the manage panel a guest buyer could not use.
 const shareOf = await call("POST", "/api/share", {
   orderToken: mine.accessToken,
   body: { ticketId: myTickets[2]?.id },
 });
-record("creates a share link for their own ticket", shareOf.status === 201, `${shareOf.status}`);
-if (shareOf.status === 201) {
-  const revoked = await call("DELETE", `/api/share/${shareOf.data?.id}`, { orderToken: mine.accessToken });
-  record("revokes their own share link", revoked.status === 204, `${revoked.status}`);
+record("cannot give the ticket away with the link alone", shareOf.status === 403, `${shareOf.status}`);
+
+const listOf = await call("POST", "/api/resale/listings", {
+  orderToken: mine.accessToken,
+  body: { ticketId: myTickets[2]?.id },
+});
+record("cannot list it for resale with the link alone", listOf.status === 403, `${listOf.status}`);
+
+// None of the refused attempts may have taken effect.
+const stillMine = await call("GET", `/api/orders/${mine.id}${k(mine.accessToken)}`);
+record(
+  "every ticket is still VALID after the refusals",
+  (stillMine.data?.order?.tickets ?? []).filter((x) => x.status === "VALID").length === 3,
+  `${(stillMine.data?.order?.tickets ?? []).filter((x) => x.status === "VALID").length}/3 valid`,
+);
+
+// Claiming the order into an account is the step that unlocks them, and
+// the order token is the proof — deliberately not the order's email,
+// which is shown to anyone holding the same link.
+const claimer = await call("POST", "/api/auth/register", {
+  body: { name: "Invite Claim", email: `guest-claim-${Date.now()}@example.com`, password: "guest-claim-2026" },
+});
+const claimerToken = claimer.data?.token;
+const claimed = await call("POST", `/api/orders/${mine.id}/claim`, {
+  token: claimerToken,
+  orderToken: mine.accessToken,
+});
+record("claiming the order into an account works", claimed.status === 200, `${claimed.status}`);
+
+const afterCancel = await call("POST", `/api/tickets/${myTickets[1]?.id}/cancel`, { token: claimerToken });
+record("and then cancelling is allowed", afterCancel.status === 200, `${afterCancel.status}`);
+
+const afterShare = await call("POST", "/api/share", {
+  token: claimerToken,
+  body: { ticketId: myTickets[2]?.id },
+});
+record("and giving it away is allowed", afterShare.status === 201, `${afterShare.status}`);
+if (afterShare.status === 201) {
+  const revoked = await call("DELETE", `/api/share/${afterShare.data?.id}`, { token: claimerToken });
+  record("and the share link can be revoked again", revoked.status === 204, `${revoked.status}`);
 }
 
 // ──────────────────────────────────── a stranger is locked out ──

@@ -6,7 +6,7 @@ import { optionalAuth } from "../middleware/auth.js";
 import { phoneOk, makePaymentRef } from "../lib/payment-sim.js";
 import { isMockPayments, getStripe, CURRENCY } from "../lib/stripe.js";
 import { cancelListing, completeResale, listTicketForResale, resolveListing } from "../lib/resale.js";
-import { requireTicketAccess } from "../lib/order-access.js";
+import { requireTicketAccessWithSession } from "../lib/order-access.js";
 
 export const resaleRouter = Router();
 
@@ -22,7 +22,7 @@ resaleRouter.post(
   optionalAuth,
   asyncHandler(async (req, res) => {
     const body = listSchema.parse(req.body);
-    const ticket = await requireTicketAccess(req, body.ticketId);
+    const ticket = await requireTicketAccessWithSession(req, body.ticketId);
     const listing = await listTicketForResale(ticket.id, ticket.order.customerId);
     res.status(201).json({
       id: listing.id,
@@ -40,7 +40,7 @@ resaleRouter.delete(
     const id = param(req, "id");
     const listing = await prisma.resaleListing.findUnique({ where: { id }, include: { ticket: true } });
     if (!listing) throw new HttpError(404, "Listing not found");
-    await requireTicketAccess(req, listing.ticketId);
+    await requireTicketAccessWithSession(req, listing.ticketId);
     await cancelListing(id);
     res.status(204).end();
   }),

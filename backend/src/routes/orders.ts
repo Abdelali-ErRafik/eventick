@@ -311,6 +311,50 @@ ordersRouter.get(
   }),
 );
 
+/**
+ * Attach a guest order to the account that is signed in.
+ *
+ * Without this, "create an account to manage this ticket" would be a dead
+ * end: /register makes an account but nothing links the orders bought before
+ * it existed, and GET /orders filters on customerId — so a guest who signed
+ * up would still see an empty ticket list and still be refused the actions
+ * that now need a session.
+ *
+ * Authorised by the order's own access token, which is the thing the buyer
+ * demonstrably has (it is in their confirmation link). Deliberately NOT by
+ * matching the order's email: that email is shown to anyone holding the same
+ * link, so it would be a password printed on the door.
+ *
+ * Idempotent for the same account, so a double-click or a retry is harmless.
+ * An order already claimed by SOMEONE ELSE is refused rather than reassigned
+ * — two people can hold the same link, and the first to claim it is the one
+ * whose account the refund will later go to.
+ */
+ordersRouter.post(
+  "/:id/claim",
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) throw new HttpError(404, "Order not found");
+
+    // Proves the caller holds the buyer's link. authoriseOrder also accepts
+    // an existing owner's session, which is what makes a repeat call a no-op.
+    await authoriseOrder(req, order);
+
+    const userId = req.user!.id;
+    if (order.customerId && order.customerId !== userId) {
+      throw new HttpError(409, "This order already belongs to another account");
+    }
+
+    const updated = order.customerId
+      ? order
+      : await prisma.order.update({ where: { id }, data: { customerId: userId } });
+
+    res.json({ order: publicOrder({ ...updated, tickets: [] }), claimed: !order.customerId });
+  }),
+);
+
 // Exposed for the event-detail screen's live "n seats left" display.
 ordersRouter.get(
   "/availability/:slug",
