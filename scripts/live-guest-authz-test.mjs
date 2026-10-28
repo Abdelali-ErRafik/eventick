@@ -48,9 +48,13 @@ function record(label, pass, detail) {
   console.log(`  ${mark}  ${label}${detail ? `  \x1b[2m${detail}\x1b[0m` : ""}`);
 }
 
-async function call(method, path, { token, body } = {}) {
+async function call(method, path, { token, orderToken, body } = {}) {
   const headers = {};
   if (token) headers.Authorization = `Bearer ${token}`;
+  // The guest credential. Separate from `token` on purpose — a guest has no
+  // bearer token at all, and mixing the two into one param is how a test
+  // call ends up silently sending neither.
+  if (orderToken) headers["X-Order-Token"] = orderToken;
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetch(`${API}${path}`, {
     method,
@@ -140,6 +144,22 @@ record("renames the holder on their own ticket", rename.status === 200, `${renam
 
 const own = await call("POST", `/api/tickets/${myTickets[1]?.id}/cancel${k(mine.accessToken)}`);
 record("cancels their own ticket", own.status === 200, `${own.status}`);
+
+// POST /share and DELETE /share/:id take the ticket id in the BODY (or a
+// share id that is not a ticket id at all), so the frontend cannot resolve
+// either request from the URL alone — it has to attach the token itself.
+// Regression coverage for exactly that: the frontend once silently dropped
+// it here while every /tickets/* and /orders/* call kept working, so this
+// was the one action in the manage panel a guest buyer could not use.
+const shareOf = await call("POST", "/api/share", {
+  orderToken: mine.accessToken,
+  body: { ticketId: myTickets[2]?.id },
+});
+record("creates a share link for their own ticket", shareOf.status === 201, `${shareOf.status}`);
+if (shareOf.status === 201) {
+  const revoked = await call("DELETE", `/api/share/${shareOf.data?.id}`, { orderToken: mine.accessToken });
+  record("revokes their own share link", revoked.status === 204, `${revoked.status}`);
+}
 
 // ──────────────────────────────────── a stranger is locked out ──
 

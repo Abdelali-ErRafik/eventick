@@ -101,12 +101,28 @@ export function setToken(token) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+/** The token for a ticket by id — the ticket's own (a share recipient has
+ * only this one) falling back to its order's. Exported because routes like
+ * POST /share and POST /resale/listings take the ticket id in the BODY, not
+ * the URL, so there is no path for orderTokenFor below to match it: the call
+ * site has to look this up itself and pass it as `{ orderToken }`. */
+export function tokenForTicket(ticketId) {
+  return getTicketKey(ticketId) ?? getTicketOrderKey(ticketId);
+}
+
 /**
  * The order token this path needs, if any.
  *
  * Attached here rather than at each call site: there are eight places that
  * touch an order or a ticket, and one of them forgetting would be a guest
- * buyer locked out of their own ticket with no way to tell why.
+ * buyer locked out of their own ticket with no way to tell why. It only
+ * covers requests whose ticket/order id is IN THE PATH, though — POST /share
+ * and POST /resale/listings take it in the body instead, so those two routes
+ * still need tokenForTicket called explicitly at the call site. That gap is
+ * exactly how a guest's "Offrir ce billet" button once 403'd with "This
+ * order is not yours": every /tickets/* and /orders/* call kept working
+ * because this function covered them, and the one call that bypassed it
+ * silently sent no credential at all.
  *
  * Sent as a header, not in the URL, so the secret stays out of referrer
  * headers and server access logs on every request after the first.
@@ -115,9 +131,7 @@ function orderTokenFor(path) {
   const order = path.match(/^\/orders\/(?:hold\/)?([^/?]+)/);
   if (order) return getOrderKey(order[1]);
   const ticket = path.match(/^\/tickets\/([^/?]+)/);
-  // The ticket's own token first: a share recipient has only that one, and it
-  // is the narrower credential, so preferring it never widens access.
-  if (ticket) return getTicketKey(ticket[1]) ?? getTicketOrderKey(ticket[1]);
+  if (ticket) return tokenForTicket(ticket[1]);
   return null;
 }
 
@@ -201,9 +215,9 @@ export async function uploadImage(file) {
 }
 
 export const api = {
-  get: (path) => request("GET", path),
-  post: (path, body) => request("POST", path, body),
-  patch: (path, body) => request("PATCH", path, body),
+  get: (path, options) => request("GET", path, undefined, options),
+  post: (path, body, options) => request("POST", path, body, options),
+  patch: (path, body, options) => request("PATCH", path, body, options),
   del: (path, options) => request("DELETE", path, undefined, options),
 };
 

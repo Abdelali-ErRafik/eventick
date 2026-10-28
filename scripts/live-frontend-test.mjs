@@ -43,12 +43,18 @@ function record(label, pass, detail) {
 }
 
 /** Mirrors frontend/src/api.js: /api prefix, Bearer token, JSON. */
-async function api(method, path, { token, body } = {}) {
+async function api(method, path, { token, orderToken, body } = {}) {
   const res = await fetch(`${PROXY}/api${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      // The guest credential api.js sends as X-Order-Token. Kept separate
+      // from `token`: a guest has no bearer token at all, and POST /share /
+      // POST /resale/listings take the ticket id in the BODY, so api.js
+      // cannot resolve this one from the URL the way it does for
+      // /orders/:id and /tickets/:id — the call site has to supply it.
+      ...(orderToken ? { "X-Order-Token": orderToken } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -371,6 +377,37 @@ async function main() {
   // ── TicketDetail.jsx share panel / ClaimShare.jsx ─────────────────────
   setGroup("SHARING  TicketDetail.jsx panel, ClaimShare.jsx");
   {
+    // A real GUEST order — no bearer token anywhere — because POST /share
+    // and DELETE /share/:id take the ticket id in the body or a share id,
+    // neither of which api.js's path-based lookup can resolve on its own.
+    // This caught a real regression: the two calls worked for a logged-in
+    // customer (their session covers everything) while a guest buyer's
+    // "Offrir ce billet" button silently 403'd with "This order is not
+    // yours" — the live-guest-authz-test suite hits the backend directly
+    // and never would have seen it either, since the backend's own check
+    // was always correct.
+    const guestHold = await api("POST", "/orders/hold", { body: { eventSlug: bought.slug, lines: [{ tierId: bought.tierId, qty: 1 }] } });
+    const guestOrderToken = guestHold.data.accessToken;
+    await api("POST", `/orders/${guestHold.data.order.id}/pay`, {
+      orderToken: guestOrderToken,
+      body: { holderName: "Invité Partage", email: `fe-guest-share-${SUFFIX}@example.com`, phone: "0612345678" },
+    });
+    const guestOrder = await api("GET", `/orders/${guestHold.data.order.id}`, { orderToken: guestOrderToken });
+    const guestTicketId = guestOrder.data.order.tickets[0].id;
+
+    const guestShare = await check("a GUEST creates a share link with their order token (not a login)", "POST", "/share", 201, {
+      orderToken: guestOrderToken,
+      body: { ticketId: guestTicketId },
+      shape: (d) => typeof d?.token === "string" && typeof d?.id === "string",
+    });
+    await check("and revokes it the same way", "DELETE", `/share/${guestShare.data.id}`, 204, {
+      orderToken: guestOrderToken,
+    });
+    // The id-only request from the actual bug report, pinned down directly.
+    await check("without the token, the same request is refused — not silently ignored", "POST", "/share", 403, {
+      body: { ticketId: guestTicketId },
+    });
+
     const ticketId = bought.tickets[1].id;
 
     const share = await check("POST /share creates the link the panel copies", "POST", "/share", 201, {

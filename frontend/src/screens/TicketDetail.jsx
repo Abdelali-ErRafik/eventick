@@ -5,7 +5,7 @@ import { QrMark } from "../components/QrMark";
 import { Shell } from "../components/Shell";
 import { toast } from "sonner";
 import { Meta, seatLabel } from "../components/TicketPass";
-import { api, downloadFile, money, rememberTicketKey } from "../api";
+import { api, downloadFile, money, rememberTicketKey, tokenForTicket } from "../api";
 import { useI18n } from "../i18n";
 import { Badge, Button, Card, Container, ErrorState, Field, IconButton, Input, Modal } from "../ui";
 import { cn } from "../utils";
@@ -99,10 +99,14 @@ export default function TicketDetail() {
     if (busy) return;
     setBusy(true);
     try {
-      const share = await api.post("/share", {
-        ticketId,
-        message: shareMessage.trim() || undefined,
-      });
+      // POST /share takes the ticket id in the BODY, which api.js's own
+      // path-based lookup can never see — this is the one request on this
+      // page where the token has to be supplied explicitly.
+      const share = await api.post(
+        "/share",
+        { ticketId, message: shareMessage.trim() || undefined },
+        { orderToken: tokenForTicket(ticketId) },
+      );
       setShareMessage("");
       // Offer the link straight away — copying is the whole point of creating it.
       await copyShare(share.token);
@@ -129,7 +133,9 @@ export default function TicketDetail() {
     if (busy) return;
     setBusy(true);
     try {
-      await api.del(`/share/${shareId}`);
+      // /share/:id's :id is the SHARE's id, not the ticket's — there is no
+      // path segment here for api.js to read a ticket token from either.
+      await api.del(`/share/${shareId}`, { orderToken: tokenForTicket(ticketId) });
       toast.success(t("shareRevoked"));
       load();
     } catch (err) {
