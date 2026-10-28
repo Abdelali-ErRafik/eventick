@@ -42,6 +42,58 @@ export function EventCard({ event, variant = "grid" }) {
   const feature = variant === "feature";
   const compact = variant === "compact";
 
+  // compact used to be the exact same column layout as the default grid
+  // card, just with a shorter image -- same padding, same mt-auto push, so
+  // the price/CTA row still landed at a fixed distance from the top and
+  // left a visible gap under a short address. A row layout (thumbnail
+  // beside the text) packs tightly regardless of how much text there is,
+  // which is what "secondary, smaller than the headline" should look like.
+  if (compact) {
+    return (
+      <article className="group relative flex items-center gap-3 overflow-hidden rounded-card border border-line/10 bg-card p-3 shadow-card transition duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-pop">
+        <div className="relative size-20 shrink-0 overflow-hidden rounded-control">
+          <img
+            src={event.image}
+            alt=""
+            loading="lazy"
+            className="size-full object-cover object-center transition duration-500 group-hover:scale-[1.04]"
+          />
+          <span className="absolute inset-x-0 bottom-0 bg-stage/80 py-0.5 text-center font-mono text-[9px] font-bold uppercase leading-none text-stage-fg">
+            {stamp.month} {stamp.day}
+          </span>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate font-mono text-[10px] font-bold uppercase tracking-widest text-primary">
+              {categoryLabel(event.category, t)}
+            </p>
+            {badge ? <Badge tone={badge.tone}>{t(badge.key)}</Badge> : null}
+          </div>
+          <h3 className="mt-0.5 truncate font-display text-base font-bold leading-tight">{title}</h3>
+          <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted">
+            <MapPin className="size-3.5 shrink-0" aria-hidden />
+            {venue}, {event.city}
+          </p>
+        </div>
+
+        <div className="shrink-0 text-end">
+          <span className="block text-[10px] font-semibold uppercase text-muted">{t("from")}</span>
+          <span className="block font-display text-sm font-extrabold tabular-nums">{money(priceCents)}</span>
+        </div>
+
+        <Link
+          to={`/evenements/${event.slug}`}
+          className="absolute inset-0 rounded-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        >
+          <span className="sr-only">
+            {title} — {venue}, {event.city}
+          </span>
+        </Link>
+      </article>
+    );
+  }
+
   return (
     <article className="group relative flex h-full flex-col overflow-hidden rounded-card border border-line/10 bg-card shadow-card transition duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-pop">
       <div className={cn("flex flex-1 flex-col", feature && "md:flex-row")}>
@@ -52,7 +104,7 @@ export function EventCard({ event, variant = "grid" }) {
             loading="lazy"
             className={cn(
               "w-full object-cover object-center transition duration-500 group-hover:scale-[1.04]",
-              compact ? "h-40" : feature ? "h-64 md:h-full md:min-h-[22rem]" : "h-48",
+              feature ? "h-64 md:h-full md:min-h-[22rem]" : "h-48",
             )}
           />
           {/* Date stamp. Readable over any photo because it sits on card, not
