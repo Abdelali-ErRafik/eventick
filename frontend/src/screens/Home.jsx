@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Headphones, Music, QrCode, RefreshCcw, Theater, Trophy, Utensils, MoonStar } from "lucide-react";
+import { Calendar, ChevronDown, Flame, Headphones, MapPin, Music, QrCode, RefreshCcw, Theater, Trophy, Utensils, MoonStar } from "lucide-react";
 import { QrMark } from "../components/QrMark";
 import { Shell } from "../components/Shell";
 import { EventCard } from "../components/EventCard";
@@ -106,48 +106,59 @@ export default function Home() {
           </div>
 
           <form className="mt-10 max-w-4xl" onSubmit={submitSearch}>
-            <div className="grid gap-2 rounded-panel bg-card p-3 text-ink shadow-pop md:grid-cols-[1fr_1fr_1fr_auto]">
-              <label className="block px-2">
-                <span className="text-xs font-semibold text-muted">{t("fieldType")}</span>
-                <select className="field mt-1 h-11" value={cat} onChange={(e) => setCat(e.target.value)}>
-                  <option value="">{t("allUniverses")}</option>
-                  {CATS.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {categoryLabel(item.id, t)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block px-2">
-                <span className="text-xs font-semibold text-muted">{t("fieldPeriod")}</span>
-                <select className="field mt-1 h-11" value={quand} onChange={(e) => setQuand(e.target.value)}>
-                  <option value="">{t("anyTime")}</option>
-                  <option value="weekend">{t("thisWeekend")}</option>
-                  <option value="month">{t("thisMonth")}</option>
-                  <option value="summer">{t("summer")}</option>
-                </select>
-              </label>
-              <label className="block px-2">
-                <span className="text-xs font-semibold text-muted">{t("fieldCity")}</span>
-                <select className="field mt-1 h-11" value={ville} onChange={(e) => setVille(e.target.value)}>
-                  <option value="">{t("allMorocco")}</option>
-                  {CITIES.map((city) => (
-                    <option key={city}>{city}</option>
-                  ))}
-                </select>
-              </label>
-              <Button size="lg" className="self-end" type="submit">
-                {t("find")}
-              </Button>
+            {/* The search card used to be a plain white rectangle of three
+                bare <select> elements -- functional, but it looked like any
+                admin form, not the one thing on the page meant to invite a
+                click. A glow ring, icon-prefixed fields with real dividers
+                between them, and a floating pill-shaped submit give it the
+                weight the rest of the hero already earned. */}
+            <div className="relative rounded-panel bg-linear-to-br from-primary via-secondary to-accent p-[1.5px] shadow-pop">
+              <div className="flex flex-col divide-y divide-line/10 rounded-[calc(var(--radius-panel)-1.5px)] bg-card text-ink md:flex-row md:divide-x md:divide-y-0">
+                <SearchField icon={<Music className="size-4" />} label={t("fieldType")}>
+                  <select className="search-select" value={cat} onChange={(e) => setCat(e.target.value)}>
+                    <option value="">{t("allUniverses")}</option>
+                    {CATS.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {categoryLabel(item.id, t)}
+                      </option>
+                    ))}
+                  </select>
+                </SearchField>
+                <SearchField icon={<Calendar className="size-4" />} label={t("fieldPeriod")}>
+                  <select className="search-select" value={quand} onChange={(e) => setQuand(e.target.value)}>
+                    <option value="">{t("anyTime")}</option>
+                    <option value="weekend">{t("thisWeekend")}</option>
+                    <option value="month">{t("thisMonth")}</option>
+                    <option value="summer">{t("summer")}</option>
+                  </select>
+                </SearchField>
+                <SearchField icon={<MapPin className="size-4" />} label={t("fieldCity")}>
+                  <select className="search-select" value={ville} onChange={(e) => setVille(e.target.value)}>
+                    <option value="">{t("allMorocco")}</option>
+                    {CITIES.map((city) => (
+                      <option key={city}>{city}</option>
+                    ))}
+                  </select>
+                </SearchField>
+                <div className="flex items-center p-2.5 md:ps-0">
+                  <Button size="lg" type="submit" className="w-full md:w-auto">
+                    {t("find")}
+                  </Button>
+                </div>
+              </div>
             </div>
-            <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-semibold text-stage-muted">{t("trends")} :</span>
+
+            <div className="mt-5 flex flex-wrap items-center gap-2 text-sm">
+              <span className="inline-flex items-center gap-1.5 font-semibold text-stage-muted">
+                <Flame className="size-3.5 text-accent" aria-hidden />
+                {t("trends")} :
+              </span>
               {TRENDS.map((trend) => (
                 <button
                   key={trend.label}
                   type="button"
                   onClick={() => navigate(`/explorer?q=${encodeURIComponent(trend.query)}`)}
-                  className="rounded-full border border-stage-fg/20 bg-stage-fg/10 px-3 py-1.5 text-xs font-bold text-stage-fg transition hover:border-accent hover:text-accent"
+                  className="rounded-full border border-stage-fg/20 bg-stage-fg/10 px-3 py-1.5 text-xs font-bold text-stage-fg transition hover:border-accent hover:bg-accent hover:text-accent-fg"
                 >
                   {trend.label}
                 </button>
@@ -313,6 +324,22 @@ export default function Home() {
         </div>
       </section>
     </Shell>
+  );
+}
+
+/** One icon-prefixed field inside the hero search card. A plain label-over-
+ * select stack worked but looked like any admin form field; the icon chip
+ * plus inline label gives each one its own identity in the row. */
+function SearchField({ icon, label, children }) {
+  return (
+    <label className="flex min-w-0 flex-1 items-center gap-2.5 px-4 py-3">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-brume text-primary">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] font-semibold text-muted">{label}</span>
+        {children}
+      </span>
+      <ChevronDown className="size-4 shrink-0 text-muted" aria-hidden />
+    </label>
   );
 }
 
