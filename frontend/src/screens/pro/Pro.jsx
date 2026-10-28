@@ -23,7 +23,7 @@ const ic = (Icon) => <Icon size={19} strokeWidth={2} aria-hidden />;
 function ProInner() {
   const { locale } = useI18n();
   const t = text[locale];
-  const { canManageUsers } = useAuth();
+  const { can } = useAuth();
   const [todayCount, setTodayCount] = useState(0);
 
   // Badge on Réservations: tickets still to be scanned for events happening today.
@@ -53,36 +53,82 @@ function ProInner() {
   // Gated on the permission rather than the role so that granting
   // users.manage to ORGANISER from the permissions screen reveals this item
   // without a code change -- which is the whole point of the table.
+  // Each item names the capability its screen needs, and filters itself out
+  // when the viewer lacks it. The backend enforces the same list per route
+  // (see organiser.ts), so without this an admin revoking finance.view would
+  // leave "Finance" in the sidebar pointing at a page that 403s on load —
+  // the menu promising something the server refuses.
+  //
+  // `permission: null` means "anyone who can reach /pro at all": Pilotage is
+  // the landing screen, and the route guard already requires events.manage.
   const sections = [
-    { group: t.grpPilotage, to: "/pro", end: true, label: t.overview, icon: ic(LayoutDashboard) },
-    { group: t.grpPilotage, to: "/pro/orders", label: t.orders, icon: ic(ReceiptText), badge: todayCount },
-    { group: t.grpCatalogue, to: "/pro/events", label: t.events, icon: ic(CalendarDays) },
-    { group: t.grpCatalogue, to: "/pro/placements", label: t.placements, icon: ic(LayoutGrid) },
-    { group: t.grpCatalogue, to: "/pro/offers", label: t.offers, icon: ic(Tags) },
-    { group: t.grpOperations, to: "/pro/gate", label: t.gate, icon: ic(QrCode) },
-    { group: t.grpFinances, to: "/pro/finance", label: t.finance, icon: ic(Wallet) },
-    ...(canManageUsers
-      ? [
-          { group: t.grpAdmin, to: "/pro/users", label: t.team, icon: ic(ShieldCheck) },
-          { group: t.grpAdmin, to: "/pro/permissions", label: t.permissions, icon: ic(KeyRound) },
-        ]
-      : []),
-  ];
+    { group: t.grpPilotage, to: "/pro", end: true, label: t.overview, icon: ic(LayoutDashboard), permission: null },
+    { group: t.grpPilotage, to: "/pro/orders", label: t.orders, icon: ic(ReceiptText), badge: todayCount, permission: "orders.manage" },
+    { group: t.grpCatalogue, to: "/pro/events", label: t.events, icon: ic(CalendarDays), permission: "events.manage" },
+    { group: t.grpCatalogue, to: "/pro/placements", label: t.placements, icon: ic(LayoutGrid), permission: "events.manage" },
+    { group: t.grpCatalogue, to: "/pro/offers", label: t.offers, icon: ic(Tags), permission: "promo.manage" },
+    { group: t.grpOperations, to: "/pro/gate", label: t.gate, icon: ic(QrCode), permission: "gate.checkin" },
+    { group: t.grpFinances, to: "/pro/finance", label: t.finance, icon: ic(Wallet), permission: "finance.view" },
+    { group: t.grpAdmin, to: "/pro/users", label: t.team, icon: ic(ShieldCheck), permission: "users.manage" },
+    { group: t.grpAdmin, to: "/pro/permissions", label: t.permissions, icon: ic(KeyRound), permission: "users.manage" },
+  ].filter((item) => !item.permission || can(item.permission));
 
   return (
     <DashboardShell sections={sections}>
       <Routes>
+        {/* Hiding a nav item is not access control: someone typing the path
+            directly would otherwise render the screen and only find out from
+            a string of 403s. Every route carries the same permission its
+            sidebar entry does, so the guard holds whichever way they arrive. */}
         <Route index element={<Overview />} />
-        <Route path="events" element={<Events />} />
-        <Route path="orders" element={<Orders />} />
-        <Route path="gate" element={<Gate />} />
-        <Route path="finance" element={<Finance />} />
-        <Route path="placements" element={<Placements />} />
-        <Route path="offers" element={<Offers />} />
-        {/* Hiding the nav item above is not access control -- an ORGANISER
-            typing /pro/users directly would otherwise render the screen and
-            only find out from a string of 403s. Protected redirects before
-            any of that happens. */}
+        <Route
+          path="events"
+          element={
+            <Protected permission="events.manage">
+              <Events />
+            </Protected>
+          }
+        />
+        <Route
+          path="orders"
+          element={
+            <Protected permission="orders.manage">
+              <Orders />
+            </Protected>
+          }
+        />
+        <Route
+          path="gate"
+          element={
+            <Protected permission="gate.checkin">
+              <Gate />
+            </Protected>
+          }
+        />
+        <Route
+          path="finance"
+          element={
+            <Protected permission="finance.view">
+              <Finance />
+            </Protected>
+          }
+        />
+        <Route
+          path="placements"
+          element={
+            <Protected permission="events.manage">
+              <Placements />
+            </Protected>
+          }
+        />
+        <Route
+          path="offers"
+          element={
+            <Protected permission="promo.manage">
+              <Offers />
+            </Protected>
+          }
+        />
         <Route
           path="users"
           element={

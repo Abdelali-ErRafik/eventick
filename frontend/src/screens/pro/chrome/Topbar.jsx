@@ -93,7 +93,7 @@ export function Topbar({ eyebrow, title, onOpenNav, user, onLogout, theme, onTog
           </span>
           <span className="hidden min-w-0 text-start sm:block">
             <span className="block max-w-[10rem] truncate text-[13px] font-bold leading-tight">{user?.name}</span>
-            <span className="block text-[11px] text-muted">{user?.role}</span>
+            <span className="block text-[11px] text-muted">{labels.role ?? user?.role}</span>
           </span>
           <ChevronDown className={cn("size-4 shrink-0 text-muted transition", menuOpen && "rotate-180")} aria-hidden />
         </button>

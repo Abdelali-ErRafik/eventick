@@ -21,6 +21,12 @@ export default function DashboardShell({ sections, children }) {
   const { locale, setLocale } = useI18n();
   const t = text[locale];
   const { user, logout } = useAuth();
+
+  // The account menu printed `user.role` straight through, so it read
+  // "ORGANISER" in all three languages while the rest of the app said
+  // "Organisateur" / "Organiser" / "منظم".
+  const roleLabel =
+    user?.role === "ADMIN" ? t.roleAdmin : user?.role === "ORGANISER" ? t.roleOrganiser : t.roleCustomer;
   const { resolved, toggle } = useTheme();
   const { pathname } = useLocation();
 
@@ -101,6 +107,9 @@ export default function DashboardShell({ sections, children }) {
             themeLight: t.themeLight,
             themeDark: t.themeDark,
             langLabel: t.langLabel,
+            // The account menu showed the raw enum ("ORGANISER") while every
+            // other surface said "Organisateur".
+            role: roleLabel,
           }}
         />
 

@@ -15,7 +15,33 @@ import { reissueTicket, renameHolder } from "../lib/ticket-admin.js";
 
 export const organiserRouter = Router();
 
-organiserRouter.use(authenticate, requirePermission("events.manage"));
+/**
+ * Authentication only. The capability check belongs on each route.
+ *
+ * This used to be `requirePermission("events.manage")` for the whole router,
+ * which made four permissions decorative: finance.view, finance.refund,
+ * orders.manage and gate.checkin were all in the vocabulary and all toggleable
+ * in the Permissions screen, while nothing read them here. An admin could
+ * revoke finance.view and the organiser would keep reading revenue — verified
+ * before this was split, with /stats returning the gross after the revoke.
+ *
+ * It was also too broad in the other direction: someone granted only
+ * orders.manage, to work the order desk and nothing else, could not reach the
+ * order routes at all because they lacked events.manage.
+ *
+ * Each route below now names the capability it actually needs. `authenticate`
+ * stays here because every one of them needs a user.
+ */
+organiserRouter.use(authenticate);
+
+/** The catalogue: events and their ticket tiers. */
+const canManageEvents = requirePermission("events.manage");
+/** The order desk: reading orders, admitting, re-issuing, cancelling. */
+const canManageOrders = requirePermission("orders.manage");
+/** Revenue, payout and platform-fee figures. */
+const canViewFinance = requirePermission("finance.view");
+/** Moving money back to a buyer. */
+const canRefund = requirePermission("finance.refund");
 
 /**
  * The `?organiserId=` override on the list routes below.
@@ -39,6 +65,7 @@ async function scopeFor(req: Request): Promise<{ organiserId?: string }> {
 
 organiserRouter.get(
   "/events",
+  canManageEvents,
   asyncHandler(async (req, res) => {
     const events = await prisma.event.findMany({
       where: await scopeFor(req),
@@ -92,6 +119,7 @@ const createEventSchema = z.object({
 
 organiserRouter.post(
   "/events",
+  canManageEvents,
   asyncHandler(async (req, res) => {
     const body = createEventSchema.parse(req.body);
     const existing = await prisma.event.findUnique({ where: { slug: body.slug } });
@@ -138,6 +166,7 @@ async function requireOwnedEvent(user: Express.Request["user"], slug: string) {
 
 organiserRouter.patch(
   "/events/:slug/visibility",
+  canManageEvents,
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
     const event = await requireOwnedEvent(req.user, slug);
@@ -153,6 +182,7 @@ organiserRouter.patch(
 
 organiserRouter.delete(
   "/events/:slug",
+  canManageEvents,
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
     const event = await requireOwnedEvent(req.user, slug);
@@ -186,6 +216,7 @@ const updateEventSchema = z.object({
  * tickets and shouldn't be silently rewritten from here. */
 organiserRouter.patch(
   "/events/:slug",
+  canManageEvents,
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
     const event = await requireOwnedEvent(req.user, slug);
@@ -201,6 +232,7 @@ organiserRouter.patch(
 
 organiserRouter.get(
   "/orders",
+  canManageOrders,
   asyncHandler(async (req, res) => {
     const orders = await prisma.order.findMany({
       where: { event: await scopeFor(req) },
@@ -225,6 +257,7 @@ organiserRouter.get(
 
 organiserRouter.get(
   "/events/:slug/waitlist",
+  canManageEvents,
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
     const event = await requireOwnedEvent(req.user, slug);
@@ -250,6 +283,7 @@ organiserRouter.get(
  * without a second round-trip per order. */
 organiserRouter.get(
   "/orders/detailed",
+  canManageOrders,
   asyncHandler(async (req, res) => {
     const orders = await prisma.order.findMany({
       where: { event: await scopeFor(req) },
@@ -276,6 +310,7 @@ async function requireOwnedOrder(user: Express.Request["user"], orderId: string)
  * counter to decrement). */
 organiserRouter.post(
   "/orders/:id/cancel",
+  canManageOrders,
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
     const cancelled = await requireOwnedOrder(req.user, id);
@@ -291,6 +326,7 @@ organiserRouter.post(
 
 organiserRouter.delete(
   "/orders/:id",
+  canManageOrders,
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
     await requireOwnedOrder(req.user, id);
@@ -306,6 +342,7 @@ const admitSchema = z.object({ status: z.enum(["VALID", "USED"]) });
  * door. This is for an organiser fixing a record after the fact. */
 organiserRouter.patch(
   "/tickets/:id/status",
+  canManageOrders,
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
     const body = admitSchema.parse(req.body);
@@ -345,6 +382,7 @@ async function broadcastRecipients(eventId: string) {
  * the organiser commits to sending. */
 organiserRouter.get(
   "/events/:slug/audience",
+  canManageEvents,
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
     const event = await requireOwnedEvent(req.user, slug);
@@ -355,6 +393,7 @@ organiserRouter.get(
 
 organiserRouter.post(
   "/events/:slug/broadcast",
+  canManageEvents,
   broadcastRateLimit,
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
@@ -392,6 +431,7 @@ organiserRouter.post(
  */
 organiserRouter.get(
   "/stats",
+  canViewFinance,
   asyncHandler(async (req, res) => {
     const events = await prisma.event.findMany({ where: await scopeFor(req), select: { id: true } });
     const eventIds = events.map((event) => event.id);
@@ -437,6 +477,7 @@ const refundSchema = z.object({
  */
 organiserRouter.post(
   "/orders/:id/refund",
+  canRefund,
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
     await requireOwnedOrder(req.user, id);
@@ -477,6 +518,7 @@ const soldForTier = committedForTier;
  * organiser needs before changing capacity. */
 organiserRouter.get(
   "/events/:slug/tiers",
+  canManageEvents,
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
     const event = await requireOwnedEvent(req.user, slug);
@@ -493,6 +535,7 @@ organiserRouter.get(
 
 organiserRouter.post(
   "/events/:slug/tiers",
+  canManageEvents,
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
     const event = await requireOwnedEvent(req.user, slug);
@@ -504,6 +547,7 @@ organiserRouter.post(
 
 organiserRouter.patch(
   "/tiers/:id",
+  canManageEvents,
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
     const tier = await prisma.ticketTier.findUnique({ where: { id }, include: { event: true } });
@@ -530,6 +574,7 @@ organiserRouter.patch(
 
 organiserRouter.delete(
   "/tiers/:id",
+  canManageEvents,
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
     const tier = await prisma.ticketTier.findUnique({ where: { id }, include: { event: { include: { tiers: true } } } });
@@ -556,6 +601,7 @@ organiserRouter.delete(
  * someone else's hands, and leaving it valid would admit two people. */
 organiserRouter.post(
   "/tickets/:id/reissue",
+  canManageOrders,
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
     const ticket = await prisma.ticket.findUnique({
@@ -577,6 +623,7 @@ const holderSchema = z.object({ holderName: z.string().min(2).max(80) });
  * with the same buyer, the name just has to match the ID shown at the gate. */
 organiserRouter.patch(
   "/tickets/:id/holder",
+  canManageOrders,
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
     const body = holderSchema.parse(req.body);
