@@ -75,7 +75,7 @@ export default function Overview() {
             <Badge tone={pulse ? "accent" : "neutral"}>{t.live}</Badge>
             <Link
               to="/organiser"
-              className="inline-flex h-11 items-center rounded-control bg-primary px-4 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover active:scale-[0.97]"
+              className="inline-flex h-11 items-center rounded-control bg-action px-4 text-sm font-semibold text-action-fg transition hover:bg-action-hover active:scale-[0.97]"
             >
               {t.create}
             </Link>

@@ -291,8 +291,12 @@ export function CountChip({ icon, children }) {
 export function StockCell({ left, total }) {
   const ratio = total > 0 ? left / total : 0;
   const tone = ratio <= 0 ? "out" : ratio < 0.2 ? "low" : "ok";
-  const colors = { ok: "bg-primary", low: "bg-accent", out: "bg-danger/40" };
-  const text = { ok: "text-primary", low: "text-accent", out: "text-danger" };
+  // "Stock is fine" is a STATUS, not a brand moment -- it used bg-primary/
+  // text-primary, which meant every healthy row in every table glowed brand
+  // pink, the one colour meant to stay reserved for the logo and actions.
+  // Success-green is what a healthy number should read as.
+  const colors = { ok: "bg-success", low: "bg-accent", out: "bg-danger/40" };
+  const text = { ok: "text-success", low: "text-accent", out: "text-danger" };
   return (
     <span className="inline-flex min-w-[68px] flex-col gap-1">
       <span className="leading-none">

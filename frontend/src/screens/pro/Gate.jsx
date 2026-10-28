@@ -275,7 +275,7 @@ export default function Gate() {
                 <button
                   type="submit"
                   disabled={busy}
-                  className="h-14 shrink-0 rounded-full bg-primary px-6 text-sm font-semibold text-primary-fg transition hover:bg-primary-hover active:scale-[0.97] disabled:opacity-50"
+                  className="h-14 shrink-0 rounded-full bg-action px-6 text-sm font-semibold text-action-fg transition hover:bg-action-hover active:scale-[0.97] disabled:opacity-50"
                 >
                   {t.check}
                 </button>
