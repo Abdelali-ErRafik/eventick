@@ -390,25 +390,6 @@
     resize: vertical;
   }
 
-  /* A borderless select for the hero search card -- that card already
-     draws its own border/divider lines between fields, so a bordered
-     .field here would double up into a box-inside-a-box. */
-  .search-select {
-    display: block;
-    width: 100%;
-    border: 0;
-    background: transparent;
-    padding: 0;
-    color: var(--color-ink);
-    font: inherit;
-    font-weight: 600;
-    appearance: none;
-  }
-
-  .search-select:focus {
-    outline: none;
-  }
-
   input[type="range"] {
     accent-color: var(--color-primary);
     width: 100%;

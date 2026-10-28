@@ -15,6 +15,7 @@
  */
 export { Button, IconButton } from "./Button.jsx";
 export { Field, Input, Select, Textarea } from "./Field.jsx";
+export { Dropdown } from "./Dropdown.jsx";
 export { Modal } from "./Modal.jsx";
 export { Popover, PopoverItem } from "./Popover.jsx";
 export { Badge, DataState, EmptyState, ErrorState, LoadingState, Notice, Skeleton } from "./Feedback.jsx";

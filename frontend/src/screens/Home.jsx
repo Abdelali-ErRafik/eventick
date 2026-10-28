@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, ChevronDown, Flame, Headphones, MapPin, Music, QrCode, RefreshCcw, Theater, Trophy, Utensils, MoonStar } from "lucide-react";
+import { Calendar, Flame, Headphones, MapPin, Music, QrCode, RefreshCcw, Theater, Trophy, Utensils, MoonStar } from "lucide-react";
 import { QrMark } from "../components/QrMark";
 import { Shell } from "../components/Shell";
 import { EventCard } from "../components/EventCard";
 import { useCatalog } from "../useCatalog";
-import { Button, Container, ErrorState, LoadingState } from "../ui";
+import { Button, Container, Dropdown, ErrorState, LoadingState } from "../ui";
 import { categoryLabel, useI18n } from "../i18n";
 import { CITIES, addDays, dateKey, todayKey } from "../utils";
 
@@ -115,30 +115,42 @@ export default function Home() {
             <div className="relative rounded-panel bg-linear-to-br from-primary via-secondary to-accent p-[1.5px] shadow-pop">
               <div className="flex flex-col divide-y divide-line/10 rounded-[calc(var(--radius-panel)-1.5px)] bg-card text-ink md:flex-row md:divide-x md:divide-y-0">
                 <SearchField icon={<Music className="size-4" />} label={t("fieldType")}>
-                  <select className="search-select" value={cat} onChange={(e) => setCat(e.target.value)}>
-                    <option value="">{t("allUniverses")}</option>
-                    {CATS.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {categoryLabel(item.id, t)}
-                      </option>
-                    ))}
-                  </select>
+                  <Dropdown
+                    value={cat}
+                    onChange={setCat}
+                    placeholder={t("allUniverses")}
+                    width="w-64"
+                    triggerClassName="text-sm font-bold"
+                    options={[
+                      { value: "", label: t("allUniverses") },
+                      ...CATS.map((item) => ({ value: item.id, label: categoryLabel(item.id, t) })),
+                    ]}
+                  />
                 </SearchField>
                 <SearchField icon={<Calendar className="size-4" />} label={t("fieldPeriod")}>
-                  <select className="search-select" value={quand} onChange={(e) => setQuand(e.target.value)}>
-                    <option value="">{t("anyTime")}</option>
-                    <option value="weekend">{t("thisWeekend")}</option>
-                    <option value="month">{t("thisMonth")}</option>
-                    <option value="summer">{t("summer")}</option>
-                  </select>
+                  <Dropdown
+                    value={quand}
+                    onChange={setQuand}
+                    placeholder={t("anyTime")}
+                    width="w-56"
+                    triggerClassName="text-sm font-bold"
+                    options={[
+                      { value: "", label: t("anyTime") },
+                      { value: "weekend", label: t("thisWeekend") },
+                      { value: "month", label: t("thisMonth") },
+                      { value: "summer", label: t("summer") },
+                    ]}
+                  />
                 </SearchField>
                 <SearchField icon={<MapPin className="size-4" />} label={t("fieldCity")}>
-                  <select className="search-select" value={ville} onChange={(e) => setVille(e.target.value)}>
-                    <option value="">{t("allMorocco")}</option>
-                    {CITIES.map((city) => (
-                      <option key={city}>{city}</option>
-                    ))}
-                  </select>
+                  <Dropdown
+                    value={ville}
+                    onChange={setVille}
+                    placeholder={t("allMorocco")}
+                    width="w-56"
+                    triggerClassName="text-sm font-bold"
+                    options={[{ value: "", label: t("allMorocco") }, ...CITIES.map((city) => ({ value: city, label: city }))]}
+                  />
                 </SearchField>
                 <div className="flex items-center p-2.5 md:ps-0">
                   <Button size="lg" type="submit" className="w-full md:w-auto">
@@ -327,19 +339,20 @@ export default function Home() {
   );
 }
 
-/** One icon-prefixed field inside the hero search card. A plain label-over-
- * select stack worked but looked like any admin form field; the icon chip
- * plus inline label gives each one its own identity in the row. */
+/** One icon-prefixed field inside the hero search card, wrapping a custom
+ * Dropdown (see ui/Dropdown.jsx) instead of a native <select> -- a native
+ * select's popup list ignores the app's theme entirely and broke the dark
+ * card the moment it opened. The chevron lives inside Dropdown's own
+ * trigger now, not duplicated here. */
 function SearchField({ icon, label, children }) {
   return (
-    <label className="flex min-w-0 flex-1 items-center gap-2.5 px-4 py-3">
+    <div className="flex min-w-0 flex-1 items-center gap-2.5 px-4 py-3">
       <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-brume text-primary">{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block text-[11px] font-semibold text-muted">{label}</span>
         {children}
       </span>
-      <ChevronDown className="size-4 shrink-0 text-muted" aria-hidden />
-    </label>
+    </div>
   );
 }
 
