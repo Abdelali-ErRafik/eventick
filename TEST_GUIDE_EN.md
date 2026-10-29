@@ -1,12 +1,15 @@
 # 🎟️ Eventick — hands-on test guide
 
-**Fifteen checks. Do them in any order.** Every step says exactly where to click and what you must see.
+**Nineteen checks. Do them in any order.** Every step says exactly where to click and what you must see.
 
 Checks **1–12** cover the buying, ticketing and admin surface. Checks **13–15**
-cover the money side — commission, payouts and the audit journal — which is the
-newest part and the part worth most attention.
+cover the money side — commission, payouts and the audit journal. Checks
+**16–19** cover what an organiser needs in the first week of running a real
+event: a cap on how many one person may buy, sales windows, calling an event
+off, and free tickets that are not a sale. Those four are the newest part and
+the part worth most attention.
 
-> 📅 29/10/2026 · Written by walking the running app at **http://localhost:3100**. The interface ships in **French**; every label in quotes below is the text actually on screen. Switch to English from the account menu if you prefer — the checks work the same.
+> 📅 30/10/2026 · Written by walking the running app at **http://localhost:3100**. The interface ships in **French**; every label in quotes below is the text actually on screen. Switch to English from the account menu if you prefer — the checks work the same.
 
 ---
 
@@ -157,7 +160,7 @@ harmless, but `npm run db:seed` will not remove them.
 | Group | Items | Who sees it |
 |---|---|---|
 | **PILOTAGE** | Pilotage · Réservations | organiser + admin |
-| **CATALOGUE** | Événements · Placements · Offres | organiser + admin |
+| **CATALOGUE** | Événements · Placements · Invitations · Offres | organiser + admin |
 | **OPÉRATIONS** | Porte | organiser + admin |
 | **FINANCES** | Finance | organiser + admin |
 | **ADMINISTRATION** | Plateforme · Équipe · Permissions · Journal | **admin only** |
@@ -170,7 +173,10 @@ harmless, but `npm run db:seed` will not remove them.
 **16 events** across Casablanca, Rabat, Marrakech, Tanger, Agadir, Essaouira, Fès and Dakhla — 14 owned by the admin account, 2 by the organiser
 **Promo codes:** `SAFRAN15` (−15 %) and `CASA50` (−50 MAD)
 **Commission plans:** Starter 5 % · Pro 3 % + 499 MAD/month · Business 2 % + 1 999 MAD/month — Starter is the default
-**Rules:** seats are held **15 minutes** · buyers may cancel up to **48 h** before the event
+**Rules:** seats are held **15 minutes** · buyers may cancel up to **48 h** before the event · one buyer may hold **10 tickets** per event · resale is **off** until the organiser turns it on
+
+> 💡 The last two are per-event defaults an organiser can change — Pro →
+> **Événements** → the sliders icon. Checks 16 and 18 cover them.
 
 ---
 
@@ -828,6 +834,216 @@ Afterwards:
 
 ---
 
+# 🗓️ CHECK 16 — Sales rules: who may buy, how many, and from when
+
+> **The task:** an organiser needs three things a ticketing page cannot do without — a cap so one person cannot clear the tier, a date the sale opens, and a date it closes. All three existed in the API for a while with no way to set them; this is the screen that closes that gap.
+
+### Step 1 — Set them while publishing
+
+Header → **"Créer un événement"**. Fill the form as in check 6, then scroll to the new group **"Règles de vente"**.
+
+| Field | Put in | What it means |
+|---|---|---|
+| **"Billets max par acheteur"** | `2` | Across *all* that buyer's orders, not per order. `0` means no limit |
+| **"Autoriser la revente entre acheteurs"** | leave **unticked** | Resale is off unless asked for — that is check 18 |
+| **"Fenêtre de vente"** → "Ouverture des ventes" | leave **empty** | Empty means on sale from publication |
+| **"Fenêtre de vente"** → "Clôture des ventes" | leave **empty** | Empty means on sale until the event |
+
+**✔️ You must see** the time pickers beside each date **greyed out and unclickable** until you pick a date. A time with no date would be a bound that is silently never sent, so the control refuses to pretend otherwise.
+
+Pick an opening date now. **✔️ The time picker beside it becomes usable**, and a **"Réinitialiser"** link appears to clear the window again.
+
+Tick **"Ajouter un tarif VIP"**. **✔️ A second "Fenêtre de vente VIP" appears** — the VIP tier gets its own window, because a VIP drop rarely opens when general sale does.
+
+### Step 2 — An impossible window is refused
+
+First notice you cannot create one by accident: pick an opening date, then open the closing picker. **✔️ Every day before the opening is greyed out and unclickable.**
+
+So reach it the other way round — set the **closing** first, then move the **opening** to a later date. (Or set both to the same day and put the opening time after the closing time.) Press **"Publier sur l'agenda"**.
+
+**✔️ You must see** *"La clôture doit être après l'ouverture."* and **no event is created**.
+
+> This is checked in the browser as well as on the server on purpose. The server's message cannot say *which* window is wrong, and with a base tier and a VIP tier open at once that leaves you guessing.
+
+Fix the dates and publish.
+
+### Step 3 — Change the rules after the event exists
+
+Pro → **CATALOGUE** → **Événements**. On your event's card, press the **sliders icon** (tooltip **"Règles de vente"**).
+
+**✔️ The modal opens on the event's current values** — not on defaults. Change **"Billets max par acheteur"** to `1`, set **"Annulation possible jusqu'à (heures avant)"** to `24`, and **"Enregistrer"**.
+
+Reopen it. **✔️ Both values are still there.**
+
+> 💡 This was the real gap: the rules could be set at creation and then never changed again.
+
+### Step 4 — The cap actually bites
+
+Open your event on the public site and try to buy **3** tickets when the cap is `1`.
+
+**✔️ You must see** the purchase refused, naming the limit. The cap counts every ticket that buyer already holds for the event — so buying one, then coming back for another, is refused too.
+
+---
+
+# 🚫 CHECK 17 — Calling an event off
+
+> **The task:** an event gets cancelled. Every buyer must get their money back, every ticket must stop working, and the organiser must be told what actually happened — in one action, not four hundred.
+
+> ⚠️ **Do this on an event you created**, not a seeded one. It refunds every buyer and cannot be undone.
+
+### Step 1 — Sell something first
+
+Buy a ticket or two on your test event (check 1). A cancellation with nothing to refund proves nothing.
+
+### Step 2 — Find the action
+
+Pro → **CATALOGUE** → **Événements** → your event's card → the **🚫 icon** (tooltip **"Annuler l'événement"**).
+
+**✔️ If you are signed in as the organiser you see it.** It needs `finance.refund`, not `events.manage` — refunding every buyer at once is a bigger act than editing a listing, so someone trusted with the catalogue is not automatically trusted with this.
+
+> To prove the gate: Pro → **ADMINISTRATION** → **Permissions**, turn **`finance.refund`** off for ORGANISER, reload **Événements**. **✔️ The icon is gone.** Turn it back on.
+
+### Step 3 — Read what it says before agreeing
+
+Press the icon.
+
+**✔️ You must see** a modal spelling out the consequences in red:
+
+> *"L'événement sort de la vente immédiatement. Chaque commande payée est remboursée, tous les billets sont annulés — y compris les invitations — et la liste d'attente est clôturée."*
+
+Type a reason under 5 characters and submit. **✔️ Refused** — the reason is sent to buyers, so it cannot be empty or a keystroke.
+
+Type a real reason: `Artiste malade, report impossible.` Leave **"Prévenir les acheteurs par e-mail"** ticked. Press **"Annuler l'événement"**.
+
+**✔️ A second confirmation appears** — *"Cette action est irréversible."* Two deliberate yeses, because "cancel" on its own does not imply refunding every buyer.
+
+> 💡 Press **Escape** on that confirmation. **✔️ The confirmation closes and the modal behind it stays open** — nothing is cancelled. Escape backs out; it never performs the action.
+
+### Step 4 — What you are told
+
+**✔️ You must see** a toast naming **how many orders were refunded and how much money went back** — for example *"1 commande(s) remboursée(s), 200,00 MAD rendus. Billets annulés."*
+
+> It deliberately does **not** quote a ticket count. The server's `ticketsVoided` counts only the final sweep, and the refund has normally cancelled every ticket already — so that number is `0` in the ordinary case and reads as "nothing happened" on the one screen where you most need to know that it did.
+
+If any refund failed, **✔️ a second orange warning** says how many need doing by hand, and stays on screen ten seconds. Those orders are still `PAID` in **Réservations**, so you can find and finish them.
+
+### Step 5 — Everything is really off
+
+| Where you look | What you must see |
+|---|---|
+| The event's card in **Événements** | A red **"Annulé"** badge, and the 🚫 icon **gone** — there is nothing left to cancel |
+| The event on the public site | **404.** It is off sale, not merely hidden |
+| **Réservations** | The order reads **REFUNDED**, full amount returned |
+| The buyer's ticket page | The ticket is **CANCELLED** — it will not scan |
+| Pro → **OPÉRATIONS** → **Porte**, scanning that ref | Refused |
+
+---
+
+# 🎁 CHECK 18 — Invitations: free tickets that are not a sale
+
+> **The task:** give a journalist, a sponsor or the band's family a seat. Until now the only way was a 100 % promo code — and that is wrong in a way that matters: a promo code is a *discount on a sale*, so it lands in revenue, in the commission and in the payout as a zero-value order. A comp was never a sale.
+
+### Step 1 — Open the panel
+
+Pro → **CATALOGUE** → **Invitations** (new item, between *Placements* and *Offres*).
+
+**✔️ You must see** the subtitle *"Billets offerts — jamais une vente, jamais une remise."* and an event switcher, because invitations belong to one event at a time.
+
+### Step 2 — Issue a couple
+
+Press **"Offrir des billets"**.
+
+**✔️ The zone dropdown shows how many seats are left** in each — *"Carré · 12 restant"* — because a comp consumes capacity exactly as a sale does.
+
+Fill the first guest: **"Nom de l'invité"** `Nadia Benali`, **"E-mail (optionnel)"** your own address. Press **"Ajouter un invité"** and fill a second with a name only, no email.
+
+> A guest row left blank is dropped rather than sent — adding a row and not filling it in is a normal thing to do, and the server would reject the whole batch over it.
+
+Press **"Offrir des billets"**.
+
+**✔️ You must see** *"2 invitation(s) émise(s)."* and both guests in the table, each with a **ticket reference**. The one with an email shows **"Envoyé"**; the one without shows **"Non envoyé"** — pass that person the reference yourself.
+
+Try a one-character name. **✔️ Refused** with *"Chaque nom doit faire au moins 2 caractères."*
+
+### Step 3 — The part that matters: it is not revenue
+
+| Where you look | What you must see |
+|---|---|
+| Pro → **CATALOGUE** → **Placements**, that zone | **2 fewer seats remaining** — capacity is consumed |
+| Pro → **FINANCES** → **Finance** | Revenue **unchanged**, commission **unchanged** |
+| Pro → **Réservations** | The comp orders exist at **0,00 MAD** |
+
+> 💡 That is the whole reason invitations are their own concept rather than a promo code.
+
+### Step 4 — The zone cannot be overbooked
+
+Issue more invitations than the zone has seats left.
+
+**✔️ Refused**, naming how many are actually left. Capacity is re-checked inside the transaction, so two people giving seats away at once cannot oversell between them.
+
+### Step 5 — Revoking
+
+Press the **🗑 icon** on a guest's row → confirm.
+
+**✔️ You must see** *"Invitation annulée."* — and the guest **still on the list**, dimmed, with a red **"Annulée"** badge instead of a reference. The revoke icon is gone from that row.
+
+> That is deliberate. *"Issued, then revoked"* is something an organiser wants to see; a row that vanishes looks like it never happened.
+
+**✔️ Back in Placements, the seat has returned** to the pool.
+
+### Step 6 — It is all in the journal
+
+Pro → **ADMINISTRATION** → **Journal** (as admin).
+
+**✔️ You must see** rows reading **"Invitations émises"** and **"Invitation annulée"**, with who did it. Free seats given away is exactly the kind of thing somebody asks about three months later.
+
+---
+
+# 🕒 CHECK 19 — A zone that is not on sale says so
+
+> **The task:** a zone that refuses to sell is the most confusing thing an organiser can look at. If a sales window is holding it back, the screen should say which window and when.
+
+### Step 1 — Put a window on an existing zone
+
+Pro → **CATALOGUE** → **Placements**. Pick an event, then **✏️** on a zone.
+
+Scroll to **"Fenêtre de vente"**. Set **"Ouverture des ventes"** to a date **next week** and save.
+
+**✔️ The zone's card now carries an orange badge** reading **"Ouvre le …"** with that date.
+
+### Step 2 — The other two states
+
+| Set the window to | Badge you must see | Colour |
+|---|---|---|
+| Opens next week | **"Ouvre le …"** | orange |
+| Opened yesterday, closes next week | **"En vente"** | green |
+| Closed yesterday | **"Ventes closes"** | red |
+| No dates at all | **no badge** | — |
+
+> 💡 The badge appears **only when a window actually constrains the zone**. Marking every unconstrained zone "En vente" would be noise; the signal worth having is the one that is *not* selling, and why.
+
+### Step 3 — Clearing a window
+
+Reopen the zone, press **"Réinitialiser"** under the window, save.
+
+**✔️ The badge is gone** and the zone sells normally again.
+
+### Step 4 — The same guard as the event form
+
+Set a closing date **before** the opening date and save.
+
+**✔️ Refused** with *"La clôture doit être après l'ouverture."*
+
+Now the subtler one: leave the closing date alone and move only the **opening** to after it. **✔️ Still refused** — the server checks the window you would *end up with*, not just the field you touched, so you cannot invert a window one field at a time.
+
+### Step 5 — The buyer sees it too
+
+Open the event on the public site while a zone is outside its window.
+
+**✔️ That zone cannot be bought.** The sales window is enforced on the server at checkout, not merely drawn in the dashboard.
+
+---
+
 # ✅ Tick them off
 
 | # | Check | Where to go | Done |
@@ -847,6 +1063,10 @@ Afterwards:
 | 13 | **Commission is server-side** | Pro → FINANCES → **Finance** | ☐ |
 | 14 | **Payouts and the subscription** | Pro → ADMINISTRATION → **Plateforme** | ☐ |
 | 15 | **Journal and account removal** | Pro → ADMINISTRATION → **Journal** · **Équipe** | ☐ |
+| 16 | **Sales rules: cap and windows** | "Créer un événement" → **"Règles de vente"** | ☐ |
+| 17 | **Calling an event off** | Pro → **Événements** → 🚫 icon | ☐ |
+| 18 | **Invitations are not a sale** | Pro → CATALOGUE → **Invitations** | ☐ |
+| 19 | **A closed zone says so** | Pro → CATALOGUE → **Placements** | ☐ |
 
 ---
 
@@ -859,7 +1079,7 @@ a seeded database.
 
 | Suite | Command | What it proves | Result |
 |---|---|---|---|
-| `vitest` | `npm test` | commission, pricing, inventory, ticket refs, the CMI hash | **99 / 99** |
+| `vitest` | `npm test` | commission, pricing, inventory, ticket refs, the CMI hash | **123 / 123** |
 | `live-api-test` | `npm run test:live` | the API surface end to end | **123 / 123** |
 | `live-authz-test` | `npm run test:live:authz` | who may reach what, across roles | **54 / 54** |
 | `live-guest-authz-test` | `npm run test:live:guest` | the boundary around a guest's link | **38 / 38** |
@@ -872,6 +1092,7 @@ a seeded database.
 | `live-share-test` | `npm run test:live:share` | giving a ticket away, and revoking the link | all pass |
 | `live-refund-webhook-test` | `npm run test:live:refund` | a back-office refund voids the tickets | all pass |
 | `live-sweeper-test` | `npm run test:live:sweeper` | lapsed holds release their seats | all pass |
+| `live-ticketing-test` | `npm run test:live:ticketing` | the buyer cap, sales windows, cancellation and comps — checks 16–19 | **32 / 32** |
 | `live-frontend-test` | `npm test` *(in `frontend/`)* | every API call the UI makes, through the Next.js proxy | **176 / 176** |
 
 ¹ Skips cleanly unless `CMI_CLIENT_ID`/`CMI_STORE_KEY` are set — the callback is
@@ -885,7 +1106,7 @@ npm run test:live            && npm run test:live:authz \
   && npm run test:live:coverage  && npm run test:live:share \
   && npm run test:live:sweeper   && npm run test:live:refund \
   && npm run test:live:money     && npm run test:live:orders \
-  && npm run test:live:audit
+  && npm run test:live:audit     && npm run test:live:ticketing
 
 # And from frontend/:
 npm test
@@ -919,6 +1140,11 @@ npm test
 11. **A quiet month refused its own payout.** 485 MAD of revenue against a 499 MAD subscription produced *"nothing to transfer"*, so over a 14 MAD shortfall the organiser got neither the money nor a record. *(Check 14, step 5.)*
 12. **A CMI payment arriving after the hold lapsed** either took the money and issued nothing, or issued a ticket for a seat already resold. *(Covered by `live-cmi-payment-test`.)*
 13. **Nothing recorded who did what.** Role changes, permission grants, refunds, plan assignments and payouts all happened silently. *(Check 15.)*
+14. **A declined CMI payment could never be retried.** The gateway reference was the bare order id, so CMI refused the second attempt as an "ongoing transaction" and the buyer was stuck. Each attempt now carries its own suffix. *(Covered by `live-cmi-payment-test`.)*
+15. **Five capabilities existed only in the API.** The buyer cap, resale switch, sales windows, event cancellation and comp tickets were all reachable by `curl` and by nothing else — an organiser had to accept the defaults forever. *(Checks 16–19.)*
+16. **A zone could be created with a sales window that never opens.** `POST /tiers` accepted a window closing before it opened — a 201 and a zone that could never sell — while `PATCH` on the same field correctly refused it. *(Check 19, step 4.)*
+17. **The sales-rules modal showed `undefined` as its labels.** The four copy keys went into the buyer-side dictionary instead of the dashboard one. A missing key is not a build error, so it rendered the word "undefined" in all three languages. *(Check 16, step 3.)*
+18. **Escape closed the modal underneath a confirm dialog.** Cancelling an event is the only place that raises a confirmation from inside an open modal; both listened for Escape, and the modal answered first — leaving the confirmation floating over nothing. Escape could never *perform* the cancellation. *(Check 17, step 3.)*
 
 ---
 
@@ -947,6 +1173,15 @@ npm test
 | A removed account still appears in the **Journal** | Correct, and the reason the journal exists — the record outlives the account |
 | Removing an account says **"anonymised"**, not deleted | It has orders. They must survive, so the row stays with its personal data stripped |
 | **429** instead of 400/403 while running the test suites | A rate limiter, not a defect. See the warning under *What the automated testing covers* |
+| A zone shows **"Ouvre le …"** or **"Ventes closes"** | Its sales window is holding it back. The badge only appears when a window actually constrains the zone |
+| A zone with no sales window shows **no badge at all** | Correct. Marking every unconstrained zone "En vente" would be noise — the useful signal is the one *not* selling |
+| The time picker beside a sales date is **greyed out** | Pick the date first. A time with no date would be a bound that is silently never sent |
+| **"Annuler l'événement"** (🚫) is missing from an event card | Either you lack `finance.refund`, or the event is already cancelled — there is nothing left to refund |
+| Cancelling says **"Billets annulés"** without a number | Deliberate. The server's ticket count only covers the final sweep, and the refund has normally voided them already — so it reads `0` when everything worked |
+| A **revoked invitation is still on the list** | Correct, and the point. "Issued, then revoked" is what the organiser needs to see; a row that vanishes looks like it never happened |
+| An invitation consumed a seat | Correct. A comp takes capacity exactly like a sale — it just never becomes revenue |
+| Revenue did **not** move after issuing invitations | Correct, and the whole reason comps are not a 100 % promo code |
+| **"Publier"** refuses with *"La clôture doit être après l'ouverture"* | One of your sales windows closes before it opens. The base tier and the VIP tier have separate windows |
 
 ---
 
@@ -972,7 +1207,9 @@ changes. **Actual gaps** are work not done yet.
 - **The demo accounts use public passwords.** They are printed in this guide and in the seed. Change them before anything is deployed.
 - **Nothing purges the journal.** It only grows. Fine for now; it needs a retention policy before it is years old.
 - **No bank integration.** A payout records what is owed and who sent it, but an admin makes the transfer by hand — see *Payouts are a ledger* above.
-- **CMI is unexercised against real money.** The integration is complete and tested against a signed stand-in for the gateway, but nobody has yet put a real card through the live merchant account.
+- **CMI is unexercised against real money.** The integration is complete and tested against a signed stand-in for the gateway, and verified against the real test gateway — our hash was reproduced byte-for-byte from CMI's own retry form, which confirms the key, the algorithm and the merchant id. What is still missing is a card: no test card supplied so far is provisioned for merchant `600002996`, and CMI answers `HOST based messaging problem (99)`, which is its gateway failing to reach the issuing bank rather than anything in this code.
+- **A sales window is wall-clock, read as UTC.** The window you type is stored exactly as typed and compared the same way, which keeps it consistent with the event's own start time. Morocco is UTC+1, so a window typed as `00:00` is not midnight local. Fine while both are naive; it needs real timezone handling before selling across timezones.
+- **No UI shows a buyer *why* a zone is unavailable.** The dashboard says "Ouvre le …" and the server refuses the purchase, but the public event page does not yet explain that a tier opens later — it simply cannot be bought. *(Check 19, step 5.)*
 
 Only the items under **Actual gaps** need work before going live. The
 deliberate limits are documented here so nobody mistakes them for bugs — and
