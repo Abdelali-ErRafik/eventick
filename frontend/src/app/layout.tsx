@@ -1,10 +1,42 @@
 import type { Metadata } from "next";
+import { siteUrl } from "../lib/catalog-server";
 import "./styles.css";
 
+/*
+ * The site-wide head.
+ *
+ * This used to be a single flat {title, description} pair, which meant every
+ * URL on the site — home, each event, the explorer — served one identical
+ * title and one identical description. `title.template` changes that: a page
+ * that sets its own title gets "<its title> · Eventick", and only pages that
+ * set nothing fall back to `title.default`.
+ *
+ * `metadataBase` is what lets child pages declare a canonical as a path
+ * rather than repeating the origin. It reads NEXT_PUBLIC_SITE_URL, which has
+ * to be the real domain in production — see catalog-server.ts.
+ *
+ * The description now says what the site DOES ("réservez vos billets") and
+ * where, rather than listing categories. It deliberately drops the old
+ * "Billetterie N°1 au Maroc" framing: an unverifiable superlative is a poor
+ * search snippet and an easy complaint to attract.
+ */
 export const metadata: Metadata = {
-  title: "Eventick · La billetterie qui se valide d'un geste",
+  metadataBase: new URL(siteUrl()),
+  title: {
+    default: "Eventick · Billets de concerts et festivals au Maroc",
+    template: "%s · Eventick",
+  },
   description:
-    "Concerts, humour, festivals, sport, formations. Eventick vend des places pour le public marocain et africain.",
+    "Réservez vos billets pour les concerts, festivals, spectacles et rencontres sportives au Maroc. E-billet immédiat avec QR code, paiement sécurisé en dirhams.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "Eventick",
+    locale: "fr_MA",
+    title: "Eventick · Billets de concerts et festivals au Maroc",
+    description:
+      "Réservez vos billets pour les concerts, festivals, spectacles et rencontres sportives au Maroc. E-billet immédiat avec QR code.",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
