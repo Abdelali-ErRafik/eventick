@@ -14,10 +14,11 @@ import { cn } from "../../../utils";
  *
  * Now the per-session controls (theme, language, sign out) live behind the
  * account button, which is where people look for them. The bar itself got
- * taller and the title sits on an eyebrow line, so it reads as a masthead
- * for the page rather than a thin strip of controls with a label squeezed
- * between them — matching the bigger, bolder type used on the card-grid
- * screens below it.
+ * taller and the title usually sits on an eyebrow line, so it reads as a
+ * masthead for the page rather than a thin strip of controls with a label
+ * squeezed between them — matching the bigger, bolder type used on the
+ * card-grid screens below it. "Usually", because the eyebrow drops out when
+ * it would only repeat the title; see showEyebrow.
  */
 
 export function Topbar({ eyebrow, title, onOpenNav, user, onLogout, theme, onToggleTheme, locales, locale, onSetLocale, localeShort, labels }) {
@@ -48,6 +49,11 @@ export function Topbar({ eyebrow, title, onOpenNav, user, onLogout, theme, onTog
 
   const initial = (user?.name ?? "?").trim().slice(0, 1).toUpperCase();
 
+  // Compared case-insensitively and trimmed, because the duplication is a
+  // copy decision ("Pilotage" is both a group and the screen inside it), not
+  // a string-identity one — and it holds in fr, en and ar alike.
+  const showEyebrow = Boolean(eyebrow) && eyebrow.trim().toLowerCase() !== (title ?? "").trim().toLowerCase();
+
   return (
     <header className="sticky top-0 z-40 flex h-18 shrink-0 items-center gap-3 border-b border-line/10 bg-card/85 px-4 backdrop-blur-md md:px-6">
       <IconButton label={labels.openMenu} size="sm" className="lg:hidden" onClick={onOpenNav}>
@@ -55,9 +61,14 @@ export function Topbar({ eyebrow, title, onOpenNav, user, onLogout, theme, onTog
       </IconButton>
 
       {/* A fixed anchor while scrolling a long table — an eyebrow over the
-          title gives the bar a masthead feel instead of a single flat line. */}
+          title gives the bar a masthead feel instead of a single flat line.
+          Suppressed when the group and the page share a name, which on the
+          landing screen read "PILOTAGE / Pilotage" — the same word twice, in
+          all three locales, and the first thing anyone sees. */}
       <div className="min-w-0 flex-1">
-        {eyebrow ? <p className="truncate text-[11px] font-bold uppercase tracking-[0.09em] text-muted">{eyebrow}</p> : null}
+        {showEyebrow ? (
+          <p className="truncate text-[11px] font-bold uppercase tracking-[0.09em] text-muted">{eyebrow}</p>
+        ) : null}
         <p className="truncate font-display text-subhead font-extrabold leading-tight">{title}</p>
       </div>
 
@@ -67,7 +78,7 @@ export function Topbar({ eyebrow, title, onOpenNav, user, onLogout, theme, onTog
         title={labels.market}
         className="inline-flex size-9 shrink-0 items-center justify-center rounded-control text-muted transition hover:bg-brume hover:text-primary active:scale-95"
       >
-        <ExternalLink className="size-[18px]" aria-hidden />
+        <ExternalLink className="size-4.5" aria-hidden />
       </Link>
 
       <span className="h-6 w-px shrink-0 bg-line/15" aria-hidden />
@@ -92,7 +103,7 @@ export function Topbar({ eyebrow, title, onOpenNav, user, onLogout, theme, onTog
             {initial}
           </span>
           <span className="hidden min-w-0 text-start sm:block">
-            <span className="block max-w-[10rem] truncate text-[13px] font-bold leading-tight">{user?.name}</span>
+            <span className="block max-w-40 truncate text-[13px] font-bold leading-tight">{user?.name}</span>
             <span className="block text-[11px] text-muted">{labels.role ?? user?.role}</span>
           </span>
           <ChevronDown className={cn("size-4 shrink-0 text-muted transition", menuOpen && "rotate-180")} aria-hidden />
@@ -105,9 +116,15 @@ export function Topbar({ eyebrow, title, onOpenNav, user, onLogout, theme, onTog
             aria-label={labels.userMenu}
             className="absolute end-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-panel border border-line/10 bg-card shadow-modal"
           >
+            {/* The name and role are already on the trigger from sm up, so
+                this header leads with the email — the one thing the button
+                does not show, and the thing you open this menu to check
+                when several accounts are in play. The name stays for the
+                phone case, where the trigger is avatar-only. */}
             <div className="border-b border-line/10 px-4 py-3">
-              <p className="truncate text-sm font-bold">{user?.name}</p>
-              <p className="truncate text-xs text-muted">{user?.email}</p>
+              <p className="truncate text-sm font-bold sm:hidden">{user?.name}</p>
+              <p className="truncate text-sm font-semibold sm:font-bold">{user?.email}</p>
+              <p className="truncate text-xs text-muted">{labels.role ?? user?.role}</p>
             </div>
 
             {/* Theme */}
