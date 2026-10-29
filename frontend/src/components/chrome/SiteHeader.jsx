@@ -5,7 +5,7 @@ import { useAuth } from "../../AuthContext";
 import { useCart } from "../../CartContext";
 import { useCatalog } from "../../useCatalog";
 import { money } from "../../api";
-import { LOCALES, LOCALE_LABELS, useI18n } from "../../i18n";
+import { categoryLabel, LOCALES, LOCALE_LABELS, useI18n } from "../../i18n";
 import { useTheme } from "../../ThemeContext";
 import { Button, IconButton, Popover, PopoverItem } from "../../ui";
 import { cn, CITIES, minPriceCents, monthBadge } from "../../utils";
@@ -49,11 +49,23 @@ import { EventTicker } from "./EventTicker";
 // to wrap onto a second line at common laptop widths, which broke the
 // header's height. Pro is still reachable from the account menu and the
 // mobile drawer below — just not fighting for room in the top bar.
+//
+// `key` must name the category it links to. The third item used to read
+// "Concerts" while pointing at ?cat=humour, so clicking it opened theatre
+// and comedy — there is no "concerts" category at all (the six are
+// festivals, humour, sport, nightlife, culture, salons; see utils.js).
+// Labels come from categoryLabel() for exactly that reason: it is keyed off
+// the category id, so a link and its text cannot drift apart again.
 const NAV = [
   { to: "/explorer", key: "explore" },
-  { to: "/explorer?cat=festivals", key: "festivals" },
-  { to: "/explorer?cat=humour", key: "concerts" },
+  { to: "/explorer?cat=festivals", cat: "festivals" },
+  { to: "/explorer?cat=nightlife", cat: "nightlife" },
 ];
+
+/** A nav item's visible text: the category's own label, or a plain copy key. */
+function navLabel(item, t) {
+  return item.cat ? categoryLabel(item.cat, t) : t(item.key);
+}
 
 export function SiteHeader({ overlay = false }) {
   const { t, locale, setLocale } = useI18n();
@@ -205,7 +217,7 @@ export function SiteHeader({ overlay = false }) {
                       : "text-muted hover:bg-paper hover:text-ink",
                 )}
               >
-                {t(item.key)}
+                {navLabel(item, t)}
               </Link>
             );
           })}
@@ -479,7 +491,7 @@ export function SiteHeader({ overlay = false }) {
                       onClick={() => setMenuOpen(false)}
                       className="block rounded-control px-3 py-3 text-[15px] font-semibold transition hover:bg-paper"
                     >
-                      {t(item.key)}
+                      {navLabel(item, t)}
                     </Link>
                   </li>
                 ))}
