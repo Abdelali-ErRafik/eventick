@@ -2,7 +2,7 @@ import { Router, urlencoded } from "express";
 import { prisma } from "../lib/prisma.js";
 import { asyncHandler } from "../lib/http.js";
 import { cmiConfig, isApproved, verifyCallbackHash } from "../lib/cmi.js";
-import { settleOrder } from "../lib/settle.js";
+import { OversoldError, settleOrder } from "../lib/settle.js";
 import { completeResale } from "../lib/resale.js";
 import { logger } from "../lib/logger.js";
 
@@ -89,45 +89,109 @@ webhooksRouter.post(
 
     const gatewayRef = body.TransId ?? `CMI-${reference}`;
 
-    // A resale buys one existing seat rather than fresh tier inventory, so it
-    // settles through completeResale, not settleOrder. The listing was linked
-    // to this order before the buyer left for the gateway.
-    const listing = await prisma.resaleListing.findUnique({
-      where: { pendingOrderId: order.id },
-      select: { id: true },
-    });
-    if (listing) {
-      const claimed = await prisma.order.updateMany({
-        where: { id: order.id, status: "PENDING" },
-        data: { status: "PAID", paymentRef: gatewayRef, gatewayRef },
+    /*
+     * Only ACTION=POSTAUTH takes the buyer's money, so it must be sent if and
+     * only if they end up with something. That is harder than it looks here,
+     * because CMI is a REDIRECT gateway: the buyer is away on CMI's hosted
+     * page for as long as it takes them to find their card and pass 3-D
+     * Secure, which can outlast the 15-minute hold. By the time this callback
+     * arrives the order may already have been cancelled by the sweeper.
+     *
+     * `settled: false` is ambiguous on its own — it means EITHER "already
+     * delivered, this is a retry" (accept the money) OR "cancelled, nothing
+     * delivered" (refuse it), which are opposite answers. So the decision is
+     * made from the order's actual state afterwards, never from that flag.
+     */
+    const deliver = async (): Promise<boolean> => {
+      // A resale buys one existing seat rather than fresh tier inventory, so
+      // it settles through completeResale, not settleOrder. The listing was
+      // linked to this order before the buyer left for the gateway.
+      const listing = await prisma.resaleListing.findUnique({
+        where: { pendingOrderId: order.id },
+        select: { id: true, status: true },
       });
-      // completeResale is itself guarded on status LISTED, so a replayed
-      // callback cannot transfer the seat twice.
-      if (claimed.count > 0) {
-        await completeResale(listing.id, order.id).catch((err) =>
-          logger.error({ err, listingId: listing.id }, "resale completion failed after payment"),
-        );
+
+      if (listing) {
+        const claimed = await prisma.order.updateMany({
+          where: { id: order.id, status: "PENDING" },
+          data: { status: "PAID", paymentRef: gatewayRef, gatewayRef },
+        });
+        if (claimed.count === 0) {
+          // Not PENDING any more: either a retry of a sale we completed, or a
+          // buyer order that was cancelled while they were at the gateway.
+          const seatIsTheirs = (await prisma.ticket.count({ where: { orderId: order.id } })) > 0;
+          return seatIsTheirs;
+        }
+        try {
+          // Guarded on status LISTED inside, so a replay cannot transfer the
+          // seat twice — and a listing cancelled or sold to someone else while
+          // this buyer was paying throws, which must NOT take their money.
+          await completeResale(listing.id, order.id);
+          return true;
+        } catch (err) {
+          logger.error(
+            { err, listingId: listing.id, orderId: order.id },
+            "CMI resale could not be completed — refusing the payment",
+          );
+          // Undo the PAID flip: nothing was delivered, so the order must not
+          // look paid for a seat the buyer never received.
+          await prisma.order.updateMany({
+            where: { id: order.id, gatewayRef },
+            data: { status: "PENDING", paymentRef: null, gatewayRef: null },
+          });
+          return false;
+        }
       }
-      logger.info({ orderId: order.id, replay: claimed.count === 0 }, "CMI resale settled");
-      return res.type("text/plain").send("ACTION=POSTAUTH");
+
+      // Normal sale. settleOrder is idempotent and only promotes a PENDING
+      // order, so a retry is a no-op rather than a second set of tickets.
+      await prisma.order.updateMany({
+        where: { id: order.id, status: "PENDING" },
+        data: { gatewayRef },
+      });
+      let result;
+      try {
+        result = await settleOrder(order.id, {
+          paymentRef: gatewayRef,
+          cardBrand: body.CardType ?? null,
+          cardLast4: last4(body.MaskedPan),
+          cardBank: "CMI",
+        });
+      } catch (err) {
+        if (err instanceof OversoldError) {
+          // The seats went while they were on CMI's page. Refuse the money;
+          // the rolled-back transaction left the order PENDING.
+          logger.error({ err: err.message, orderId: order.id }, "CMI payment arrived after the seats were gone");
+          return false;
+        }
+        // Anything else is an infrastructure failure, and we do NOT know
+        // whether delivery can succeed. Rethrowing 500s the callback so CMI
+        // retries it, which is recoverable — answering FAILURE would void a
+        // payment that might well have been deliverable.
+        throw err;
+      }
+      if (result.settled) return true;
+
+      // Did not settle. Tickets existing means this is a retry of a delivered
+      // order and the money is genuinely owed; none means the order was
+      // cancelled (an expired hold, swept) and charging would be theft.
+      return (await prisma.ticket.count({ where: { orderId: order.id } })) > 0;
+    };
+
+    const delivered = await deliver();
+
+    if (!delivered) {
+      logger.error(
+        { orderId: order.id, gatewayRef, status: order.status },
+        "CMI payment REFUSED after approval — nothing could be delivered, so the money is not taken",
+      );
+      return res.type("text/plain").send("FAILURE");
     }
 
-    // settleOrder is idempotent: CMI retries deliveries, and a replay must be
-    // a no-op rather than minting a second set of tickets.
-    await prisma.order.updateMany({
-      where: { id: order.id, status: "PENDING" },
-      data: { gatewayRef },
-    });
-    const result = await settleOrder(order.id, {
-      paymentRef: gatewayRef,
-      cardBrand: body.CardType ?? null,
-      cardLast4: last4(body.MaskedPan),
-      cardBank: "CMI",
-    });
-    logger.info({ orderId: order.id, settled: result.settled }, "CMI payment settled");
+    logger.info({ orderId: order.id, gatewayRef }, "CMI payment settled");
 
-    // Accept the transaction. Replies other than this leave CMI holding the
-    // authorisation, so the buyer is debited and we issued the tickets anyway.
+    // Accept the transaction. Anything other than this leaves CMI holding the
+    // authorisation, so the buyer would not be charged for tickets we issued.
     res.type("text/plain").send("ACTION=POSTAUTH");
   }),
 );

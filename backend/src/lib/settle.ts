@@ -10,12 +10,35 @@ import { emitToOrganiser } from "./realtime.js";
 import type { Event, Order, Ticket, TicketTier } from "@prisma/client";
 
 /**
+ * The seats went while the buyer was at the gateway.
+ *
+ * Its own type because the caller has to tell it apart from an infrastructure
+ * failure: this one means "do not take the money", whereas a dropped database
+ * connection means "we do not know yet".
+ */
+export class OversoldError extends Error {
+  constructor(
+    readonly orderId: string,
+    readonly tierId: string,
+    readonly wanted: number,
+    readonly available: number,
+  ) {
+    super(`Order ${orderId} wanted ${wanted} seat(s) of tier ${tierId}, only ${available} left`);
+    this.name = "OversoldError";
+  }
+}
+
+/**
  * Settlement — the one place a successful payment turns into tickets.
  *
  * Both paths funnel through here so they can never drift: the CMI callback
  * (real mode) and the direct confirm (mock mode). IDEMPOTENT by necessity —
  * CMI retries a callback it considers unanswered, so applying the same outcome
  * twice must be a no-op rather than minting a second set of tickets.
+ *
+ * Returns `settled: false` for BOTH "already settled" and "could not settle".
+ * Callers that decide whether to take the buyer's money must therefore look at
+ * the order's real state rather than trust this flag — see routes/webhooks.ts.
  */
 export async function settleOrder(orderId: string, payment: {
   paymentRef: string;
@@ -42,6 +65,39 @@ export async function settleOrder(orderId: string, payment: {
       where: { id: orderId },
       include: { lines: { include: { tier: true } }, event: true },
     });
+
+    /*
+     * Re-check capacity before issuing, not just at hold time.
+     *
+     * A hold reserves seats until `holdUntil`, and availability stops counting
+     * it the moment that passes — but the order stays PENDING until the
+     * sweeper runs, up to five minutes later. With Stripe that gap was
+     * unreachable: the card was confirmed in-page, in seconds. CMI sends the
+     * buyer away to its own hosted page, where finding a card and passing
+     * 3-D Secure can easily outlast the hold, so a payment arriving in that
+     * window would issue tickets against seats already resold to someone
+     * else. Checking here covers every settlement path at once.
+     */
+    for (const line of current.lines) {
+      const live = await tx.ticket.count({
+        where: { tierId: line.tierId, status: { in: ["VALID", "USED"] } },
+      });
+      const otherHolds = await tx.orderLine.aggregate({
+        where: {
+          tierId: line.tierId,
+          orderId: { not: current.id },
+          order: { status: "PENDING", holdUntil: { gt: new Date() } },
+        },
+        _sum: { qty: true },
+      });
+      const free = line.tier.capacity - live - (otherHolds._sum.qty ?? 0);
+      if (line.qty > free) {
+        // Throwing rolls back the PAID flip with it, leaving the order PENDING
+        // so the caller can refuse the payment rather than charge for a seat
+        // that no longer exists.
+        throw new OversoldError(current.id, line.tierId, line.qty, free);
+      }
+    }
 
     for (const line of current.lines) {
       // Seat cursor starts after everything already committed for this tier,

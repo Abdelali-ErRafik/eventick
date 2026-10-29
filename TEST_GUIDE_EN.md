@@ -52,6 +52,22 @@ Payments run in **mock** mode — **no card is ever charged**. Checkout settles 
 > - **CMI calls back from its own servers**, so it cannot reach `localhost`. Without a public callback URL the payment succeeds at CMI and **no ticket is ever issued**. Expose the API with a tunnel (ngrok, cloudflared) and set `CMI_CALLBACK_URL` to the public address.
 >
 > Test cards come with the CMI integration kit; they are not reproduced here.
+>
+> **The slow-buyer cases.** These are worth testing deliberately, because they
+> cannot happen with an in-page card form and they are where money and tickets
+> can come apart. The rule the server enforces is: *the buyer is charged only
+> if they end up holding something.* `ACTION=POSTAUTH` is the reply that takes
+> the money, so it is sent if and only if a ticket exists.
+>
+> | What you do | What should happen |
+> |---|---|
+> | Sit on CMI's page for over 15 minutes, then pay | Payment **refused**, nothing charged. The hold lapsed and the seats went back on sale. |
+> | Pay, then let CMI retry the callback (or replay it) | Money accepted again, but **no second ticket** — the order already delivered. |
+> | Hold the last seat, let the hold lapse, have someone else buy it, then pay | Payment **refused**. The tier is never oversold. |
+> | Start buying a resold ticket, have the seller cancel the listing, then pay | Payment **refused**, the seller keeps their seat. |
+>
+> `npm run test:live:cmi` (from `backend/`, with CMI configured) checks all
+> four automatically.
 
 ---
 
@@ -647,6 +663,7 @@ cd backend && npm run test:live && npm run test:live:authz && npm run test:live:
 
 - **Payments default to simulated.** With no `CMI_CLIENT_ID`/`CMI_STORE_KEY` no card is charged. The CMI integration itself is complete — signed redirect, hash-verified callback, replay-safe settlement — but it needs real merchant credentials to exercise, and production refuses to boot without them.
 - **Refunds do not move money.** CMI has no refund API: `/organiser/orders/:id/refund` records the refund, voids the tickets and emails the buyer, but someone must then reverse the transaction by hand in the CMI back office. Use `/organiser/orders/:id/reconcile-refund` to sync the books after a reversal made there, since CMI notifies us of nothing.
+- **A refused late payment leaves the order PENDING, not CANCELLED.** When the seats are gone the server declines the money and stops; the sweeper tidies the order up on its next pass (within five minutes). Nothing is charged in the meantime, but the order looks unpaid rather than explicitly failed until then.
 - **The commission is not real.** On **Finance**, the organiser picks their own plan and the fee is computed in the browser — nothing is stored and nothing is charged. The backend has no concept of a plan.
 - **There are no payouts.** The Pilotage board shows a "Reversement" step, but there is no bank detail, no payout run and no record of a transfer.
 - **No audit trail.** Role changes, permission grants, refunds and deletions are not recorded anywhere. Only organiser-application decisions keep a record.
