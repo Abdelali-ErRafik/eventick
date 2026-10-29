@@ -21,6 +21,7 @@
     "test:live:share": "node ../scripts/live-share-test.mjs",
     "test:live:refund": "tsx ../scripts/live-refund-webhook-test.mjs",
     "test:live:cmi": "tsx ../scripts/live-cmi-payment-test.mjs",
+    "test:live:money": "tsx ../scripts/live-money-test.mjs",
     "test:live:sweeper": "tsx ../scripts/live-sweeper-test.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

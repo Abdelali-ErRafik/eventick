@@ -4,6 +4,8 @@ import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { authenticate, requirePermission, userHasPermission } from "../middleware/auth.js";
 import { organiserScope } from "../domain/auth.js";
+import { normaliseRib, ribOk, summariseRevenue } from "../domain/commission.js";
+import { organiserEarnings } from "../lib/payout.js";
 import { publicEvent, publicOrderWithContext } from "../lib/serialize.js";
 import { committedForTier, remainingByTier } from "../lib/availability.js";
 import { broadcastRateLimit } from "../middleware/rateLimit.js";
@@ -437,15 +439,33 @@ organiserRouter.get(
     const eventIds = events.map((event) => event.id);
 
     if (eventIds.length === 0) {
-      res.json({ gmvCents: 0, orders: 0, tickets: 0, inside: 0, generatedAt: new Date().toISOString() });
+      res.json({
+        gmvCents: 0,
+        grossCents: 0,
+        refundedCents: 0,
+        feeCents: 0,
+        payableCents: 0,
+        orders: 0,
+        tickets: 0,
+        inside: 0,
+        generatedAt: new Date().toISOString(),
+      });
       return;
     }
 
-    const [paid, tickets, inside] = await Promise.all([
-      prisma.order.aggregate({
-        where: { eventId: { in: eventIds }, status: "PAID" },
-        _sum: { totalCents: true },
-        _count: true,
+    /*
+     * Revenue is counted NET OF REFUNDS.
+     *
+     * This used to sum `totalCents` of PAID orders only, which got it wrong
+     * twice: a fully refunded order flips to REFUNDED and vanished from the
+     * figure entirely, while a PARTIALLY refunded one stayed at full value.
+     * So the headline revenue was neither gross nor net, and an organiser who
+     * refunded half an order still saw all of it as earnings.
+     */
+    const [settled, tickets, inside] = await Promise.all([
+      prisma.order.findMany({
+        where: { eventId: { in: eventIds }, status: { in: ["PAID", "REFUNDED"] } },
+        select: { totalCents: true, refundedCents: true, feeCents: true },
       }),
       prisma.ticket.count({
         where: { order: { eventId: { in: eventIds } }, status: { not: "CANCELLED" } },
@@ -455,9 +475,18 @@ organiserRouter.get(
       }),
     ]);
 
+    const fallback = (await prisma.plan.findFirst({ where: { isDefault: true } })) ?? undefined;
+    const summary = summariseRevenue(settled, fallback);
+
     res.json({
-      gmvCents: paid._sum.totalCents ?? 0,
-      orders: paid._count,
+      // Kept as `gmvCents` so existing callers do not break, but it is now
+      // net of refunds rather than a gross figure.
+      gmvCents: summary.netRevenueCents,
+      grossCents: summary.grossCents,
+      refundedCents: summary.refundedCents,
+      feeCents: summary.feeCents,
+      payableCents: summary.payableCents,
+      orders: settled.length,
       tickets,
       inside,
       generatedAt: new Date().toISOString(),
@@ -667,5 +696,127 @@ organiserRouter.patch(
     }
     await renameHolder(id, body.holderName);
     res.json({ ok: true });
+  }),
+);
+
+// ─── Finance: earnings, commission and bank details ──────────────────────
+//
+// The Finance screen used to compute all of this in the browser from a plan
+// the organiser chose from a <select>, and store none of it. These routes make
+// the figures the server's, which is the only way they can mean anything: the
+// commission is recorded on each order at settlement, and the plan is set by
+// an admin.
+
+/**
+ * What this organiser has earned, what the platform took, and what is owed.
+ *
+ * Read-only on purpose. The plan comes back with the figures so the UI can
+ * explain the fee, but there is no route here to CHANGE it — an organiser
+ * picking their own commission rate is the bug this replaces.
+ */
+organiserRouter.get(
+  "/finance",
+  canViewFinance,
+  asyncHandler(async (req, res) => {
+    // Honours ?organiserId= only for a caller with scope.any, via the same
+    // helper the list routes use.
+    const scope = await scopeFor(req);
+    const organiserId = scope.organiserId ?? req.user!.id;
+    res.json(await organiserEarnings(organiserId));
+  }),
+);
+
+/** Payouts to this organiser, newest first. */
+organiserRouter.get(
+  "/payouts",
+  canViewFinance,
+  asyncHandler(async (req, res) => {
+    const scope = await scopeFor(req);
+    const organiserId = scope.organiserId ?? req.user!.id;
+    const payouts = await prisma.payout.findMany({
+      where: { organiserId },
+      select: {
+        id: true,
+        status: true,
+        periodStart: true,
+        periodEnd: true,
+        grossCents: true,
+        feeCents: true,
+        netCents: true,
+        reference: true,
+        note: true,
+        createdAt: true,
+        paidAt: true,
+        _count: { select: { orders: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({
+      payouts: payouts.map((p) => ({
+        id: p.id,
+        status: p.status,
+        periodStart: p.periodStart.toISOString(),
+        periodEnd: p.periodEnd.toISOString(),
+        grossCents: p.grossCents,
+        feeCents: p.feeCents,
+        netCents: p.netCents,
+        reference: p.reference,
+        note: p.note,
+        orders: p._count.orders,
+        createdAt: p.createdAt.toISOString(),
+        paidAt: p.paidAt?.toISOString() ?? null,
+      })),
+    });
+  }),
+);
+
+const bankSchema = z.object({
+  holderName: z.string().min(3),
+  /** Moroccan RIB. Validated below rather than by regex here, so the error
+   * names the actual problem instead of "invalid format". */
+  rib: z.string(),
+  bank: z.string().optional(),
+});
+
+/**
+ * Set where this organiser's money goes.
+ *
+ * The organiser owns this, not an admin: it is their bank account, and making
+ * an admin type someone else's RIB is both a worse workflow and a worse place
+ * for a typo. An admin can still read the last four through the payout screen.
+ */
+organiserRouter.put(
+  "/bank-account",
+  canViewFinance,
+  asyncHandler(async (req, res) => {
+    const body = bankSchema.parse(req.body);
+    const rib = normaliseRib(body.rib);
+    if (!ribOk(rib)) throw new HttpError(400, "A Moroccan RIB is exactly 24 digits");
+
+    const saved = await prisma.bankAccount.upsert({
+      where: { organiserId: req.user!.id },
+      create: {
+        organiserId: req.user!.id,
+        holderName: body.holderName.trim(),
+        rib,
+        bank: body.bank?.trim() || null,
+      },
+      update: {
+        holderName: body.holderName.trim(),
+        rib,
+        bank: body.bank?.trim() || null,
+      },
+      select: { holderName: true, rib: true, bank: true, updatedAt: true },
+    });
+
+    res.json({
+      holderName: saved.holderName,
+      // Echo back the last four only. Returning the full RIB would put a
+      // payment credential in every response and in the browser's memory for
+      // no benefit — the organiser just typed it.
+      ribLast4: saved.rib.slice(-4),
+      bank: saved.bank,
+      updatedAt: saved.updatedAt.toISOString(),
+    });
   }),
 );

@@ -69,6 +69,31 @@ Payments run in **mock** mode — **no card is ever charged**. Checkout settles 
 > `npm run test:live:cmi` (from `backend/`, with CMI configured) checks all
 > four automatically.
 
+### 5. Commission and payouts
+
+Money reaches Eventick's CMI account, not the organiser's, so the organiser's
+share is transferred separately. Three screens are involved:
+
+| Where | Who | What |
+|---|---|---|
+| **Admin → Plateforme** | admin | Assign each organiser a plan (Starter 5%, Pro 3% + 499/mo, Business 2% + 1 999/mo), and run payouts |
+| **Pro → Finance** | organiser | See net revenue, commission, what is owed — and enter their RIB |
+| **Pro → Finance** | organiser | Their own payout history |
+
+Worth testing deliberately, because each one protects money:
+
+| What you do | What should happen |
+|---|---|
+| As the organiser, try to change your own plan | Not possible — the plan is read-only on Finance, and the API answers 403 |
+| Sell a ticket, then have an admin move you to a cheaper plan | The commission already recorded **does not change**. Only later sales use the new rate |
+| Refund half an order | Net revenue *and* commission both halve |
+| Run a payout before entering a RIB | Refused — there is nowhere to send it |
+| Run the same period twice | The second run finds nothing: an order belongs to one payout, ever |
+| Mark a payout paid without a reference | Refused — the row could not be reconciled against a statement |
+| Refund something *after* its payout was marked paid | The payout's total does not move; it is a record of money already sent |
+
+`npm run test:live:money` (from `backend/`) checks all of this automatically.
+
 ---
 
 ## 🧭 Where things are
@@ -664,8 +689,8 @@ cd backend && npm run test:live && npm run test:live:authz && npm run test:live:
 - **Payments default to simulated.** With no `CMI_CLIENT_ID`/`CMI_STORE_KEY` no card is charged. The CMI integration itself is complete — signed redirect, hash-verified callback, replay-safe settlement — but it needs real merchant credentials to exercise, and production refuses to boot without them.
 - **Refunds do not move money.** CMI has no refund API: `/organiser/orders/:id/refund` records the refund, voids the tickets and emails the buyer, but someone must then reverse the transaction by hand in the CMI back office. Use `/organiser/orders/:id/reconcile-refund` to sync the books after a reversal made there, since CMI notifies us of nothing.
 - **A refused late payment leaves the order PENDING, not CANCELLED.** When the seats are gone the server declines the money and stops; the sweeper tidies the order up on its next pass (within five minutes). Nothing is charged in the meantime, but the order looks unpaid rather than explicitly failed until then.
-- **The commission is not real.** On **Finance**, the organiser picks their own plan and the fee is computed in the browser — nothing is stored and nothing is charged. The backend has no concept of a plan.
-- **There are no payouts.** The Pilotage board shows a "Reversement" step, but there is no bank detail, no payout run and no record of a transfer.
+- **Commission is recorded but never collected.** The fee is real — computed server-side from the organiser's plan and written onto each order when it settles — but Eventick does not invoice or charge it. It is withheld on paper, by being deducted from the payout.
+- **Payouts are a ledger, not a bank integration.** A run calculates what is owed and records the transfer, but nobody sends money automatically: an admin makes the transfer in their bank and pastes the reference back in. There is no bank API.
 - **No audit trail.** Role changes, permission grants, refunds and deletions are not recorded anywhere. Only organiser-application decisions keep a record.
 - **No delete-user endpoint.** The Équipe screen cannot remove an account.
 - The demo accounts use public passwords and must be changed before production.

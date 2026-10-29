@@ -93,13 +93,12 @@ export function parseBrief(raw, locale) {
   };
 }
 
-// gmv is in cents; the old version's flat fees (499/1999 MAD) become
-// 49900/199900 cents to match.
-export function planCost(id, gmvCents) {
-  if (id === "starter") return Math.round(gmvCents * 0.05);
-  if (id === "pro") return 49900 + Math.round(gmvCents * 0.03);
-  return 199900 + Math.round(gmvCents * 0.02);
-}
+// planCost() lived here: it priced the three commission plans in the browser
+// for the Finance screen, from rates hardcoded twice over. It is gone because
+// the commission is now the server's — recorded on each order at settlement
+// from the plan an admin assigned, at rates held in the `plans` table. Keeping
+// a second copy of those rates here would guarantee they eventually disagreed
+// with the figure actually charged.
 
 export const EXAMPLE_BRIEF = {
   ar: "أنشئ حفلاً موسيقياً بالدار البيضاء يوم 20 دجنبر، بسعة 500 شخص. أريد VIP بسعر 400 درهم وStandard بسعر 150 درهماً، مع خصم 15% لأول 100 تذكرة.",

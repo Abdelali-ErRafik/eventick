@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowDownRight, ArrowUpRight, CalendarDays, Minus, ReceiptText, Users as UsersIcon, Wallet } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, CalendarDays, Landmark, Minus, ReceiptText, Users as UsersIcon, Wallet } from "lucide-react";
+import { toast } from "sonner";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
-import { Badge } from "../../ui";
+import { Badge, Button, Field, Input, Modal, Select } from "../../ui";
 import { EmptyState, PageHead, SectionTitle, StatCard, StatSkeletons } from "./ui";
 import { text } from "./copy";
 
@@ -22,14 +23,41 @@ export default function Platform() {
   const t = text[locale];
   const [stats, setStats] = useState(null);
   const [sellers, setSellers] = useState(null);
+  const [plans, setPlans] = useState([]);
+  const [payouts, setPayouts] = useState(null);
+  /** The organiser a payout is being prepared for, or null. */
+  const [running, setRunning] = useState(null);
 
-  useEffect(() => {
-    api.get("/platform/stats").then(setStats).catch(() => setStats(null));
+  const loadSellers = useCallback(() => {
     api
       .get("/platform/organisers")
       .then((data) => setSellers(data.organisers))
       .catch(() => setSellers([]));
   }, []);
+  const loadPayouts = useCallback(() => {
+    api
+      .get("/platform/payouts")
+      .then((data) => setPayouts(data.payouts))
+      .catch(() => setPayouts([]));
+  }, []);
+
+  useEffect(() => {
+    api.get("/platform/stats").then(setStats).catch(() => setStats(null));
+    api.get("/platform/plans").then((data) => setPlans(data.plans)).catch(() => setPlans([]));
+    loadSellers();
+    loadPayouts();
+  }, [loadSellers, loadPayouts]);
+
+  /** Move an organiser onto a plan. Affects future orders only. */
+  const assignPlan = async (sellerId, planKey) => {
+    try {
+      await api.patch(`/platform/organisers/${sellerId}/plan`, { planKey: planKey || null });
+      toast.success(t.plPlanSaved);
+      loadSellers();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
 
   const revenue = stats?.revenue;
   // Percentage change week on week. Guarded because the first week has no
@@ -167,17 +195,225 @@ export default function Platform() {
                 </span>
               </div>
 
+              {/* Commission plan. The organiser sees this read-only on their
+                  own Finance screen — assigning it is an admin act, because
+                  an organiser choosing their own rate is the bug being fixed. */}
+              <label className="flex shrink-0 flex-col gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-muted">{t.plPlan}</span>
+                <Select
+                  value={seller.plan ?? ""}
+                  onChange={(e) => assignPlan(seller.id, e.target.value)}
+                  style={{ width: 150 }}
+                >
+                  <option value="">{t.plPlanDefault}</option>
+                  {plans.map((plan) => (
+                    <option key={plan.key} value={plan.key}>
+                      {plan.label} · {plan.rateBps / 100}%
+                    </option>
+                  ))}
+                </Select>
+              </label>
+
               <p className="shrink-0 text-end">
                 <span className="block font-display text-subhead font-bold tabular-nums">
                   {money(seller.grossCents)}
                 </span>
-                <span className="block text-[11px] font-semibold text-muted">MAD</span>
+                <span className="block text-[11px] font-semibold text-muted">
+                  MAD · {t.fee} {money(seller.feeCents ?? 0)}
+                </span>
               </p>
+
+              <Button variant="ghost" onClick={() => setRunning(seller)} className="shrink-0">
+                {t.plRunPayout}
+              </Button>
             </article>
           ))}
         </div>
       )}
+
+      <SectionTitle>{t.plPayouts}</SectionTitle>
+      {payouts && payouts.length === 0 ? (
+        <EmptyState icon={<Landmark className="size-6" />} title={t.plPayoutsNone} />
+      ) : (
+        <div className="grid gap-3">
+          {(payouts ?? []).map((row) => (
+            <PayoutAdminRow
+              key={row.id}
+              row={row}
+              t={t}
+              onChanged={() => {
+                loadPayouts();
+                loadSellers();
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {running ? (
+        <RunPayoutModal
+          seller={running}
+          t={t}
+          onClose={() => setRunning(null)}
+          onDone={() => {
+            setRunning(null);
+            loadPayouts();
+            loadSellers();
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+const PAYOUT_TONE = {
+  PENDING: "bg-warn-bg text-warn",
+  PAID: "bg-success-bg text-success",
+  CANCELLED: "bg-sunken text-muted",
+};
+
+const PAYOUT_LABEL = (row, t) =>
+  ({ PENDING: t.payoutPending, PAID: t.payoutPaid, CANCELLED: t.payoutCancelled })[row.status] ?? row.status;
+
+/** One payout, with the bank details needed to action it. */
+function PayoutAdminRow({ row, t, onChanged }) {
+  const [reference, setReference] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const markPaid = async () => {
+    if (!reference.trim() || busy) return;
+    setBusy(true);
+    try {
+      await api.post(`/platform/payouts/${row.id}/paid`, { reference: reference.trim() });
+      toast.success(t.plPayoutPaid);
+      onChanged();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancel = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/platform/payouts/${row.id}/cancel`, { note: "" });
+      toast.success(t.plCancelled);
+      onChanged();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <article className="rounded-card border border-line/10 bg-card p-4 shadow-card">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${PAYOUT_TONE[row.status]}`}>
+          {PAYOUT_LABEL(row, t)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold">{row.organiserName}</p>
+          <p className="truncate text-xs text-muted">
+            {row.orders} {t.payoutOrders} · {t.gross} {money(row.grossCents)} − {t.fee} {money(row.feeCents)}
+            {row.reference ? ` · ${t.payoutRef} ${row.reference}` : ""}
+          </p>
+        </div>
+        <p className="shrink-0 font-display text-subhead font-bold tabular-nums">{money(row.netCents)} MAD</p>
+      </div>
+
+      {/* The RIB shows only on a payout waiting to be sent — it is what the
+          transfer is made from, and there is no reason to keep displaying a
+          payment credential once the money has gone. */}
+      {row.status === "PENDING" ? (
+        <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-line/10 pt-3">
+          <p className="me-auto font-mono text-xs text-muted">
+            {row.bank
+              ? `${row.bank.holderName} · ${row.bank.rib}${row.bank.bank ? ` · ${row.bank.bank}` : ""}`
+              : t.plNoBank}
+          </p>
+          <Input
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            placeholder={t.plPayoutRef}
+            style={{ width: 200 }}
+          />
+          <Button onClick={markPaid} disabled={busy || !reference.trim()}>
+            {t.plMarkPaid}
+          </Button>
+          <Button variant="ghost" onClick={cancel} disabled={busy}>
+            {t.plCancelPayout}
+          </Button>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+/** Pick a period and create the payout. */
+function RunPayoutModal({ seller, t, onClose, onDone }) {
+  const [earnings, setEarnings] = useState(null);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    // Defaults to a wide window on purpose: a run only picks up orders that
+    // are not already in a payout, so "everything outstanding" is both the
+    // common case and safe to repeat.
+    const now = new Date();
+    setTo(new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10));
+    setFrom("2020-01-01");
+    api.get(`/platform/organisers/${seller.id}/earnings`).then(setEarnings).catch(() => setEarnings(null));
+  }, [seller.id]);
+
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await api.post(`/platform/organisers/${seller.id}/payouts`, {
+        periodStart: from,
+        periodEnd: to,
+      });
+      toast.success(t.plPayoutDone.replace("{amount}", money(result.netCents)));
+      onDone();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={t.plRunPayoutFor.replace("{name}", seller.name)}>
+      <div className="grid gap-3">
+        {earnings ? (
+          <p className="text-sm">
+            <span className="text-muted">{t.plOwed}: </span>
+            <span className="font-bold tabular-nums">{money(earnings.pending.payableCents)} MAD</span>
+            <span className="text-muted">
+              {" "}
+              ({earnings.unpaidOrders} {t.payoutOrders})
+            </span>
+            {/* Without a RIB there is nowhere to send it, and the server
+                refuses the run — say so before they fill the dates in. */}
+            {!earnings.bankAccount ? <span className="ms-2 font-semibold text-danger">· {t.plNoBank}</span> : null}
+          </p>
+        ) : null}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={t.plPeriodFrom}>
+            {(props) => <Input {...props} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />}
+          </Field>
+          <Field label={t.plPeriodTo}>
+            {(props) => <Input {...props} type="date" value={to} onChange={(e) => setTo(e.target.value)} />}
+          </Field>
+        </div>
+        <Button onClick={submit} disabled={busy || !from || !to || !earnings?.bankAccount}>
+          {t.plRunPayout}
+        </Button>
+      </div>
+    </Modal>
   );
 }
 

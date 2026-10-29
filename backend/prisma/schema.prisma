@@ -61,10 +61,19 @@ model User {
   role         Role     @default(CUSTOMER)
   createdAt    DateTime @default(now()) @map("created_at")
 
-  events Event[]
-  orders Order[]
+  /// Commission plan, for organisers. Null for customers, and for an
+  /// organiser nobody has assigned one to yet — the finance routes fall back
+  /// to the default plan rather than charging nothing.
+  planId String? @map("plan_id")
+
+  events   Event[]
+  orders   Order[]
   listings ResaleListing[]
   shares   TicketShare[]
+
+  plan        Plan?        @relation(fields: [planId], references: [key], onDelete: SetNull)
+  bankAccount BankAccount?
+  payouts     Payout[]
 
   /// Applications this person submitted to become an organiser.
   organiserApplications OrganiserApplication[] @relation("OrganiserApplicant")
@@ -129,13 +138,13 @@ model Event {
   organiserId String?     @map("organiser_id") // null for seeded/platform events
   status      EventStatus @default(PUBLISHED)
 
-  titleFr String @map("title_fr")
-  titleAr String @map("title_ar")
+  titleFr  String @map("title_fr")
+  titleAr  String @map("title_ar")
   category String
   city     String
 
-  venueFr String  @map("venue_fr")
-  venueAr String  @map("venue_ar")
+  venueFr String @map("venue_fr")
+  venueAr String @map("venue_ar")
   address String
 
   startAt DateTime @map("start_at")
@@ -144,13 +153,13 @@ model Event {
 
   image      String
   badge      String?
-  blurbFr    String @map("blurb_fr")
-  blurbAr    String @map("blurb_ar")
-  aboutFr    String @map("about_fr")
-  aboutAr    String @map("about_ar")
-  ageFr      String @map("age_fr")
-  ageAr      String @map("age_ar")
-  popularity Int    @default(0)
+  blurbFr    String  @map("blurb_fr")
+  blurbAr    String  @map("blurb_ar")
+  aboutFr    String  @map("about_fr")
+  aboutAr    String  @map("about_ar")
+  ageFr      String  @map("age_fr")
+  ageAr      String  @map("age_ar")
+  popularity Int     @default(0)
   instant    Boolean @default(true) // sold instantly vs waitlist-only when sold out
 
   /// Hours before the start when buyers may no longer cancel themselves.
@@ -159,12 +168,12 @@ model Event {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  organiser User?        @relation(fields: [organiserId], references: [id], onDelete: SetNull)
-  tiers     TicketTier[]
-  lineup    LineupItem[]
-  orders    Order[]
+  organiser  User?           @relation(fields: [organiserId], references: [id], onDelete: SetNull)
+  tiers      TicketTier[]
+  lineup     LineupItem[]
+  orders     Order[]
   promoCodes PromoCode[]
-  waitlist  WaitlistEntry[]
+  waitlist   WaitlistEntry[]
 
   @@index([organiserId])
   @@index([status])
@@ -172,13 +181,13 @@ model Event {
 }
 
 model LineupItem {
-  id      String @id @default(cuid())
-  eventId String @map("event_id")
+  id      String   @id @default(cuid())
+  eventId String   @map("event_id")
   day     DateTime
   time    String
   name    String
-  genreFr String @map("genre_fr")
-  genreAr String @map("genre_ar")
+  genreFr String   @map("genre_fr")
+  genreAr String   @map("genre_ar")
   image   String
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -196,24 +205,24 @@ model TicketTier {
   blurbFr String @map("blurb_fr")
   blurbAr String @map("blurb_ar")
 
-  priceCents Int     @map("price_cents")
-  capacity   Int
-  numbered   Boolean @default(false) // true -> tickets get a row/seat on purchase
+  priceCents  Int      @map("price_cents")
+  capacity    Int
+  numbered    Boolean  @default(false) // true -> tickets get a row/seat on purchase
   /// Seats per row when `numbered`. Was hardcoded to 12, which only matched
   /// one imaginary venue; a real room has its own row width.
-  seatsPerRow Int    @default(12) @map("seats_per_row")
-  recommended Boolean @default(false)
-  saveCents  Int?    @map("save_cents") // displayed "you save X" vs buying tiers separately
-  perks      String[] @default([]) // e.g. "qr", "lounge", "skip" — drives the VIP/perk filter on Explorer
+  seatsPerRow Int      @default(12) @map("seats_per_row")
+  recommended Boolean  @default(false)
+  saveCents   Int?     @map("save_cents") // displayed "you save X" vs buying tiers separately
+  perks       String[] @default([]) // e.g. "qr", "lounge", "skip" — drives the VIP/perk filter on Explorer
 
   zoneFr String @map("zone_fr")
   zoneAr String @map("zone_ar")
   gateFr String @map("gate_fr")
   gateAr String @map("gate_ar")
 
-  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  orderLines   OrderLine[]
-  tickets      Ticket[]
+  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orderLines OrderLine[]
+  tickets    Ticket[]
 
   @@index([eventId])
   @@map("ticket_tiers")
@@ -246,7 +255,7 @@ model Order {
   /// use their emailed link without logging in first.
   accessToken String? @unique @map("access_token")
 
-  holderName String  @map("holder_name")
+  holderName String @map("holder_name")
   email      String
   phone      String
 
@@ -269,6 +278,15 @@ model Order {
   /// callback can never settle a second order against the same payment.
   gatewayRef String? @unique @map("gateway_ref")
 
+  /// Platform commission on this order, in cents, recorded AT SETTLEMENT from
+  /// the organiser's plan at that moment — never recomputed. Moving an
+  /// organiser to a cheaper plan must not retroactively change what they owed
+  /// on tickets already sold. Null for orders settled before plans existed.
+  feeCents   Int?    @map("fee_cents")
+  /// Which plan produced `feeCents`, kept so a figure can be explained later
+  /// even if the plan's rate has since been edited.
+  feePlanKey String? @map("fee_plan_key")
+
   /// Refund audit trail. `refundedCents` accumulates across partial refunds,
   /// so it is the amount already returned — never the amount outstanding.
   refundedCents Int       @default(0) @map("refunded_cents")
@@ -277,11 +295,12 @@ model Order {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  customer  User?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  event     Event       @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  promoCode PromoCode?  @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
-  lines     OrderLine[]
-  tickets   Ticket[]
+  customer    User?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  promoCode   PromoCode?   @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
+  lines       OrderLine[]
+  tickets     Ticket[]
+  payoutOrder PayoutOrder?
 
   @@index([customerId])
   @@index([eventId])
@@ -309,10 +328,10 @@ model Ticket {
   tierId  String       @map("tier_id")
   status  TicketStatus @default(VALID)
 
-  holderName String  @map("holder_name")
-  seatRow    Int?    @map("seat_row")
-  seatNumber Int?    @map("seat_number")
-  usedAt     DateTime? @map("used_at")
+  holderName  String    @map("holder_name")
+  seatRow     Int?      @map("seat_row")
+  seatNumber  Int?      @map("seat_number")
+  usedAt      DateTime? @map("used_at")
   /// Set when a buyer cancels their own ticket, as distinct from an
   /// organiser voiding it — the two need telling apart in a dispute.
   cancelledAt DateTime? @map("cancelled_at")
@@ -423,10 +442,10 @@ enum WaitlistStatus {
 /// issued to the buyer while the old reference is voided. Nobody hands money
 /// to a stranger, and a sold ticket cannot be presented twice.
 model ResaleListing {
-  id       String        @id @default(cuid())
-  ticketId String        @unique @map("ticket_id")
-  sellerId String?       @map("seller_id") // null when the original order was a guest checkout
-  status   ResaleStatus  @default(LISTED)
+  id       String       @id @default(cuid())
+  ticketId String       @unique @map("ticket_id")
+  sellerId String?      @map("seller_id") // null when the original order was a guest checkout
+  status   ResaleStatus @default(LISTED)
 
   /// Face value at listing time, copied so a later tier price change cannot
   /// silently alter what a listed ticket costs.
@@ -545,10 +564,10 @@ model OrganiserApplication {
 
   /// Set when an admin decides. Kept even after a decline, so a repeat
   /// application can be read against the earlier one.
-  reviewedAt     DateTime? @map("reviewed_at")
-  reviewedById   String?   @map("reviewed_by_id")
+  reviewedAt   DateTime? @map("reviewed_at")
+  reviewedById String?   @map("reviewed_by_id")
   /// Why it was declined, shown to the applicant.
-  decisionNote   String?   @map("decision_note")
+  decisionNote String?   @map("decision_note")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -567,4 +586,134 @@ enum OrganiserApplicationStatus {
   APPROVED
   /// Turned down. decisionNote says why.
   DECLINED
+}
+
+// ---------------------------------------------------------------------------
+// Money owed to organisers
+//
+// Three things used to be fiction here, all of them on the Finance screen: the
+// organiser picked their own commission plan from a <select>, the fee was
+// computed in the browser and stored nowhere, and "Reversement" named a payout
+// that did not exist. These models make the first two real and give the third
+// somewhere to live.
+//
+// The ordering rule throughout: a fee is recorded ON THE ORDER at settlement,
+// never recomputed from the plan afterwards. An organiser moved to a cheaper
+// plan must not retroactively owe less on tickets already sold, and a payout
+// already made must not change value because a rate did.
+// ---------------------------------------------------------------------------
+
+/// What the platform charges an organiser. Assigned by an admin — an organiser
+/// choosing their own rate is the bug this replaces.
+model Plan {
+  /// Stable, human-readable key ("starter"), not a cuid: it appears in config
+  /// and in the UI, and a re-seed must not orphan the organisers pointing at it.
+  key   String @id
+  label String
+
+  /// Percentage cut, in BASIS POINTS (500 = 5%). Integer, because a float rate
+  /// reintroduces exactly the rounding drift cents exist to avoid.
+  rateBps      Int @map("rate_bps")
+  /// Fixed monthly fee in cents, on top of the percentage.
+  monthlyCents Int @default(0) @map("monthly_cents")
+
+  /// Given to a newly approved organiser when no plan is chosen for them.
+  isDefault Boolean @default(false) @map("is_default")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  organisers User[]
+
+  @@map("plans")
+}
+
+/// Where an organiser's money goes. Deliberately minimal: a name and an RIB,
+/// which is what a Moroccan bank transfer actually needs.
+model BankAccount {
+  id          String @id @default(cuid())
+  organiserId String @unique @map("organiser_id")
+
+  /// Account holder as the bank has it, which is often the trading name
+  /// rather than the person who signed up.
+  holderName String  @map("holder_name")
+  /// Moroccan RIB: 24 digits. Stored as given, digits only.
+  rib        String
+  bank       String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  organiser User @relation(fields: [organiserId], references: [id], onDelete: Cascade)
+
+  @@map("bank_accounts")
+}
+
+enum PayoutStatus {
+  /// Calculated, not yet sent to the bank.
+  PENDING
+  /// Transfer made. `reference` is the bank's.
+  PAID
+  /// Abandoned — see `note`.
+  CANCELLED
+}
+
+/// One transfer to one organiser for one period.
+///
+/// Totals are FROZEN at creation by copying from the orders in the period,
+/// rather than recomputed on read: a refund processed next week must not
+/// silently change what we already paid out last week.
+model Payout {
+  id          String       @id @default(cuid())
+  organiserId String       @map("organiser_id")
+  status      PayoutStatus @default(PENDING)
+
+  /// Half-open period [periodStart, periodEnd), by order settlement time.
+  periodStart DateTime @map("period_start")
+  periodEnd   DateTime @map("period_end")
+
+  /// Ticket revenue in the period, already net of refunds.
+  grossCents Int @map("gross_cents")
+  /// Platform commission withheld, summed from the orders themselves.
+  feeCents   Int @map("fee_cents")
+  /// What is actually transferred: gross - fee. Stored rather than derived so
+  /// the row remains readable if either input is ever corrected.
+  netCents   Int @map("net_cents")
+
+  /// Orders included, so a payout can be reconciled line by line.
+  orders PayoutOrder[]
+
+  /// Bank's transfer reference, filled when marked PAID.
+  reference String?
+  note      String?
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  paidAt    DateTime? @map("paid_at")
+
+  organiser User @relation(fields: [organiserId], references: [id], onDelete: Restrict)
+
+  @@index([organiserId, status])
+  @@index([status])
+  @@map("payouts")
+}
+
+/// Join row pinning one order into one payout.
+///
+/// `@@unique([orderId])` is the safeguard that matters: an order can appear in
+/// at most ONE payout ever, so a second run over an overlapping period cannot
+/// pay for the same tickets twice.
+model PayoutOrder {
+  id       String @id @default(cuid())
+  payoutId String @map("payout_id")
+  orderId  String @map("order_id")
+
+  /// Copied from the order at the time of the run, for line-by-line
+  /// reconciliation without re-reading orders that may since have changed.
+  grossCents Int @map("gross_cents")
+  feeCents   Int @map("fee_cents")
+
+  payout Payout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@unique([orderId])
+  @@index([payoutId])
+  @@map("payout_orders")
 }

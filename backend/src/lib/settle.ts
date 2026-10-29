@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { seatFor } from "../domain/inventory.js";
+import { feeForOrder } from "../domain/commission.js";
 import { makeTicketRef } from "../domain/ticketRef.js";
 import { sendEmail } from "./email.js";
 import { orderConfirmationHtml, orderConfirmationSubject } from "./email-templates.js";
@@ -65,6 +66,38 @@ export async function settleOrder(orderId: string, payment: {
       where: { id: orderId },
       include: { lines: { include: { tier: true } }, event: true },
     });
+
+    /*
+     * Record the platform's commission NOW, from the plan in force at this
+     * moment, and never recompute it.
+     *
+     * The alternative — deriving the fee from the organiser's current plan
+     * whenever Finance is opened — means moving an organiser to a cheaper
+     * plan retroactively changes what they owed on tickets already sold, and
+     * silently alters payouts that have already been made. Writing it onto
+     * the order makes the figure a fact about the sale rather than a function
+     * of today's configuration.
+     */
+    if (current.event.organiserId) {
+      const organiser = await tx.user.findUnique({
+        where: { id: current.event.organiserId },
+        select: { plan: true },
+      });
+      // An organiser with no plan assigned still owes the default rate;
+      // falling back to "no plan, no fee" would make unassigned organisers
+      // free, which is a billing hole rather than a kindness.
+      const plan =
+        organiser?.plan ?? (await tx.plan.findFirst({ where: { isDefault: true } }));
+      if (plan) {
+        await tx.order.update({
+          where: { id: current.id },
+          data: {
+            feeCents: feeForOrder(current.totalCents, plan),
+            feePlanKey: plan.key,
+          },
+        });
+      }
+    }
 
     /*
      * Re-check capacity before issuing, not just at hold time.
