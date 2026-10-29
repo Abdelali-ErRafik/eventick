@@ -37,6 +37,23 @@ async function defaultPlan() {
 }
 
 /**
+ * Spread a capped subscription total across the months it covers.
+ *
+ * Each month takes the full monthly fee until the total runs out, so a
+ * three-month run that could only afford two shows two months paid and the
+ * third at zero — rather than three months each short by a third, which would
+ * imply every month was partly settled.
+ */
+function splitAcrossMonths(months: Date[], total: number, perMonth: number) {
+  let left = total;
+  return months.map((month) => {
+    const amountCents = Math.min(perMonth, Math.max(0, left));
+    left -= amountCents;
+    return { month, amountCents };
+  });
+}
+
+/**
  * The plan to price an UNRECORDED fee at.
  *
  * Orders settled before commission existed carry feeCents: null, and pricing
@@ -251,25 +268,32 @@ export async function runPayout(
     const subscriptionCents = monthlyCents * billableMonths.length;
 
     /*
-     * Subscription comes out of what is payable, and the result is floored at
-     * zero rather than allowed to go negative: a quiet month must not turn a
-     * payout into an invoice. The unbilled remainder is simply not collected,
-     * which is the lenient direction — the alternative is a debt model, and
-     * that is a bigger decision than this run should make on its own.
+     * The subscription is capped at what the period can actually pay.
+     *
+     * Charging the full monthly fee regardless meant a quiet month refused
+     * its own payout: 485 MAD of revenue against a 499 MAD subscription
+     * produced "nothing to transfer", so the organiser received neither the
+     * money nor a record of why. Worse, the shortfall was only 14 MAD.
+     *
+     * So the fee takes what is there and no more. The uncollected remainder
+     * is NOT carried forward — that would be a debt model, which is a bigger
+     * decision than a payout run should make on its own, and is called out in
+     * the test guide as a deliberate limit.
      */
-    const netCents = Math.max(0, summary.payableCents - subscriptionCents);
+    const subscriptionCharged = Math.min(subscriptionCents, summary.payableCents);
+    const netCents = summary.payableCents - subscriptionCharged;
 
     // A period of fully refunded orders nets zero. Recording it would create a
     // transfer of 0 MAD that someone has to action.
     if (summary.payableCents <= 0) {
       throw new HttpError(409, "This period nets nothing payable — every order in it was refunded");
     }
-    if (netCents <= 0) {
-      throw new HttpError(
-        409,
-        `This period nets ${(summary.payableCents / 100).toFixed(2)} MAD, which does not cover the ` +
-          `${(subscriptionCents / 100).toFixed(2)} MAD plan subscription for it — nothing to transfer`,
-      );
+    // A period whose entire payable amount goes to the subscription leaves
+    // nothing to transfer. The months are still billed, so this is recorded
+    // rather than refused — refusing would lose the fact that they were
+    // charged, and the next run would bill the same months again.
+    if (netCents <= 0 && subscriptionCharged <= 0) {
+      throw new HttpError(409, "This period nets nothing payable");
     }
 
     const created = await tx.payout.create({
@@ -279,7 +303,7 @@ export async function runPayout(
         periodEnd,
         grossCents: summary.netRevenueCents,
         feeCents: summary.feeCents,
-        subscriptionCents,
+        subscriptionCents: subscriptionCharged,
         netCents,
         orders: {
           create: orders.map((o) => ({
@@ -293,10 +317,20 @@ export async function runPayout(
           })),
         },
         subscriptions: {
-          create: billableMonths.map((month) => ({
+          /*
+           * Records what was ACTUALLY taken, which can be less than the
+           * plan's monthly fee when the period could not cover it — see the
+           * cap above. Writing the full fee here would make these rows
+           * disagree with the payout that withheld them, and a reader
+           * reconciling the two would find money that never moved.
+           *
+           * Spread across the billed months in order, so a multi-month run
+           * that runs out mid-way shows which months were paid for.
+           */
+          create: splitAcrossMonths(billableMonths, subscriptionCharged, monthlyCents).map(({ month, amountCents }) => ({
             organiserId,
             month,
-            amountCents: monthlyCents,
+            amountCents,
             // Copied so the charge can still be explained after a rate edit.
             planKey: plan!.key,
           })),
@@ -309,7 +343,7 @@ export async function runPayout(
       payoutId: created.id,
       netCents: created.netCents,
       orders: orders.length,
-      subscriptionCents,
+      subscriptionCents: subscriptionCharged,
       months: billableMonths.length,
     };
   });

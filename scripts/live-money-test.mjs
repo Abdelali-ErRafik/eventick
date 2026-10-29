@@ -76,10 +76,47 @@ const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth()
 const tomorrow = new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10);
 const created = { events: [], orders: [] };
 
+/**
+ * Remove everything this suite creates.
+ *
+ * Matches the slug PREFIX, not just this run's suffix, and runs at the START
+ * as well as the end — the old version only ran on the success path, so a
+ * failure left a settled order behind and the next run's payout swept it in,
+ * shifting the totals and failing for an unrelated reason.
+ */
+async function teardown() {
+  const orga = await prisma.user.findUnique({ where: { email: ACCOUNTS.organiser.email }, select: { id: true } });
+  if (orga) {
+    // Ordered by dependency: charges and join rows before the payouts they
+    // hang off, and the payout before the organiser's plan is cleared.
+    await prisma.subscriptionCharge.deleteMany({ where: { organiserId: orga.id } });
+    await prisma.payoutOrder.deleteMany({ where: { payout: { organiserId: orga.id } } });
+    await prisma.payout.deleteMany({ where: { organiserId: orga.id } });
+    await prisma.bankAccount.deleteMany({ where: { organiserId: orga.id } });
+    await prisma.user.update({ where: { id: orga.id }, data: { planId: null } });
+  }
+
+  const stale = await prisma.event.findMany({ where: { slug: { startsWith: "money-test-" } }, select: { id: true } });
+  for (const { id: eventId } of stale) {
+    const tiers = await prisma.ticketTier.findMany({ where: { eventId }, select: { id: true } });
+    const tierIds = tiers.map((t) => t.id);
+    await prisma.resaleListing.deleteMany({ where: { ticket: { tierId: { in: tierIds } } } });
+    await prisma.ticket.deleteMany({ where: { tierId: { in: tierIds } } });
+    await prisma.orderLine.deleteMany({ where: { tierId: { in: tierIds } } });
+    await prisma.waitlistEntry.deleteMany({ where: { eventId } });
+    await prisma.order.deleteMany({ where: { eventId } });
+    await prisma.ticketTier.deleteMany({ where: { eventId } });
+    await prisma.event.delete({ where: { id: eventId } });
+  }
+}
+
 async function main() {
   const admin = await login(ACCOUNTS.admin);
   const orga = await login(ACCOUNTS.organiser);
   const orgaId = (await call("GET", "/api/auth/me", { token: orga })).data.user.id;
+
+  // Start clean, whatever an earlier run left behind.
+  await teardown();
 
   // A throwaway event owned by the demo organiser, so the test never depends
   // on seeded revenue and never disturbs it.
@@ -361,20 +398,8 @@ async function main() {
 
   // ── Cleanup ─────────────────────────────────────────────────────────────
   console.log("\n\x1b[1mCleanup\x1b[0m");
-  await prisma.payoutOrder.deleteMany({ where: { payout: { organiserId: orgaId } } });
-  await prisma.payout.deleteMany({ where: { organiserId: orgaId } });
-  await prisma.bankAccount.deleteMany({ where: { organiserId: orgaId } });
-  await prisma.user.update({ where: { id: orgaId }, data: { planId: null } });
-  for (const eventId of created.events) {
-    const tiers = await prisma.ticketTier.findMany({ where: { eventId }, select: { id: true } });
-    const tierIds = tiers.map((t) => t.id);
-    await prisma.ticket.deleteMany({ where: { tierId: { in: tierIds } } });
-    await prisma.orderLine.deleteMany({ where: { tierId: { in: tierIds } } });
-    await prisma.order.deleteMany({ where: { eventId } });
-    await prisma.ticketTier.deleteMany({ where: { eventId } });
-    await prisma.event.delete({ where: { id: eventId } });
-  }
-  const left = await prisma.event.count({ where: { slug: `money-test-${SUFFIX}` } });
+  await teardown();
+  const left = await prisma.event.count({ where: { slug: { startsWith: "money-test-" } } });
   check("test data removed", left === 0, `${left} event(s) left`);
 
   console.log(
@@ -386,6 +411,8 @@ async function main() {
 
 main().catch(async (err) => {
   console.error("\x1b[31mharness error:\x1b[0m", err);
+  // Tidy up even on the failure path, so one bad run does not poison the next.
+  await teardown().catch(() => {});
   await prisma.$disconnect();
   process.exit(1);
 });

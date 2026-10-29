@@ -554,6 +554,42 @@ async function main() {
     );
   }
 
+  // ═══ 8b. A month too quiet to cover its own subscription ══════════════
+  section("8b. A month that cannot afford the subscription");
+  {
+    /*
+     * Charging the full monthly fee regardless meant a quiet month refused
+     * its own payout — "nets 485.00, does not cover 499.00, nothing to
+     * transfer" — so the organiser got neither the money nor a record, over a
+     * 14 MAD shortfall. The fee now takes what is there and no more.
+     */
+    const { event, tier } = await makeEvent("quiet", { priceCents: 20000, capacity: 5, organiserId: orgaId });
+    const o = await buyAndSettle(event, tier, 1);
+    // 200.00 revenue, 3% fee = 6.00, so 194.00 payable against a 499.00 fee.
+    await prisma.order.update({ where: { id: o.id }, data: { createdAt: new Date("2026-11-10T12:00:00Z") } });
+
+    const run = await call("POST", `/api/platform/organisers/${orgaId}/payouts`, {
+      token: admin,
+      body: { periodStart: "2026-11-01", periodEnd: "2026-12-01" },
+    });
+    check("the payout is still created", run.status === 201, `${run.status} ${run.data.error ?? ""}`);
+
+    const row = await prisma.payout.findUnique({
+      where: { id: run.data.payoutId },
+      select: { grossCents: true, feeCents: true, subscriptionCents: true, netCents: true, subscriptions: { select: { amountCents: true } } },
+    });
+    const payable = row.grossCents - row.feeCents;
+    check("the subscription is capped at what was payable", row.subscriptionCents === payable, `${mad(row.subscriptionCents)} of a 499.00 fee, payable was ${mad(payable)}`);
+    check("nothing is transferred, but the run exists", row.netCents === 0, mad(row.netCents));
+    // The charge row must agree with the payout, or reconciling the two finds
+    // money that never moved.
+    check(
+      "the charge row records what was taken, not the full fee",
+      row.subscriptions.reduce((sum, x) => sum + x.amountCents, 0) === row.subscriptionCents,
+      `${mad(row.subscriptions.reduce((sum, x) => sum + x.amountCents, 0))} vs ${mad(row.subscriptionCents)}`,
+    );
+  }
+
   // ═══ 9. Multi-month and cancellation ══════════════════════════════════
   section("9. Several months, and releasing a cancelled run");
   {
