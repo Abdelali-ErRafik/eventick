@@ -5,6 +5,8 @@ import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { authenticate, requirePermission } from "../middleware/auth.js";
 import { summariseRevenue } from "../domain/commission.js";
 import { cancelPayout, markPayoutPaid, organiserEarnings, runPayout } from "../lib/payout.js";
+import { listAudit } from "../lib/audit.js";
+import { AUDIT_ACTIONS, recordAudit } from "../lib/audit.js";
 
 /**
  * The platform console — what someone running the marketplace needs, as
@@ -243,7 +245,7 @@ platformRouter.patch(
     const id = param(req, "id");
     const body = assignPlanSchema.parse(req.body ?? {});
 
-    const organiser = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
+    const organiser = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, planId: true } });
     if (!organiser) throw new HttpError(404, "User not found");
 
     if (body.planKey !== null) {
@@ -255,6 +257,15 @@ platformRouter.patch(
       where: { id },
       data: { planId: body.planKey },
       select: { id: true, name: true, plan: { select: { key: true, label: true } } },
+    });
+
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.ORGANISER_PLAN_ASSIGNED,
+      subjectType: "user",
+      subjectId: updated.id,
+      subjectLabel: updated.name,
+      // Both ends, because "assigned Pro" alone does not say what it replaced.
+      details: { from: organiser.planId ?? null, to: body.planKey },
     });
 
     res.json({
@@ -365,7 +376,22 @@ platformRouter.post(
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       throw new HttpError(400, "periodStart and periodEnd must be valid dates");
     }
-    const result = await runPayout(param(req, "id"), start, end);
+    const organiserId = param(req, "id");
+    const result = await runPayout(organiserId, start, end);
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.PAYOUT_CREATED,
+      subjectType: "payout",
+      subjectId: result.payoutId,
+      subjectLabel: `${(result.netCents / 100).toFixed(2)} MAD`,
+      details: {
+        organiserId,
+        netCents: result.netCents,
+        orders: result.orders,
+        subscriptionCents: result.subscriptionCents,
+        periodStart: body.periodStart,
+        periodEnd: body.periodEnd,
+      },
+    });
     res.status(201).json(result);
   }),
 );
@@ -380,7 +406,16 @@ platformRouter.post(
   requirePermission("users.manage"),
   asyncHandler(async (req, res) => {
     const body = markPaidSchema.parse(req.body ?? {});
-    await markPayoutPaid(param(req, "id"), body.reference);
+    const payoutId = param(req, "id");
+    await markPayoutPaid(payoutId, body.reference);
+    // Says money left the bank. Nothing in the system verifies that, so the
+    // record of who asserted it is the only accountability there is.
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.PAYOUT_PAID,
+      subjectType: "payout",
+      subjectId: payoutId,
+      details: { reference: body.reference },
+    });
     res.json({ ok: true });
   }),
 );
@@ -390,7 +425,46 @@ platformRouter.post(
   requirePermission("users.manage"),
   asyncHandler(async (req, res) => {
     const note = typeof req.body?.note === "string" ? req.body.note : "";
-    await cancelPayout(param(req, "id"), note);
+    const payoutId = param(req, "id");
+    await cancelPayout(payoutId, note);
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.PAYOUT_CANCELLED,
+      subjectType: "payout",
+      subjectId: payoutId,
+      details: { note: note || null },
+    });
     res.json({ ok: true });
+  }),
+);
+
+// ─── The journal ─────────────────────────────────────────────────────────
+//
+// Reading it needs the same gate as the rest of this router (scope.any +
+// finance.view): the rows describe money moving and accounts changing across
+// every organiser, which is precisely what those two capabilities mean.
+
+platformRouter.get(
+  "/audit",
+  asyncHandler(async (req, res) => {
+    const str = (key: string) => (typeof req.query[key] === "string" ? (req.query[key] as string) : undefined);
+    const beforeRaw = str("before");
+    const before = beforeRaw ? new Date(beforeRaw) : undefined;
+    if (before && Number.isNaN(before.getTime())) throw new HttpError(400, "`before` must be a valid date");
+
+    const events = await listAudit({
+      action: str("action"),
+      actorId: str("actorId"),
+      subjectType: str("subjectType"),
+      subjectId: str("subjectId"),
+      before,
+      limit: Number(str("limit") ?? 50),
+    });
+
+    res.json({
+      events,
+      // The vocabulary, so the filter dropdown does not hardcode a list that
+      // drifts from what the server actually records.
+      actions: Object.values(AUDIT_ACTIONS),
+    });
   }),
 );

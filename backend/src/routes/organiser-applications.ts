@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { AUDIT_ACTIONS, recordAudit } from "../lib/audit.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { authenticate, requirePermission } from "../middleware/auth.js";
 import { phoneOk } from "../lib/payment-sim.js";
@@ -195,6 +196,17 @@ organiserApplicationsRouter.post(
           reviewedBy: { select: { name: true } },
         },
       });
+    });
+
+    // The application table already keeps reviewedById, so this is about the
+    // journal being complete: someone auditing "who promoted this organiser"
+    // should not have to know that one action is recorded somewhere else.
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.ORGANISER_APPLICATION_DECIDED,
+      subjectType: "user",
+      subjectId: app.userId,
+      subjectLabel: app.user.email,
+      details: { status, promoted: body.approve && app.user.role === "CUSTOMER", note: body.note ?? null },
     });
 
     res.json({ application: reviewView(updated) });

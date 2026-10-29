@@ -75,6 +75,7 @@ model User {
   bankAccount   BankAccount?
   payouts       Payout[]
   subscriptions SubscriptionCharge[]
+  auditEvents   AuditEvent[]
 
   /// Applications this person submitted to become an organiser.
   organiserApplications OrganiserApplication[] @relation("OrganiserApplicant")
@@ -755,4 +756,62 @@ model SubscriptionCharge {
   @@unique([organiserId, month])
   @@index([payoutId])
   @@map("subscription_charges")
+}
+
+// ---------------------------------------------------------------------------
+// Audit trail
+//
+// Who did what, to whom, and when — for the actions where "it just changed"
+// is not an acceptable answer: role changes, permission grants, refunds, plan
+// assignments, payouts and account deletion.
+//
+// Deliberately NOT a general event log. Reads and ordinary CRUD stay out of
+// it: a log that records everything is one nobody reads, and the point here is
+// that every row is something a person should be able to account for.
+// ---------------------------------------------------------------------------
+
+/// A privileged action, recorded.
+model AuditEvent {
+  id String @id @default(cuid())
+
+  /// Who did it. Nullable because the record must OUTLIVE the account: the
+  /// whole reason to log a deletion is to know who performed it, and a
+  /// cascade would erase exactly that.
+  actorId    String? @map("actor_id")
+  /// Actor's email and role AT THE TIME, copied. A renamed or deleted account
+  /// would otherwise make an old row unreadable, and a role change after the
+  /// fact would silently rewrite the authority the action was taken under.
+  actorEmail String  @map("actor_email")
+  actorRole  String  @map("actor_role")
+
+  /// What was done: a stable dotted key, e.g. "user.role.changed".
+  action String
+
+  /// What it was done to. Free-form id plus a type, rather than a relation to
+  /// every auditable model — a foreign key per subject type would make this
+  /// table grow a column every time something new becomes auditable, and
+  /// would block deleting the subject it describes.
+  subjectType  String  @map("subject_type")
+  subjectId    String? @map("subject_id")
+  /// Human label for the subject, so a row reads without extra lookups and
+  /// still reads after the subject is gone.
+  subjectLabel String? @map("subject_label")
+
+  /// What changed, as JSON. Shape is per-action and deliberately loose: the
+  /// alternative is a column per field, which cannot work across actions as
+  /// different as a refund and a permission grant.
+  details Json?
+
+  /// Where from. Useful when an account is shared or compromised.
+  ip String?
+
+  at DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([at])
+  @@index([action, at])
+  @@index([subjectType, subjectId])
+  @@index([actorId])
+  @@map("audit_events")
 }

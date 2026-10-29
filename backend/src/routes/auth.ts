@@ -9,6 +9,8 @@ import { authenticate, requirePermission } from "../middleware/auth.js";
 import { ADMIN_CREATABLE_ROLES, isRole, PUBLIC_SIGNUP_ROLE, ROLES, type Role } from "../domain/auth.js";
 import { isLockedGrant, isPermission, PERMISSION_KEYS, PERMISSIONS } from "../domain/permissions.js";
 import { invalidatePermissionCache, permissionListForRole } from "../lib/permissions.js";
+import { AUDIT_ACTIONS, recordAudit } from "../lib/audit.js";
+import { planRemoval, removeUser } from "../lib/user-admin.js";
 
 export const authRouter = Router();
 
@@ -198,6 +200,15 @@ authRouter.patch(
     if (!existing) throw new HttpError(404, "User not found");
 
     const user = await prisma.user.update({ where: { id }, data: { role: body.role } });
+    // A role change hands out or removes capability, so it has to be
+    // attributable afterwards.
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.USER_ROLE_CHANGED,
+      subjectType: "user",
+      subjectId: user.id,
+      subjectLabel: user.email,
+      details: { from: existing.role, to: user.role },
+    });
     res.json({ user: publicUser(user, await permissionsOf(user)) });
   }),
 );
@@ -249,6 +260,15 @@ authRouter.post(
         createdAt: true,
         _count: { select: { events: true, orders: true } },
       },
+    });
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.USER_CREATED,
+      subjectType: "user",
+      subjectId: user.id,
+      subjectLabel: user.email,
+      // Never the password, obviously — but the ROLE is the part worth
+      // keeping: an account created as ORGANISER can sell tickets.
+      details: { role: user.role, name: user.name },
     });
     res.status(201).json({ user: adminUser(user) });
   }),
@@ -313,6 +333,14 @@ authRouter.post(
     // bug to whoever just clicked the toggle.
     invalidatePermissionCache(role);
 
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.ROLE_PERMISSION_GRANTED,
+      subjectType: "role",
+      subjectId: role,
+      subjectLabel: role,
+      details: { permission },
+    });
+
     res.json({ role, permissions: await permissionListForRole(role) });
   }),
 );
@@ -338,6 +366,74 @@ authRouter.delete(
     await prisma.rolePermission.deleteMany({ where: { role, permissionKey: permission } });
     invalidatePermissionCache(role);
 
+    // Revoking affects every account holding that role, immediately — the
+    // one change most likely to be asked about later.
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.ROLE_PERMISSION_REVOKED,
+      subjectType: "role",
+      subjectId: role,
+      subjectLabel: role,
+      details: { permission },
+    });
+
     res.json({ role, permissions: await permissionListForRole(role) });
+  }),
+);
+
+/**
+ * What removing this account would actually do.
+ *
+ * Read-only, so a confirmation dialog can say "this will be anonymised, not
+ * deleted, because there are 3 payouts" before the click rather than after.
+ */
+authRouter.get(
+  "/users/:id/removal",
+  authenticate,
+  requirePermission("users.manage"),
+  asyncHandler(async (req, res) => {
+    res.json(await planRemoval(param(req, "id")));
+  }),
+);
+
+/**
+ * Remove an account.
+ *
+ * Deletes it outright when nothing depends on it, and anonymises it when
+ * money history does — see lib/user-admin.ts for why that is two outcomes
+ * rather than a choice.
+ *
+ * The self-deletion guard mirrors the one on /users/:id/role: as long as an
+ * admin can never remove themselves, the platform can never reach zero
+ * admins, so there is no separate count to maintain. It also rules out the
+ * obvious accident.
+ */
+authRouter.delete(
+  "/users/:id",
+  authenticate,
+  requirePermission("users.manage"),
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    if (id === req.user!.id) throw new HttpError(422, "You cannot remove your own account");
+
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, email: true, role: true } });
+    if (!target) throw new HttpError(404, "User not found");
+    // Same reasoning as ADMIN_CREATABLE_ROLES on user creation: an admin
+    // must not be able to remove another admin, or one compromised account
+    // could clear out every other administrator.
+    if (target.role === "ADMIN") throw new HttpError(403, "An admin account cannot be removed here");
+
+    const result = await removeUser(id);
+
+    // Recorded BEFORE the response, and with the old email as the label —
+    // the row is the only remaining trace of who this was.
+    recordAudit(req, {
+      action: result.mode === "deleted" ? AUDIT_ACTIONS.USER_DELETED : AUDIT_ACTIONS.USER_ANONYMISED,
+      subjectType: "user",
+      subjectId: id,
+      subjectLabel: result.email,
+      details: { mode: result.mode, role: target.role },
+    });
+
+    res.json({ ok: true, mode: result.mode });
   }),
 );

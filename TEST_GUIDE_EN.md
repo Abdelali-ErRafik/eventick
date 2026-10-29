@@ -101,6 +101,25 @@ Worth testing deliberately, because each one protects money:
 settle, refund, resell, commission, subscription, payout — in 75 checks.
 `npm run test:live:money` covers the commission and payout rules on their own.
 
+### 6. The journal, and removing an account
+
+**Admin → Journal** lists who did what. It is gated on `scope.any`, the same
+as the rest of the platform console, because the rows describe money and
+accounts across every organiser.
+
+| What you do | What should happen |
+|---|---|
+| Change someone's role, grant a permission, refund an order, assign a plan, send a payout | Each appears in the Journal with your email, what changed (both ends) and when |
+| Filter by action | Only that action's rows |
+| Open the Journal as the organiser | Refused — it is admin-only |
+| **Équipe →** remove a brand-new account | Deleted outright; the Journal still shows it existed and who removed it |
+| Remove an account that has orders | **Anonymised**, not deleted — the dialog says so *before* you confirm. Orders and tickets survive; the old login stops working |
+| Try to remove yourself, or another admin | Refused. One compromised admin cannot clear out the others |
+
+`npm run test:live:audit` (from `backend/`) checks all of this in 46 checks,
+including the one that matters most: a record survives the deletion of the
+person who made it.
+
 ---
 
 ## 🧭 Where things are
@@ -699,8 +718,8 @@ cd backend && npm run test:live && npm run test:live:authz && npm run test:live:
 - **Commission and subscription are withheld, not invoiced.** Both are real and computed server-side — the percentage is written onto each order when it settles, the monthly fee is charged per calendar month that had sales — but Eventick never issues an invoice or takes a card. Both are collected by being deducted from the payout, so an organiser with no payout due is never charged.
 - **A dormant month is not billed, and no debt accrues.** If a month's sales do not cover the plan's monthly fee, the shortfall is simply not collected rather than carried forward. Charging it would mean a debt model, which is a bigger decision than the payout run should make.
 - **Payouts are a ledger, not a bank integration.** A run calculates what is owed and records the transfer, but nobody sends money automatically: an admin makes the transfer in their bank and pastes the reference back in. There is no bank API.
-- **No audit trail.** Role changes, permission grants, refunds and deletions are not recorded anywhere. Only organiser-application decisions keep a record.
-- **No delete-user endpoint.** The Équipe screen cannot remove an account.
+- **The journal records decisions, not everything.** Role changes, permission grants, refunds, plan assignments, payouts and account removal are recorded. Ordinary reads and CRUD are deliberately not: a log of everything is one nobody reads. Nothing purges it yet, so it grows without bound.
+- **An account with money history is anonymised, not deleted.** Its orders, tickets and payouts have to survive — the organiser was paid for them — so the row stays with its personal data stripped. A true erasure would mean rewriting financial records.
 - The demo accounts use public passwords and must be changed before production.
 
 These should all be addressed before going live.

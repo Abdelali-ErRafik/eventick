@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, RefreshCw, ShieldCheck, UserPlus, X } from "lucide-react";
+import { Check, RefreshCw, ShieldCheck, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { useAuth } from "../../AuthContext";
 import { useI18n } from "../../i18n";
 import { longDate } from "../../utils";
 import { useConfirm } from "./ConfirmContext";
-import { Badge, Btn, EmptyState, FilterBar, InfoTip, PageHead, Pager, PersonCell } from "./ui";
+import { Badge, Btn, EmptyState, FilterBar, IconBtn, InfoTip, PageHead, Pager, PersonCell } from "./ui";
 import { Dropdown, Field, Input, Modal, triggerControlClass } from "../../ui";
 import { text } from "./copy";
 
@@ -135,6 +135,44 @@ export default function Users() {
   const pages = Math.max(1, Math.ceil(allRows.length / limit));
   const rows = allRows.slice((page - 1) * limit, page * limit);
   const activeCount = [query, role].filter(Boolean).length;
+
+  /**
+   * Remove an account.
+   *
+   * Two outcomes, and the server decides which: delete when nothing depends
+   * on the account, anonymise when money history does. The plan is fetched
+   * FIRST so the confirmation can say which one applies and why — finding out
+   * afterwards that a "delete" only anonymised would be a bad surprise.
+   */
+  const remove = async (target) => {
+    let plan;
+    try {
+      plan = await api.get(`/auth/users/${target.id}/removal`);
+    } catch (err) {
+      toast.error(err.message);
+      return;
+    }
+
+    const ok = await confirm({
+      title: t.removeTitle.replace("{name}", target.name),
+      message: plan.mode === "deleted" ? t.removeDeleted : t.removeAnonymised,
+      tone: "danger",
+      confirmLabel: t.removeAccount,
+      cancelLabel: t.close,
+    });
+    if (!ok) return;
+
+    setBusyId(target.id);
+    try {
+      const result = await api.del(`/auth/users/${target.id}`);
+      toast.success(result.mode === "deleted" ? t.removeDone : t.removeAnonDone);
+      await load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const changeRole = async (target, nextRole) => {
     const ok = await confirm({
@@ -341,6 +379,23 @@ export default function Users() {
                     ))}
                   </select>
                   {isSelf ? <InfoTip text={t.cannotChangeOwnRole} /> : null}
+
+                  {/* Hidden for yourself and for another admin, matching the
+                      server's own guards — a button that always 403s is worse
+                      than no button. */}
+                  {isSelf || u.role === "ADMIN" ? (
+                    <InfoTip text={isSelf ? t.removeCannotSelf : t.removeCannotAdmin} />
+                  ) : (
+                    <IconBtn
+                      label={t.removeAccount}
+                      title={t.removeAccount}
+                      tone="danger"
+                      disabled={busyId === u.id}
+                      onClick={() => remove(u)}
+                    >
+                      <Trash2 className="size-4" />
+                    </IconBtn>
+                  )}
                 </div>
               </article>
             );

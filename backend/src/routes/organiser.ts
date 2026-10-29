@@ -12,6 +12,7 @@ import { broadcastRateLimit } from "../middleware/rateLimit.js";
 import { sendEmail } from "../lib/email.js";
 import { broadcastHtml } from "../lib/email-templates.js";
 import { reconcileExternalRefund, refundOrder } from "../lib/refund.js";
+import { AUDIT_ACTIONS, recordAudit } from "../lib/audit.js";
 import { offerFreedSeats } from "../lib/waitlist.js";
 import { reissueTicket, renameHolder } from "../lib/ticket-admin.js";
 
@@ -542,6 +543,15 @@ organiserRouter.post(
     await requireOwnedOrder(req.user, id);
     const body = refundSchema.parse(req.body ?? {});
     const result = await refundOrder(id, body.amountCents ?? null);
+    // Money going back to a buyer, and with CMI it is a manual reversal
+    // someone has to action — so who asked for it matters.
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.ORDER_REFUNDED,
+      subjectType: "order",
+      subjectId: id,
+      subjectLabel: `${(result.refundedCents / 100).toFixed(2)} MAD`,
+      details: { refundedCents: result.refundedCents, full: result.full, refundRef: result.refundRef },
+    });
     res.json({ ...result, gatewayAction: "Reverse this transaction in the CMI back office." });
   }),
 );
@@ -569,6 +579,12 @@ organiserRouter.post(
     if (!order.gatewayRef) throw new HttpError(409, "This order has no gateway transaction to reconcile");
     const result = await reconcileExternalRefund(order.gatewayRef, body.amountRefundedCents);
     if (!result) return res.json({ reconciled: false, reason: "Already recorded" });
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.ORDER_REFUND_RECONCILED,
+      subjectType: "order",
+      subjectId: id,
+      details: { amountRefundedCents: body.amountRefundedCents, full: result.full },
+    });
     res.json({ reconciled: true, ...result });
   }),
 );
@@ -844,6 +860,17 @@ organiserRouter.put(
         bank: body.bank?.trim() || null,
       },
       select: { holderName: true, rib: true, bank: true, updatedAt: true },
+    });
+
+    // Where the organiser's money goes. Changing it is the step an attacker
+    // would take after compromising an account, so it is recorded — the last
+    // four digits only, never the full RIB.
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.BANK_ACCOUNT_CHANGED,
+      subjectType: "user",
+      subjectId: req.user!.id,
+      subjectLabel: req.user!.email,
+      details: { holderName: saved.holderName, ribLast4: saved.rib.slice(-4), bank: saved.bank },
     });
 
     res.json({

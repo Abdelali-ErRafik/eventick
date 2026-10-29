@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Route, Routes } from "react-router-dom";
-import { Activity, CalendarDays, KeyRound, LayoutDashboard, LayoutGrid, QrCode, ReceiptText, ShieldCheck, Tags, Wallet } from "lucide-react";
+import { Activity, CalendarDays, KeyRound, LayoutDashboard, LayoutGrid, QrCode, ReceiptText, ScrollText, ShieldCheck, Tags, Wallet } from "lucide-react";
 import { Protected } from "../../components/Protected";
 import { useAuth } from "../../AuthContext";
 import { api } from "../../api";
@@ -18,6 +18,7 @@ import Placements from "./Placements";
 import Users from "./Users";
 import Permissions from "./Permissions";
 import Platform from "./Platform";
+import Journal from "./Journal";
 
 const ic = (Icon) => <Icon size={19} strokeWidth={2} aria-hidden />;
 
@@ -65,6 +66,9 @@ function ProInner() {
     { group: t.grpAdmin, to: "/pro/platform", label: t.platform, icon: ic(Activity), permission: "scope.any" },
     { group: t.grpAdmin, to: "/pro/users", label: t.team, icon: ic(ShieldCheck), permission: "users.manage" },
     { group: t.grpAdmin, to: "/pro/permissions", label: t.permissions, icon: ic(KeyRound), permission: "users.manage" },
+    // Same gate as the journal route and the API behind it: the rows describe
+    // money and accounts across every organiser.
+    { group: t.grpAdmin, to: "/pro/journal", label: t.journal, icon: ic(ScrollText), permission: "scope.any" },
   ].filter((item) => !item.permission || can(item.permission));
 
   return (
@@ -136,6 +140,14 @@ function ProInner() {
           element={
             <Protected permission="users.manage">
               <Users />
+            </Protected>
+          }
+        />
+        <Route
+          path="journal"
+          element={
+            <Protected permission="scope.any">
+              <Journal />
             </Protected>
           }
         />
