@@ -1,21 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Copy, ExternalLink, Eye, EyeOff, Mail, Pencil, Ticket, Trash2, Users } from "lucide-react";
+import { Ban, Copy, ExternalLink, Eye, EyeOff, Mail, Pencil, SlidersHorizontal, Ticket, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api, money } from "../../api";
+import { useAuth } from "../../AuthContext";
 import { useI18n } from "../../i18n";
 import { CITIES, longDate, totalCapacity, totalRemaining } from "../../utils";
 import { useConfirm } from "./ConfirmContext";
 import { useOrganisers } from "./useOrganisers";
 import { Badge, Btn, EmptyState, FilterBar, IconBtn, Modal, PageHead } from "./ui";
 import { text } from "./copy";
-import { Dropdown, Field, Input, Textarea, triggerControlClass } from "../../ui";
+import { CheckOption, Dropdown, Field, Input, Notice, Textarea, triggerControlClass } from "../../ui";
 
 export default function Events() {
   const { locale } = useI18n();
   const t = text[locale];
   const navigate = useNavigate();
   const confirm = useConfirm();
+  // Cancelling needs finance.refund, NOT events.manage: it moves money for
+  // every buyer at once (see the route's own comment). This whole screen is
+  // gated on events.manage, so without this check the action would be a
+  // button that 403s for most of the people who can see it.
+  const { can } = useAuth();
+  const mayRefund = can("finance.refund");
   const { maySeeAllOrganisers, organisers } = useOrganisers();
   const [events, setEvents] = useState(null);
   const [orders, setOrders] = useState(null);
@@ -32,6 +39,16 @@ export default function Events() {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  // Calling an event off.
+  const [cancelling, setCancelling] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelNotify, setCancelNotify] = useState(true);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  // The per-event sales rules, editable after the event exists.
+  const [rules, setRules] = useState(null);
+  const [rulesMax, setRulesMax] = useState(10);
+  const [rulesResale, setRulesResale] = useState(false);
+  const [rulesCutoff, setRulesCutoff] = useState(0);
 
   // The ?organiserId= suffix is only ever meaningful for an admin -- the
   // backend ignores it for anyone else (see requestedOrganiserId in
@@ -63,6 +80,7 @@ export default function Events() {
           left: totalRemaining(event),
           cap: totalCapacity(event),
           hidden: event.status === "HIDDEN",
+          cancelled: Boolean(event.cancelledAt),
         };
       })
       .filter((row) => {
@@ -140,6 +158,82 @@ export default function Events() {
     await api.del(`/organiser/events/${event.slug}`);
     load();
     toast.success(t.removed);
+  };
+
+  const openRules = (event) => {
+    setRules(event);
+    setRulesMax(event.maxPerBuyer ?? 10);
+    setRulesResale(Boolean(event.allowResale));
+    setRulesCutoff(event.cancelCutoffHours ?? 48);
+  };
+
+  const saveRules = async (e) => {
+    e.preventDefault();
+    try {
+      await api.patch(`/organiser/events/${rules.slug}/settings`, {
+        maxPerBuyer: rulesMax,
+        allowResale: rulesResale,
+        cancelCutoffHours: rulesCutoff,
+      });
+      setRules(null);
+      load();
+      toast.success(t.saved);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const openCancel = (event) => {
+    setCancelling(event);
+    setCancelReason("");
+    setCancelNotify(true);
+  };
+
+  const submitCancel = async (e) => {
+    e.preventDefault();
+    if (cancelBusy) return;
+    // Asked separately from the form's own validation: this refunds every
+    // buyer of the event and cannot be undone, so the organiser should have
+    // to say yes to it twice.
+    const ok = await confirm({
+      title: t.cancelEvent,
+      message: t.cancelEventIrreversible,
+      tone: "danger",
+      confirmLabel: t.cancelConfirmBtn,
+      cancelLabel: t.cancelBtn,
+    });
+    if (!ok) return;
+    setCancelBusy(true);
+    try {
+      const result = await api.post(`/organiser/events/${cancelling.slug}/cancel`, {
+        reason: cancelReason,
+        notify: cancelNotify,
+      });
+      setCancelling(null);
+      load();
+      /*
+       * `ticketsVoided` counts only the tickets the final sweep still had to
+       * cancel — and in the normal case refundOrder has already cancelled
+       * every one of them, so it comes back 0. Reporting that number alone
+       * read as "nothing happened" on the one screen where the organiser
+       * most needs to know that it did. The figures that are true either
+       * way are the orders refunded and the money returned.
+       */
+      toast.success(
+        t.cancelDone
+          .replace("{n}", String(result.refunded))
+          .replace("{m}", money(result.refundedCents)),
+      );
+      // A partial failure is the case that actually needs the organiser's
+      // attention, and a success toast alone would bury it.
+      if (result.failed?.length > 0) {
+        toast.warning(t.cancelPartial.replace("{n}", String(result.failed.length)), { duration: 10_000 });
+      }
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setCancelBusy(false);
+    }
   };
 
   const duplicate = (event) => {
@@ -264,6 +358,8 @@ export default function Events() {
               onContact={() => openContact(row.event)}
               onToggleHidden={() => toggleHidden(row.event.slug, !row.hidden)}
               onRemove={() => removeEvent(row.event)}
+              onRules={() => openRules(row.event)}
+              onCancel={mayRefund ? () => openCancel(row.event) : null}
             />
           ))}
         </div>
@@ -391,6 +487,100 @@ export default function Events() {
           </form>
         )}
       </Modal>
+
+      <Modal
+        open={Boolean(rules)}
+        onClose={() => setRules(null)}
+        title={t.eventSettings}
+        sub={t.eventSettingsSub}
+        icon={<SlidersHorizontal className="size-5" />}
+        footer={
+          <>
+            <Btn variant="secondary" onClick={() => setRules(null)}>
+              {t.close}
+            </Btn>
+            <Btn type="submit" form="event-rules">
+              {t.save}
+            </Btn>
+          </>
+        }
+      >
+        <form id="event-rules" className="grid gap-4" onSubmit={saveRules}>
+          <Field label={t.maxPerBuyer} hint={t.maxPerBuyerHint}>
+            {({ id, describedBy, invalid }) => (
+              <Input
+                id={id}
+                describedBy={describedBy}
+                invalid={invalid}
+                type="number"
+                min={0}
+                max={100}
+                value={rulesMax}
+                onChange={(e) => setRulesMax(Number(e.target.value))}
+              />
+            )}
+          </Field>
+          <Field label={t.cancelCutoff} hint={t.cancelCutoffHint}>
+            {({ id, describedBy, invalid }) => (
+              <Input
+                id={id}
+                describedBy={describedBy}
+                invalid={invalid}
+                type="number"
+                min={0}
+                max={8760}
+                value={rulesCutoff}
+                onChange={(e) => setRulesCutoff(Number(e.target.value))}
+              />
+            )}
+          </Field>
+          <div>
+            <CheckOption label={t.allowResale} checked={rulesResale} onChange={setRulesResale} />
+            <p className="px-2 text-xs text-muted">{t.allowResaleHint}</p>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(cancelling)}
+        onClose={() => setCancelling(null)}
+        title={t.cancelEvent}
+        sub={cancelling ? (locale === "ar" ? cancelling.titleAr : cancelling.titleFr) : undefined}
+        icon={<Ban className="size-5" />}
+        footer={
+          <>
+            <Btn variant="secondary" onClick={() => setCancelling(null)}>
+              {t.close}
+            </Btn>
+            <Btn type="submit" form="event-cancel" variant="danger" disabled={cancelBusy}>
+              {t.cancelConfirmBtn}
+            </Btn>
+          </>
+        }
+      >
+        <form id="event-cancel" className="grid gap-4" onSubmit={submitCancel}>
+          {/* Spelled out rather than left to the button's label: refunding
+              every buyer and voiding every ticket is not what "cancel"
+              implies on its own, and this is the last screen before it
+              happens. */}
+          <Notice tone="danger">{t.cancelEventWhat}</Notice>
+          <Field label={t.cancelReasonLabel} hint={t.cancelReasonHint} required>
+            {({ id, describedBy, invalid, required }) => (
+              <Textarea
+                id={id}
+                describedBy={describedBy}
+                invalid={invalid}
+                required={required}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                minLength={5}
+                maxLength={500}
+              />
+            )}
+          </Field>
+          <CheckOption label={t.cancelNotify} checked={cancelNotify} onChange={setCancelNotify} />
+        </form>
+      </Modal>
     </div>
   );
 }
@@ -405,8 +595,8 @@ export default function Events() {
  * (success/accent/danger by remaining ratio) instead of StockCell's tight
  * table-cell layout.
  */
-function EventRow({ row, locale, t, onEdit, onDuplicate, onGuests, onContact, onToggleHidden, onRemove }) {
-  const { event, issued, revenue, left, cap, hidden } = row;
+function EventRow({ row, locale, t, onEdit, onDuplicate, onGuests, onContact, onToggleHidden, onRemove, onRules, onCancel }) {
+  const { event, issued, revenue, left, cap, hidden, cancelled } = row;
   const ratio = cap > 0 ? left / cap : 0;
   const tone = ratio <= 0 ? "out" : ratio < 0.2 ? "low" : "ok";
   const barColor = { ok: "bg-success", low: "bg-accent", out: "bg-danger/40" }[tone];
@@ -422,7 +612,12 @@ function EventRow({ row, locale, t, onEdit, onDuplicate, onGuests, onContact, on
             {event.city} · {longDate(event.start, locale)}
           </p>
         </div>
-        <Badge tone={hidden ? "neutral" : "success"}>{hidden ? t.hidden : t.public}</Badge>
+        {/* Cancelled outranks hidden/public: the event being off sale for
+            good is the fact that matters, and cancelEvent hides it too, so
+            otherwise it would read as merely "Masqué". */}
+        <Badge tone={cancelled ? "danger" : hidden ? "neutral" : "success"}>
+          {cancelled ? t.alreadyCancelled : hidden ? t.hidden : t.public}
+        </Badge>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -474,6 +669,9 @@ function EventRow({ row, locale, t, onEdit, onDuplicate, onGuests, onContact, on
         <IconBtn label={t.contact} onClick={onContact}>
           <Mail className="size-4" />
         </IconBtn>
+        <IconBtn label={t.eventSettings} onClick={onRules}>
+          <SlidersHorizontal className="size-4" />
+        </IconBtn>
         <IconBtn label={hidden ? t.restore : t.hide} onClick={onToggleHidden}>
           {hidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
         </IconBtn>
@@ -486,6 +684,13 @@ function EventRow({ row, locale, t, onEdit, onDuplicate, onGuests, onContact, on
           >
             <ExternalLink className="size-4" />
           </Link>
+        ) : null}
+        {/* Only for someone with finance.refund, and only once — a second
+            cancellation has nothing left to refund or void. */}
+        {onCancel && !cancelled ? (
+          <IconBtn tone="danger" label={t.cancelEvent} onClick={onCancel}>
+            <Ban className="size-4" />
+          </IconBtn>
         ) : null}
         <IconBtn tone="danger" label={t.remove} onClick={onRemove}>
           <Trash2 className="size-4" />
