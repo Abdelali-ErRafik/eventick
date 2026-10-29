@@ -49,6 +49,14 @@ export function Modal({ open, onClose, title, sub, icon, children, footer, size 
 
     const onKey = (event) => {
       if (event.key === "Escape") {
+        // A confirm dialog opened from inside this modal sits ABOVE it as a
+        // sibling overlay, and this listener would otherwise answer its
+        // Escape — closing the modal out from under the dialog, which then
+        // floats over nothing while focus jumps to the page behind. Both
+        // listeners are on `document`, and same-node capture listeners fire
+        // in registration order, so the dialog cannot win by stopping
+        // propagation; it raises this flag instead and we stand down.
+        if (document.body.dataset.confirming) return;
         event.stopPropagation();
         onClose();
         return;
