@@ -37,3 +37,76 @@ export function seatFor(cursor: number, seatsPerRow = DEFAULT_SEATS_PER_ROW): { 
   const width = seatsPerRow > 0 ? seatsPerRow : DEFAULT_SEATS_PER_ROW;
   return { row: Math.ceil(cursor / width), seat: ((cursor - 1) % width) + 1 };
 }
+
+// ─── Sales windows ────────────────────────────────────────────────────────
+
+export interface SalesWindow {
+  salesStartAt: Date | null;
+  salesEndAt: Date | null;
+}
+
+/**
+ * Is this tier on sale right now?
+ *
+ * Both bounds null means "on sale while the event is published", which is how
+ * every tier behaved before windows existed — so an organiser who sets
+ * neither sees no change.
+ *
+ * The reason is returned rather than a bare boolean because "not yet" and "no
+ * longer" need different words in front of a buyer: one is an invitation to
+ * come back, the other is not.
+ */
+export function salesState(
+  tier: SalesWindow,
+  now = new Date(),
+): { open: true } | { open: false; reason: "not_yet" | "closed"; at: Date } {
+  if (tier.salesStartAt && now < tier.salesStartAt) {
+    return { open: false, reason: "not_yet", at: tier.salesStartAt };
+  }
+  if (tier.salesEndAt && now >= tier.salesEndAt) {
+    return { open: false, reason: "closed", at: tier.salesEndAt };
+  }
+  return { open: true };
+}
+
+/**
+ * A window is only meaningful if it opens before it closes.
+ *
+ * Checked when an organiser saves a tier rather than when a buyer hits it: an
+ * inverted window silently takes the tier off sale forever, and finding that
+ * out from an empty sales report is far worse than a validation error.
+ */
+export function salesWindowOk(tier: SalesWindow): boolean {
+  if (!tier.salesStartAt || !tier.salesEndAt) return true;
+  return tier.salesStartAt < tier.salesEndAt;
+}
+
+// ─── Per-buyer limit ─────────────────────────────────────────────────────
+
+/**
+ * May this buyer take `wanted` more tickets for this event?
+ *
+ * The per-order cap (MAX_QTY_PER_TIER) limits ONE request. This limits a
+ * person across every order they place, which is the only version that holds:
+ * one email could otherwise place three 8-seat orders and take 24 seats of a
+ * high-demand show. Verified against the running app before this existed.
+ *
+ * `limit` of 0 means unlimited, for an event where hoarding is not a concern.
+ */
+export function checkBuyerLimit(
+  alreadyHeld: number,
+  wanted: number,
+  limit: number,
+): { ok: boolean; reason?: string } {
+  if (limit <= 0) return { ok: true };
+  if (alreadyHeld >= limit) {
+    return { ok: false, reason: `You already hold the maximum of ${limit} ticket(s) for this event` };
+  }
+  if (alreadyHeld + wanted > limit) {
+    return {
+      ok: false,
+      reason: `This event is limited to ${limit} ticket(s) per buyer — you already hold ${alreadyHeld}`,
+    };
+  }
+  return { ok: true };
+}

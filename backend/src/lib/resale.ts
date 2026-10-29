@@ -25,6 +25,20 @@ export async function listTicketForResale(ticketId: string, sellerId: string | n
   });
   if (!ticket) throw new HttpError(404, "Ticket not found");
   if (ticket.status !== "VALID") throw new HttpError(409, "Only a valid ticket can be resold");
+  /*
+   * Resale is OPT-IN per event, and off by default.
+   *
+   * It is a secondary market: genuinely useful when an organiser wants one,
+   * but making every event a reseller venue is the organiser's decision, not
+   * a platform default. Gated here rather than only in the UI, so the API
+   * cannot be used to list against an event that never enabled it.
+   *
+   * Existing listings are untouched — this gates NEW ones, so nothing in
+   * flight breaks when an organiser turns it off.
+   */
+  if (!ticket.order.event.allowResale) {
+    throw new HttpError(409, "The organiser has not enabled resale for this event");
+  }
   if (ticket.order.event.startAt.getTime() < Date.now()) {
     throw new HttpError(409, "This event has already started");
   }

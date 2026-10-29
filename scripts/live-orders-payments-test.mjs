@@ -77,7 +77,7 @@ const SUFFIX = Date.now();
 const events = [];
 
 /** A published event owned by `organiserId`, with one tier. */
-async function makeEvent(label, { priceCents = 100000, capacity = 10, organiserId }) {
+async function makeEvent(label, { priceCents = 100000, capacity = 10, organiserId, allowResale = false }) {
   const start = new Date(Date.now() + 30 * 86_400_000);
   const event = await prisma.event.create({
     data: {
@@ -101,6 +101,12 @@ async function makeEvent(label, { priceCents = 100000, capacity = 10, organiserI
       ageFr: "+18",
       ageAr: "+18",
       status: "PUBLISHED",
+      // 0 = unlimited: this suite buys repeatedly as one email, which the
+      // per-buyer limit exists to stop. That limit is covered by
+      // live-ticketing-test; here it would only obstruct.
+      maxPerBuyer: 0,
+      // Resale is opt-in per event, so the section that tests it asks for it.
+      allowResale,
       tiers: {
         create: {
           nameFr: "Place",
@@ -391,7 +397,7 @@ async function main() {
   // ═══ 6. Resale ════════════════════════════════════════════════════════
   section("6. A resale is a sale, and earns commission");
   {
-    const { event, tier } = await makeEvent("resale", { organiserId: orgaId });
+    const { event, tier } = await makeEvent("resale", { organiserId: orgaId, allowResale: true });
     // Bought with a session: a guest cannot list a resale, by design.
     const sellerOrder = await buyAsCustomer(event, tier, customer, 1);
     const sellerTicket = await prisma.ticket.findFirst({ where: { orderId: sellerOrder.id }, select: { id: true, ref: true } });

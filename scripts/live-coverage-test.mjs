@@ -90,6 +90,11 @@ async function makeEvent(orgToken, suffix, tiers) {
     token: orgToken,
     body: {
       slug,
+      // maxPerBuyer 0 — see live-api-test: repeated purchases as one email.
+      maxPerBuyer: 0,
+      // Resale is opt-in per event now, and this suite tests resale — so the
+      // event it creates has to enable it, exactly as a real organiser would.
+      allowResale: true,
       titleFr: "Couverture API",
       titleAr: "تغطية API",
       category: "concert",

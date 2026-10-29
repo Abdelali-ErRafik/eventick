@@ -5,6 +5,7 @@ import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { authenticate, requirePermission, userHasPermission } from "../middleware/auth.js";
 import { organiserScope } from "../domain/auth.js";
 import { feeForOrder, normaliseRib, ribOk, summariseRevenue } from "../domain/commission.js";
+import { salesWindowOk } from "../domain/inventory.js";
 import { organiserEarnings } from "../lib/payout.js";
 import { publicEvent, publicOrderWithContext } from "../lib/serialize.js";
 import { committedForTier, remainingByTier } from "../lib/availability.js";
@@ -12,6 +13,8 @@ import { broadcastRateLimit } from "../middleware/rateLimit.js";
 import { sendEmail } from "../lib/email.js";
 import { broadcastHtml } from "../lib/email-templates.js";
 import { reconcileExternalRefund, refundOrder } from "../lib/refund.js";
+import { cancelEvent } from "../lib/event-cancel.js";
+import { issueComps, revokeComp } from "../lib/invitations.js";
 import { AUDIT_ACTIONS, recordAudit } from "../lib/audit.js";
 import { offerFreedSeats } from "../lib/waitlist.js";
 import { reissueTicket, renameHolder } from "../lib/ticket-admin.js";
@@ -92,6 +95,9 @@ const tierInput = z.object({
   numbered: z.boolean().optional(),
   seatsPerRow: z.number().int().min(1).max(100).optional(),
   perks: z.array(z.string()).optional(),
+  /** ISO timestamps. Both omitted means on sale whenever the event is. */
+  salesStartAt: z.string().datetime().nullish(),
+  salesEndAt: z.string().datetime().nullish(),
   zoneFr: z.string(),
   zoneAr: z.string(),
   gateFr: z.string(),
@@ -100,6 +106,11 @@ const tierInput = z.object({
 
 const createEventSchema = z.object({
   slug: z.string().min(3),
+  /** Tickets one buyer may hold for this event, across every order. 0 = no
+   * limit. Defaults to the schema's 10 when omitted. */
+  maxPerBuyer: z.number().int().min(0).max(100).optional(),
+  /** Whether buyers may resell. Off unless the organiser asks for it. */
+  allowResale: z.boolean().optional(),
   titleFr: z.string().min(3),
   titleAr: z.string().min(3),
   category: z.string(),
@@ -119,6 +130,22 @@ const createEventSchema = z.object({
   ageAr: z.string(),
   tiers: z.array(tierInput).min(1),
 });
+
+/**
+ * Tier input -> Prisma data, with the sales window parsed and checked.
+ *
+ * The window is validated when the organiser SAVES, not when a buyer hits it:
+ * an inverted window silently takes the tier off sale forever, and finding
+ * that out from an empty sales report is far worse than a validation error.
+ */
+function toTierData<T extends { salesStartAt?: string | null; salesEndAt?: string | null }>(tier: T) {
+  const salesStartAt = tier.salesStartAt ? new Date(tier.salesStartAt) : null;
+  const salesEndAt = tier.salesEndAt ? new Date(tier.salesEndAt) : null;
+  if (!salesWindowOk({ salesStartAt, salesEndAt })) {
+    throw new HttpError(400, "A zone's sales window must open before it closes");
+  }
+  return { ...tier, salesStartAt, salesEndAt };
+}
 
 organiserRouter.post(
   "/events",
@@ -150,7 +177,9 @@ organiserRouter.post(
         aboutAr: body.aboutAr,
         ageFr: body.ageFr,
         ageAr: body.ageAr,
-        tiers: { create: body.tiers },
+        maxPerBuyer: body.maxPerBuyer,
+        allowResale: body.allowResale,
+        tiers: { create: body.tiers.map(toTierData) },
       },
       include: { tiers: true, lineup: true },
     });
@@ -465,7 +494,9 @@ organiserRouter.get(
      */
     const [settled, tickets, inside, defaultPlan] = await Promise.all([
       prisma.order.findMany({
-        where: { eventId: { in: eventIds }, status: { in: ["PAID", "REFUNDED"] } },
+        // Comps excluded: PAID with totalCents 0, so they move no money — but
+        // counting them would put the guest list in the order total.
+        where: { eventId: { in: eventIds }, status: { in: ["PAID", "REFUNDED"] }, NOT: { paymentRef: "COMP" } },
         select: {
           totalCents: true,
           refundedCents: true,
@@ -606,6 +637,8 @@ const tierPatchSchema = z.object({
   numbered: z.boolean().optional(),
   seatsPerRow: z.number().int().min(1).max(100).optional(),
   perks: z.array(z.string()).optional(),
+  salesStartAt: z.string().datetime().nullish(),
+  salesEndAt: z.string().datetime().nullish(),
   recommended: z.boolean().optional(),
   zoneFr: z.string().optional(),
   zoneAr: z.string().optional(),
@@ -669,7 +702,27 @@ organiserRouter.patch(
       }
     }
 
-    const updated = await prisma.ticketTier.update({ where: { id }, data: body });
+    /*
+     * The window is validated against the MERGED state, not the patch alone.
+     *
+     * Patching only salesEndAt has to be checked against the start already
+     * stored, or an organiser could invert an existing window one field at a
+     * time and take the tier off sale without ever seeing an error.
+     */
+    const merged = {
+      salesStartAt:
+        body.salesStartAt === undefined ? tier.salesStartAt : body.salesStartAt ? new Date(body.salesStartAt) : null,
+      salesEndAt:
+        body.salesEndAt === undefined ? tier.salesEndAt : body.salesEndAt ? new Date(body.salesEndAt) : null,
+    };
+    if (!salesWindowOk(merged)) {
+      throw new HttpError(400, "A zone's sales window must open before it closes");
+    }
+
+    const updated = await prisma.ticketTier.update({
+      where: { id },
+      data: { ...body, ...merged },
+    });
     res.json({ tier: updated });
   }),
 );
@@ -882,5 +935,201 @@ organiserRouter.put(
       bank: saved.bank,
       updatedAt: saved.updatedAt.toISOString(),
     });
+  }),
+);
+
+// ─── Calling an event off ────────────────────────────────────────────────
+
+const cancelEventSchema = z.object({
+  /** Buyers are told what this says, so it is required, not optional. */
+  reason: z.string().min(5),
+  /** Set false to skip the emails — for a test, or when the organiser has
+   * already told everyone themselves. */
+  notify: z.boolean().optional(),
+});
+
+/**
+ * Cancel an event and refund every buyer.
+ *
+ * Needs finance.refund, not events.manage: this moves money for every buyer
+ * at once, which is a far bigger act than editing a listing. Someone trusted
+ * with the catalogue is not automatically trusted to issue four hundred
+ * refunds.
+ */
+organiserRouter.post(
+  "/events/:slug/cancel",
+  canRefund,
+  asyncHandler(async (req, res) => {
+    const slug = param(req, "slug");
+    const event = await requireOwnedEvent(req.user, slug);
+    const body = cancelEventSchema.parse(req.body ?? {});
+
+    const result = await cancelEvent(event.id, body.reason, { notify: body.notify });
+
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.EVENT_CANCELLED,
+      subjectType: "event",
+      subjectId: event.id,
+      subjectLabel: event.slug,
+      details: {
+        reason: body.reason,
+        refunded: result.refunded,
+        refundedCents: result.refundedCents,
+        ticketsVoided: result.ticketsVoided,
+        failed: result.failed.length,
+      },
+    });
+
+    res.json(result);
+  }),
+);
+
+// ─── Invitations (comp tickets) ──────────────────────────────────────────
+
+/** The guest list for an event. */
+organiserRouter.get(
+  "/events/:slug/invitations",
+  canManageEvents,
+  asyncHandler(async (req, res) => {
+    const slug = param(req, "slug");
+    const event = await requireOwnedEvent(req.user, slug);
+
+    const invitations = await prisma.invitation.findMany({
+      where: { eventId: event.id },
+      select: {
+        id: true,
+        guestName: true,
+        guestEmail: true,
+        note: true,
+        sentAt: true,
+        createdAt: true,
+        issuedByEmail: true,
+        tier: { select: { id: true, nameFr: true, nameAr: true } },
+        ticket: { select: { id: true, ref: true, status: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json({
+      invitations: invitations.map((invitation) => ({
+        id: invitation.id,
+        guestName: invitation.guestName,
+        guestEmail: invitation.guestEmail,
+        note: invitation.note,
+        tierId: invitation.tier.id,
+        tierNameFr: invitation.tier.nameFr,
+        tierNameAr: invitation.tier.nameAr,
+        ref: invitation.ticket?.ref ?? null,
+        // "issued, then revoked" is information an organiser wants to see, so
+        // a cancelled ticket still shows up here rather than vanishing.
+        revoked: invitation.ticket?.status === "CANCELLED",
+        sentAt: invitation.sentAt?.toISOString() ?? null,
+        issuedBy: invitation.issuedByEmail,
+        createdAt: invitation.createdAt.toISOString(),
+      })),
+    });
+  }),
+);
+
+const inviteSchema = z.object({
+  tierId: z.string(),
+  guests: z
+    .array(
+      z.object({
+        guestName: z.string().min(2),
+        guestEmail: z.string().email().optional(),
+        note: z.string().optional(),
+      }),
+    )
+    .min(1),
+});
+
+/**
+ * Issue comp tickets to a guest list.
+ *
+ * Deliberately not a 100% promo code, which was the only way to do this
+ * before: a promo code is a discount on a SALE, so it lands in revenue,
+ * commission and the payout as a zero-value order. A comp was never a sale.
+ */
+organiserRouter.post(
+  "/events/:slug/invitations",
+  canManageEvents,
+  asyncHandler(async (req, res) => {
+    const slug = param(req, "slug");
+    const event = await requireOwnedEvent(req.user, slug);
+    const body = inviteSchema.parse(req.body);
+
+    const issued = await issueComps(req, event.id, body.tierId, body.guests);
+
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.COMPS_ISSUED,
+      subjectType: "event",
+      subjectId: event.id,
+      subjectLabel: event.slug,
+      // Free seats given away is exactly the kind of thing somebody asks
+      // about later.
+      details: { count: issued.length, tierId: body.tierId, refs: issued.map((i) => i.ref) },
+    });
+
+    res.status(201).json({ issued });
+  }),
+);
+
+/** Revoke one comp. The guest stays on the list, marked revoked. */
+organiserRouter.delete(
+  "/invitations/:id",
+  canManageEvents,
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const invitation = await prisma.invitation.findUnique({
+      where: { id },
+      select: { id: true, guestName: true, event: { select: { slug: true } } },
+    });
+    if (!invitation) throw new HttpError(404, "Invitation not found");
+    // Ownership is on the EVENT, not the invitation.
+    await requireOwnedEvent(req.user, invitation.event.slug);
+
+    await revokeComp(id);
+
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.COMP_REVOKED,
+      subjectType: "invitation",
+      subjectId: id,
+      subjectLabel: invitation.guestName,
+    });
+
+    res.json({ ok: true });
+  }),
+);
+
+const eventSettingsSchema = z.object({
+  /** 0 = unlimited. */
+  maxPerBuyer: z.number().int().min(0).max(100).optional(),
+  allowResale: z.boolean().optional(),
+  cancelCutoffHours: z.number().int().min(0).max(8760).optional(),
+});
+
+/**
+ * The rules an organiser sets per event, after it exists.
+ *
+ * Separate from the event PATCH that edits the listing: these change what
+ * buyers may DO (how many they may hold, whether they may resell), not what
+ * the page says, and they are the settings worth finding in one place.
+ */
+organiserRouter.patch(
+  "/events/:slug/settings",
+  canManageEvents,
+  asyncHandler(async (req, res) => {
+    const slug = param(req, "slug");
+    const event = await requireOwnedEvent(req.user, slug);
+    const body = eventSettingsSchema.parse(req.body ?? {});
+
+    const updated = await prisma.event.update({
+      where: { id: event.id },
+      data: body,
+      select: { maxPerBuyer: true, allowResale: true, cancelCutoffHours: true },
+    });
+
+    res.json(updated);
   }),
 );

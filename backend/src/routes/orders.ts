@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { optionalAuth, authenticate } from "../middleware/auth.js";
-import { checkQuantity, holdExpiry, tierRemaining } from "../domain/inventory.js";
+import { checkBuyerLimit, checkQuantity, holdExpiry, salesState, tierRemaining } from "../domain/inventory.js";
 import { quotePromo, type PromoCandidate } from "../domain/pricing.js";
 import { phoneOk, makePaymentRef } from "../lib/payment-sim.js";
 import { publicOrder, publicOrderWithContext } from "../lib/serialize.js";
@@ -63,6 +63,77 @@ ordersRouter.post(
         where: { id: { in: body.lines.map((line) => line.tierId) }, eventId: event.id },
       });
       if (tiers.length !== body.lines.length) throw new HttpError(400, "Invalid ticket tier");
+
+      /*
+       * Is each tier on sale right now?
+       *
+       * Checked here, inside the transaction, rather than only hidden in the
+       * UI: a tier that is not yet open or has closed must refuse a hold even
+       * if someone reaches the API directly or keeps a stale page open across
+       * the boundary. "not yet" and "closed" get different words because one
+       * invites the buyer back and the other does not.
+       */
+      for (const tier of tiers) {
+        const state = salesState(tier);
+        if (!state.open) {
+          throw new HttpError(
+            409,
+            state.reason === "not_yet"
+              ? `Sales for this zone open on ${state.at.toISOString()}`
+              : "Sales for this zone have closed",
+          );
+        }
+      }
+
+      /*
+       * Has this buyer already taken their share of the event?
+       *
+       * The per-tier cap above limits ONE request to 8. This limits a PERSON
+       * across every order they place — without it, one email could place
+       * three 8-seat orders and take 24 seats of a high-demand show, which
+       * was verified against the running app before this existed.
+       *
+       * Identity here is the email for a guest and the account for a signed-in
+       * buyer. Neither is proof of a person, and a determined scalper can use
+       * more addresses — but the limit that stops the casual case is worth far
+       * more than no limit at all, and anything stronger means asking every
+       * buyer for ID.
+       */
+      if (event.maxPerBuyer > 0) {
+        const identity = req.user?.id
+          ? { customerId: req.user.id }
+          : body.email
+            // Case-INSENSITIVE, because orders store the address as the buyer
+            // typed it. Matching exactly would let Case@x.ma and case@x.ma
+            // count as two different people and walk straight through the
+            // limit this check exists to enforce.
+            ? { email: { equals: body.email.trim(), mode: "insensitive" as const } }
+            : null;
+
+        if (identity) {
+          const held = await tx.ticket.count({
+            where: {
+              status: { in: ["VALID", "USED"] },
+              order: { eventId: event.id, ...identity },
+            },
+          });
+          // Live holds count too, or two concurrent checkouts each pass.
+          const holding = await tx.orderLine.aggregate({
+            where: {
+              order: {
+                eventId: event.id,
+                status: "PENDING",
+                holdUntil: { gt: new Date() },
+                ...identity,
+              },
+            },
+            _sum: { qty: true },
+          });
+          const wanted = body.lines.reduce((sum, line) => sum + line.qty, 0);
+          const limit = checkBuyerLimit(held + (holding._sum.qty ?? 0), wanted, event.maxPerBuyer);
+          if (!limit.ok) throw new HttpError(409, limit.reason ?? "Purchase limit reached");
+        }
+      }
 
       // Count ISSUED TICKETS, not paid orders. A resold seat leaves the
       // seller's order REFUNDED while the buyer's ticket lives on — counting

@@ -45,6 +45,10 @@ async function main() {
       ageFr: "18+",
       ageAr: "+18",
       status: "PUBLISHED",
+      // 0 = unlimited: this suite buys repeatedly as one email, which the
+      // per-buyer limit exists to stop. That limit is covered by
+      // live-ticketing-test; here it would only obstruct.
+      maxPerBuyer: 0,
       tiers: {
         create: {
           nameFr: "Standard",

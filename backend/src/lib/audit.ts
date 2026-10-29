@@ -40,6 +40,9 @@ export const AUDIT_ACTIONS = {
   PAYOUT_PAID: "payout.paid",
   PAYOUT_CANCELLED: "payout.cancelled",
   BANK_ACCOUNT_CHANGED: "bank_account.changed",
+  EVENT_CANCELLED: "event.cancelled",
+  COMPS_ISSUED: "event.comps.issued",
+  COMP_REVOKED: "invitation.revoked",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

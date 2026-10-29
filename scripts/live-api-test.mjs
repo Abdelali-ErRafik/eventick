@@ -331,6 +331,10 @@ const mkEvent = await call("POST", "/api/organiser/events", {
   token: tokens.organiser,
   body: {
     slug: newSlug,
+    // maxPerBuyer 0: this suite buys repeatedly as one email, which the
+    // per-buyer limit exists to stop. That limit is covered by
+    // live-ticketing-test; here it would only obstruct.
+    maxPerBuyer: 0,
     titleFr: "Événement de test",
     titleAr: "حدث اختباري",
     category: "festivals",

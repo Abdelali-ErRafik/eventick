@@ -84,6 +84,10 @@ export async function organiserEarnings(organiserId: string) {
     where: {
       event: { organiserId },
       status: { in: ["PAID", "REFUNDED"] },
+      // A comp is PAID with totalCents 0: it moves no money, but counting it
+      // as an order would put the guest list in the sales figures, and
+      // sweeping it into a payout would add a zero-value line to every run.
+      NOT: { paymentRef: "COMP" },
     },
     select: {
       id: true,
@@ -204,6 +208,8 @@ export async function runPayout(
       where: {
         event: { organiserId },
         status: { in: ["PAID", "REFUNDED"] },
+        // See the note in organiserEarnings: comps are not sales.
+        NOT: { paymentRef: "COMP" },
         createdAt: { gte: periodStart, lt: periodEnd },
         // Only what has never been paid. This, not the dates, is what makes
         // a re-run safe.

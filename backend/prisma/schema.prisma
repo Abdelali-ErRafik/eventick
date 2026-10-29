@@ -76,6 +76,7 @@ model User {
   payouts       Payout[]
   subscriptions SubscriptionCharge[]
   auditEvents   AuditEvent[]
+  invitations   Invitation[]
 
   /// Applications this person submitted to become an organiser.
   organiserApplications OrganiserApplication[] @relation("OrganiserApplicant")
@@ -168,14 +169,39 @@ model Event {
   /// 0 disables self-cancellation, leaving it to the organiser.
   cancelCutoffHours Int @default(48) @map("cancel_cutoff_hours")
 
+  /// Tickets ONE BUYER may hold for this event, across every order they
+  /// place. Distinct from the per-order cap (MAX_QTY_PER_TIER, 8): that one
+  /// only limits a single request, so one email could buy 8 three times over
+  /// and take 24 seats of a high-demand show. This is the limit that actually
+  /// keeps tickets with fans rather than resellers.
+  ///
+  /// 0 means unlimited, for an event where hoarding is not a concern.
+  maxPerBuyer Int @default(10) @map("max_per_buyer")
+
+  /// When the organiser called the event off, and why.
+  ///
+  /// Separate from `status: CANCELLED` so the reason survives for the buyers
+  /// who have to be told — a status alone cannot answer "why was my festival
+  /// cancelled", which is the first thing anyone asks.
+  cancelledAt  DateTime? @map("cancelled_at")
+  cancelReason String?   @map("cancel_reason")
+
+  /// May buyers resell their tickets for this event?
+  ///
+  /// Opt-in, and off by default. Resale is a secondary market: useful when an
+  /// organiser wants it, but making every event a reseller venue by default
+  /// is a decision the organiser should take, not the platform.
+  allowResale Boolean @default(false) @map("allow_resale")
+
   createdAt DateTime @default(now()) @map("created_at")
 
-  organiser  User?           @relation(fields: [organiserId], references: [id], onDelete: SetNull)
-  tiers      TicketTier[]
-  lineup     LineupItem[]
-  orders     Order[]
-  promoCodes PromoCode[]
-  waitlist   WaitlistEntry[]
+  organiser   User?           @relation(fields: [organiserId], references: [id], onDelete: SetNull)
+  tiers       TicketTier[]
+  lineup      LineupItem[]
+  orders      Order[]
+  promoCodes  PromoCode[]
+  waitlist    WaitlistEntry[]
+  invitations Invitation[]
 
   @@index([organiserId])
   @@index([status])
@@ -222,9 +248,20 @@ model TicketTier {
   gateFr String @map("gate_fr")
   gateAr String @map("gate_ar")
 
-  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  orderLines OrderLine[]
-  tickets    Ticket[]
+  /// When this tier may be bought. Both null means "on sale as soon as the
+  /// event is published", which is how every tier behaved before these
+  /// existed.
+  ///
+  /// This is what early-bird pricing, staged releases and "doors close at
+  /// midnight" are made of — an organiser plans a launch around exactly these
+  /// two timestamps, and without them every tier goes live at once.
+  salesStartAt DateTime? @map("sales_start_at")
+  salesEndAt   DateTime? @map("sales_end_at")
+
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orderLines  OrderLine[]
+  tickets     Ticket[]
+  invitations Invitation[]
 
   @@index([eventId])
   @@map("ticket_tiers")
@@ -323,12 +360,26 @@ model OrderLine {
   @@map("order_lines")
 }
 
+/// How a ticket came into being. A comp was never paid for, so it must not
+/// appear in revenue, commission or a payout — and the gate still has to
+/// admit it exactly like any other.
+enum TicketKind {
+  /// Bought through checkout.
+  SOLD
+  /// Issued free by the organiser: press, sponsors, the artist's guest list.
+  COMP
+}
+
 model Ticket {
   id      String       @id @default(cuid())
   ref     String       @unique // e.g. ET-2026-004815, shown on the e-billet and scanned at the gate
   orderId String       @map("order_id")
   tierId  String       @map("tier_id")
   status  TicketStatus @default(VALID)
+  /// SOLD unless an organiser issued it as a comp. Kept on the ticket rather
+  /// than inferred from a zero-price order, because a 100%-discounted sale and
+  /// a guest-list invitation are different things with different accounting.
+  kind    TicketKind   @default(SOLD)
 
   holderName  String    @map("holder_name")
   seatRow     Int?      @map("seat_row")
@@ -350,10 +401,11 @@ model Ticket {
   /// reached through their order.
   accessToken String? @unique @map("access_token")
 
-  order  Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  tier   TicketTier     @relation(fields: [tierId], references: [id], onDelete: Restrict)
-  resale ResaleListing?
-  shares TicketShare[]
+  order      Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tier       TicketTier     @relation(fields: [tierId], references: [id], onDelete: Restrict)
+  resale     ResaleListing?
+  shares     TicketShare[]
+  invitation Invitation?
 
   @@index([orderId])
   /// The live entry counter aggregates by status; without this it seq-scans
@@ -814,4 +866,48 @@ model AuditEvent {
   @@index([subjectType, subjectId])
   @@index([actorId])
   @@map("audit_events")
+}
+
+/// A free ticket the organiser issued to a named guest.
+///
+/// Its own model rather than a flag on Order, because the questions asked of
+/// it are different: who is on the guest list, has it been sent, has it been
+/// used. The Ticket it produces is an ordinary ticket with kind COMP, so the
+/// gate, the PDF and the QR all work unchanged — the only thing that differs
+/// is that no money was involved.
+///
+/// Deliberately NOT a 100% promo code, which was the only way to do this
+/// before: a promo code is a discount on a sale, so it lands in revenue,
+/// commission and the payout as a zero-value order and muddles all three.
+model Invitation {
+  id      String @id @default(cuid())
+  eventId String @map("event_id")
+  tierId  String @map("tier_id")
+
+  /// Who it is for. Email is optional: a guest list is often just names, and
+  /// requiring an address would block the common case.
+  guestName  String  @map("guest_name")
+  guestEmail String? @map("guest_email")
+  /// Free text — "presse", "sponsor", "invité de l'artiste".
+  note       String?
+
+  /// The ticket issued for this invitation, once it is issued. Null while the
+  /// invitation is only a name on a list.
+  ticketId String? @unique @map("ticket_id")
+
+  /// Who issued it, kept for the guest list even after that account is gone.
+  issuedById    String?   @map("issued_by_id")
+  issuedByEmail String    @map("issued_by_email")
+  sentAt        DateTime? @map("sent_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  event    Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tier     TicketTier @relation(fields: [tierId], references: [id], onDelete: Restrict)
+  ticket   Ticket?    @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  issuedBy User?      @relation(fields: [issuedById], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([tierId])
+  @@map("invitations")
 }
