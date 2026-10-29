@@ -1,6 +1,10 @@
 # 🎟️ Eventick — hands-on test guide
 
-**Twelve checks. Do them in any order.** Every step says exactly where to click and what you must see.
+**Fifteen checks. Do them in any order.** Every step says exactly where to click and what you must see.
+
+Checks **1–12** cover the buying, ticketing and admin surface. Checks **13–15**
+cover the money side — commission, payouts and the audit journal — which is the
+newest part and the part worth most attention.
 
 > 📅 29/10/2026 · Written by walking the running app at **http://localhost:3100**. The interface ships in **French**; every label in quotes below is the text actually on screen. Switch to English from the account menu if you prefer — the checks work the same.
 
@@ -122,6 +126,29 @@ person who made it.
 
 ---
 
+### 7. Start clean (when you need to)
+
+The seed is **idempotent** — running it again does not duplicate anything, so
+it is safe whenever the catalogue looks wrong:
+
+```bash
+cd backend
+npm run db:deploy    # apply any migrations you do not have yet
+npm run db:seed      # 16 events, 2 promo codes, the three accounts above
+```
+
+**✔️ You must see** `Seeded 16 events and 2 promo codes.`
+
+The baseline is **16 events** (14 owned by the admin, 2 by the organiser),
+**3 accounts** and the orders the seed creates. If you have been running the
+automated suites, extra test accounts and events may be left behind; they are
+harmless, but `npm run db:seed` will not remove them.
+
+> 💡 `npm run db:studio` opens Prisma Studio if you want to look at the rows
+> directly — useful for checking a commission or a payout by hand.
+
+---
+
 ## 🧭 Where things are
 
 **Public site** — Explorer · event pages · checkout · your tickets
@@ -133,20 +160,18 @@ person who made it.
 | **CATALOGUE** | Événements · Placements · Offres | organiser + admin |
 | **OPÉRATIONS** | Porte | organiser + admin |
 | **FINANCES** | Finance | organiser + admin |
-| **ADMINISTRATION** | Plateforme · Équipe · Permissions | **admin only** |
+| **ADMINISTRATION** | Plateforme · Équipe · Permissions · Journal | **admin only** |
 
 > 💡 The group headings are labels, not buttons — click the item under them.
 > 💡 **The sidebar is permission-driven.** An item you cannot use does not appear at all. That is check 9.
 
 ### What already exists
 
-**17 events** across Casablanca, Rabat, Marrakech, Tanger, Agadir, Essaouira, Fès and Dakhla
+**16 events** across Casablanca, Rabat, Marrakech, Tanger, Agadir, Essaouira, Fès and Dakhla — 14 owned by the admin account, 2 by the organiser
 **Promo codes:** `SAFRAN15` (−15 %) and `CASA50` (−50 MAD)
+**Commission plans:** Starter 5 % · Pro 3 % + 499 MAD/month · Business 2 % + 1 999 MAD/month — Starter is the default
 **Rules:** seats are held **15 minutes** · buyers may cancel up to **48 h** before the event
 
-> 🔄 **To start clean:** `cd backend && npx prisma migrate deploy && npm run db:seed`
-
----
 ---
 
 # 🎫 CHECK 1 — Buy a ticket with no account at all
@@ -639,6 +664,170 @@ curl -s -o /dev/null -w "%{http_code}\n" 'http://localhost:4100/api/platform/sta
 ---
 ---
 
+# 💰 CHECK 13 — Commission is the server's, not the browser's
+
+**Why this check exists.** The Finance screen used to let the organiser pick
+their own commission plan from a row of buttons, compute the fee in the
+browser, and store nothing. The number changed when you clicked a different
+button and reset on reload. It matched no charge anyone would ever make.
+
+### Step 1 — Look, but do not touch
+
+Sign in as **organisateur@eventick.ma** → **FINANCES → Finance**.
+
+- The plan is shown with a **padlock** and reads *"Offre attribuée par
+  Eventick"* (or *"Offre par défaut"* if none is assigned). There is **no way
+  to change it** — that is the point.
+- Four figures across the top: **Recettes nettes**, **Remboursé**,
+  **Commission Eventick**, **À reverser**.
+
+### Step 2 — Assign a plan, as admin
+
+Sign in as **admin@eventick.ma** → **ADMINISTRATION → Plateforme**. Each
+organiser row has an **Offre** dropdown. Put the demo organiser on **Pro ·
+3%**.
+
+The response says, in effect, *"applies to orders settled from now on"*.
+
+### Step 3 — Sell something, then check the fee
+
+As a buyer, purchase a ticket from one of that organiser's events. Back on
+**Finance**, the commission has grown by **3% of what you just spent**.
+
+### Step 4 — The important part: history does not move
+
+As admin, change the organiser to **Starter · 5%**. Return to **Finance**.
+
+> ✅ The commission figure **does not change**. The fee was recorded on each
+> order at the moment it was paid, so moving someone to a different rate
+> cannot rewrite what they already owed. Only *later* sales use the new rate.
+
+If that number moved, the fee is being recomputed on read — which is the bug
+this design exists to prevent.
+
+### Step 5 — A refund takes its commission with it
+
+Refund half an order (**Réservations** → the order → refund half).
+
+> ✅ **Recettes nettes** drops by the refund **and** the commission drops in
+> proportion. An organiser must not pay a fee on a sale the buyer got their
+> money back for.
+
+---
+
+# 🏦 CHECK 14 — Payouts: what is owed, and sending it
+
+**Why this check exists.** Money reaches Eventick's CMI account, not the
+organiser's, so their share has to be transferred separately. The dashboard
+used to show a "Reversement" step that calculated nothing and recorded
+nothing.
+
+### Step 1 — Try to run a payout with no bank details
+
+As admin → **Plateforme** → an organiser row → **Préparer un reversement**.
+
+> ✅ Refused: *"no bank details on file"*. A pending payout nobody can
+> actually send is worse than none — it reads as money already on its way.
+
+### Step 2 — Add the RIB, as the organiser
+
+**Finance → Coordonnées bancaires**. Try `123` first.
+
+> ✅ *"Le RIB marocain comporte exactement 24 chiffres."*
+
+Now enter 24 digits — spacing is fine, paste `1234 5678 9012 3456 7890 1234`.
+
+> ✅ Saved, and only the **last four** come back (`**** 1234`). The full RIB is
+> a payment credential; the earnings screen has no need for it.
+
+### Step 3 — Run it
+
+As admin → **Préparer un reversement**. The dialog shows **what is owed** and
+how many orders. Dates default to the **last twelve months**.
+
+> ✅ Created. The row reads `net = gross − commission − subscription`.
+
+**On the subscription:** Pro is "3% + 499/month". The monthly part is withheld
+here, once per calendar month **that had sales**. A dormant month is free.
+
+### Step 4 — The guards
+
+| What you do | What should happen |
+|---|---|
+| Run the same period again | *"Nothing to pay out"* — an order belongs to one payout, ever |
+| Mark it paid with no reference | Refused — the row could not be reconciled against a bank statement |
+| Mark it paid, then try again | Refused: already paid, and the first reference survives |
+| Try to cancel a **sent** payout | Refused — a transfer that has gone cannot be un-sent by editing a row |
+| Cancel a **pending** payout, then re-run | Works: its orders *and* its subscription months are released |
+| Refund something already paid out | The payout's total **does not move** — it records money already sent |
+
+### Step 5 — A month too quiet to cover its fee
+
+If a month's revenue is less than the monthly subscription (say 194 MAD
+against 499), the payout is **still created**: the fee takes what is there,
+nothing is transferred, and the record exists.
+
+> ⚠️ The shortfall is **not** carried forward as debt. That is a deliberate
+> limit, not an oversight — see *Still open*.
+
+---
+
+# 📜 CHECK 15 — The journal, and removing an account
+
+**Why this check exists.** Fourteen privileged routes could change a role,
+grant a permission, refund money, assign a plan or send a payout, and none of
+them left a record. *"It just changed"* is not an answer anyone can act on.
+
+### Step 1 — Do something privileged
+
+As admin, do any two of: change someone's role · grant a permission · refund
+an order · assign a plan · send a payout.
+
+### Step 2 — Read the journal
+
+**ADMINISTRATION → Journal**.
+
+> ✅ Each action appears with **your email**, **what changed — both ends**
+> (`CUSTOMER → ORGANISER`, not just the result), and when.
+
+Filter by action with the dropdown. Open the same screen as the **organiser**:
+
+> ✅ Refused. The rows describe money and accounts across every organiser, so
+> it is admin-only.
+
+### Step 3 — Remove a fresh account
+
+**Équipe** → create a throwaway account → remove it with the **bin** icon.
+
+> ✅ The dialog says it will be **deleted permanently**. Afterwards the account
+> is gone — but the **Journal still shows it existed and who removed it**.
+
+That is the whole point: a cascade would have erased exactly the record worth
+keeping.
+
+### Step 4 — Remove an account that has bought something
+
+Try to remove a customer **with orders**.
+
+> ✅ The dialog says it will be **anonymised, not deleted**, because its
+> payment history has to be kept.
+
+Afterwards:
+
+- The name reads *"Compte supprimé"*, the email is an opaque non-address.
+- **The orders and tickets still exist** — the organiser was paid for them.
+- The old credentials **no longer work**.
+
+### Step 5 — The guards
+
+| What you try | What should happen |
+|---|---|
+| Remove **your own** account | Refused — the platform can never reach zero admins |
+| Remove **another admin** | Refused — one compromised admin must not clear out the rest |
+| Remove anyone, as the organiser | Refused — `users.manage` only |
+
+---
+
 # ✅ Tick them off
 
 | # | Check | Where to go | Done |
@@ -655,6 +844,9 @@ curl -s -o /dev/null -w "%{http_code}\n" 'http://localhost:4100/api/platform/sta
 | 10 | **Platform console** | Pro → ADMINISTRATION → **Plateforme** | ☐ |
 | 11 | **Three languages + RTL** | Account menu → **LANGUE** | ☐ |
 | 12 | **Theme and no browser chrome** | Account menu → **"Passer en clair"** | ☐ |
+| 13 | **Commission is server-side** | Pro → FINANCES → **Finance** | ☐ |
+| 14 | **Payouts and the subscription** | Pro → ADMINISTRATION → **Plateforme** | ☐ |
+| 15 | **Journal and account removal** | Pro → ADMINISTRATION → **Journal** · **Équipe** | ☐ |
 
 ---
 
@@ -662,23 +854,55 @@ curl -s -o /dev/null -w "%{http_code}\n" 'http://localhost:4100/api/platform/sta
 
 Every check above runs against the live app before each release.
 
-| Suite | What it proves | Result |
-|---|---|---|
-| `live-frontend-test` | every API call the UI makes, through the Next.js proxy | **176 / 176** |
-| `live-api-test` | the API surface end to end | **123 / 123** |
-| `live-authz-test` | who may reach what, across roles | **54 / 54** |
-| `live-guest-authz-test` | the boundary around a guest's link | **38 / 38** |
-| `live-organiser-authz-test` | each organiser capability is really enforced | **16 / 16** |
-| `vitest` | pricing, inventory and ticket-reference maths | **49 / 49** |
+Last full run: **every suite green, zero failures**, against fresh servers and
+a seeded database.
+
+| Suite | Command | What it proves | Result |
+|---|---|---|---|
+| `vitest` | `npm test` | commission, pricing, inventory, ticket refs, the CMI hash | **99 / 99** |
+| `live-api-test` | `npm run test:live` | the API surface end to end | **123 / 123** |
+| `live-authz-test` | `npm run test:live:authz` | who may reach what, across roles | **54 / 54** |
+| `live-guest-authz-test` | `npm run test:live:guest` | the boundary around a guest's link | **38 / 38** |
+| `live-organiser-authz-test` | `npm run test:live:organiser` | each organiser capability is really enforced | **16 / 16** |
+| `live-coverage-test` | `npm run test:live:coverage` | the routes the other suites do not reach | **72 / 72** |
+| `live-orders-payments-test` | `npm run test:live:orders` | hold → pay → settle → refund → resell → commission → payout | **79 / 79** |
+| `live-audit-test` | `npm run test:live:audit` | the journal, and the two ways an account is removed | **46 / 46** |
+| `live-money-test` | `npm run test:live:money` | commission and payout rules on their own | all pass |
+| `live-cmi-payment-test` | `npm run test:live:cmi` | the gateway: forged, tampered and late callbacks | **20 / 20** ¹ |
+| `live-share-test` | `npm run test:live:share` | giving a ticket away, and revoking the link | all pass |
+| `live-refund-webhook-test` | `npm run test:live:refund` | a back-office refund voids the tickets | all pass |
+| `live-sweeper-test` | `npm run test:live:sweeper` | lapsed holds release their seats | all pass |
+| `live-frontend-test` | `npm test` *(in `frontend/`)* | every API call the UI makes, through the Next.js proxy | **176 / 176** |
+
+¹ Skips cleanly unless `CMI_CLIENT_ID`/`CMI_STORE_KEY` are set — the callback is
+signature-verified, so there is nothing to test without a key.
 
 ```bash
-# Run them (both servers must be up)
-node scripts/live-frontend-test.mjs
-node scripts/live-guest-authz-test.mjs
-cd backend && npm run test:live && npm run test:live:authz && npm run test:live:organiser && npm test
+# Everything, with both servers up. From backend/:
+npm test                     # unit
+npm run test:live            && npm run test:live:authz \
+  && npm run test:live:organiser && npm run test:live:guest \
+  && npm run test:live:coverage  && npm run test:live:share \
+  && npm run test:live:sweeper   && npm run test:live:refund \
+  && npm run test:live:money     && npm run test:live:orders \
+  && npm run test:live:audit
+
+# And from frontend/:
+npm test
 ```
 
-> ⚠️ Running several suites back to back exhausts the **10 sign-ins / 15 min** limit and you will see `429` failures that are not real. Restart the backend between runs, or raise `AUTH_RATE_LIMIT_MAX` in `backend/.env` temporarily.
+> ⚠️ **Two rate limiters will fail a long run, and it is not a real defect.**
+> Sign-in is 10 per 15 minutes and organiser broadcast is 6 per hour; both are
+> held **in memory, per process**, so running every suite back to back exhausts
+> them and you see `429` where you expected `400` or `403`. **Restarting the
+> backend clears both** — or raise `AUTH_RATE_LIMIT_MAX` and
+> `BROADCAST_RATE_LIMIT_MAX` in `backend/.env` for the duration.
+
+> 💡 **Suites clean up after themselves, including when they fail.** The money
+> and orders suites purge their own leftovers at startup as well as at the end.
+> That matters: a payout correctly sweeps up *every* unpaid order in its
+> period, so one crashed run used to leave an order behind that made the *next*
+> run fail for an unrelated reason.
 
 ### Defects these checks caught, and that are now fixed
 
@@ -689,6 +913,12 @@ cd backend && npm run test:live && npm run test:live:authz && npm run test:live:
 5. **"Créer un événement" was a dead end** for customers — a silent redirect to the homepage. *(Check 8.)*
 6. **Any admin could mint another admin**, by creation or promotion. Now only the seed can. *(Check 9.)*
 7. **The order id was treated as a credential**, exposing the buyer's name, email and phone to anyone with the link. *(Check 2.)*
+8. **The commission was a browser calculation.** The organiser chose their own plan, `planCost()` ran client-side, and nothing was stored — so the fee changed on a click and reset on reload. *(Check 13.)*
+9. **Revenue counted refunded money as earnings,** and charged commission on it. A fully refunded order vanished from the figure; a partially refunded one stayed at full value. *(Check 13.)*
+10. **A resale earned the platform nothing.** Both resale settlement paths bypassed the one place commission was recorded, so Eventick brokered the sale, moved the seat, refunded the seller and took 0.00 MAD. *(Check 14.)*
+11. **A quiet month refused its own payout.** 485 MAD of revenue against a 499 MAD subscription produced *"nothing to transfer"*, so over a 14 MAD shortfall the organiser got neither the money nor a record. *(Check 14, step 5.)*
+12. **A CMI payment arriving after the hold lapsed** either took the money and issued nothing, or issued a ticket for a seat already resold. *(Covered by `live-cmi-payment-test`.)*
+13. **Nothing recorded who did what.** Role changes, permission grants, refunds, plan assignments and payouts all happened silently. *(Check 15.)*
 
 ---
 
@@ -707,10 +937,26 @@ cd backend && npm run test:live && npm run test:live:authz && npm run test:live:
 | A floating **"N"** on the left edge | The Next.js dev indicator. Dev-only, never in production |
 | **"Ce billet est déjà entré"** at the gate | Correct — one ticket, one entry |
 | Seats "disappear" mid-test | Holds last 15 minutes. An abandoned checkout releases them |
+| The plan on **Finance** has a padlock and cannot be changed | Correct. An admin assigns it — an organiser choosing their own rate was the bug |
+| Changing a plan does not change the commission shown | Correct, and the point. The fee was recorded when each order was paid; only later sales use the new rate |
+| A payout deducted **499 MAD** you were not expecting | The plan's monthly subscription, withheld once per calendar month that had sales. Starter is 0 |
+| A second payout for the same month deducts **nothing** | Correct — the subscription is charged once per month, however many runs cover it |
+| A payout nets **0.00** but still exists | That month's revenue did not cover its subscription. The fee took what was there; the record exists so the month is not billed twice |
+| **"no bank details on file"** when running a payout | The organiser has not entered a RIB. A payout nobody can send reads as money already on its way |
+| Only `**** 1234` comes back after saving a RIB | Deliberate. The full RIB is a payment credential; the screen showing earnings does not need it |
+| A removed account still appears in the **Journal** | Correct, and the reason the journal exists — the record outlives the account |
+| Removing an account says **"anonymised"**, not deleted | It has orders. They must survive, so the row stays with its personal data stripped |
+| **429** instead of 400/403 while running the test suites | A rate limiter, not a defect. See the warning under *What the automated testing covers* |
 
 ---
 
 # ⚠️ Still open (not failures of the checks above)
+
+Two kinds of thing are listed here, and the difference matters. **Deliberate
+limits** are decisions with a reason — leave them alone unless the reason
+changes. **Actual gaps** are work not done yet.
+
+### Deliberate limits
 
 - **Payments default to simulated.** With no `CMI_CLIENT_ID`/`CMI_STORE_KEY` no card is charged. The CMI integration itself is complete — signed redirect, hash-verified callback, replay-safe settlement — but it needs real merchant credentials to exercise, and production refuses to boot without them.
 - **Refunds do not move money.** CMI has no refund API: `/organiser/orders/:id/refund` records the refund, voids the tickets and emails the buyer, but someone must then reverse the transaction by hand in the CMI back office. Use `/organiser/orders/:id/reconcile-refund` to sync the books after a reversal made there, since CMI notifies us of nothing.
@@ -718,8 +964,16 @@ cd backend && npm run test:live && npm run test:live:authz && npm run test:live:
 - **Commission and subscription are withheld, not invoiced.** Both are real and computed server-side — the percentage is written onto each order when it settles, the monthly fee is charged per calendar month that had sales — but Eventick never issues an invoice or takes a card. Both are collected by being deducted from the payout, so an organiser with no payout due is never charged.
 - **A dormant month is not billed, and no debt accrues.** If a month's sales do not cover the plan's monthly fee, the shortfall is simply not collected rather than carried forward. Charging it would mean a debt model, which is a bigger decision than the payout run should make.
 - **Payouts are a ledger, not a bank integration.** A run calculates what is owed and records the transfer, but nobody sends money automatically: an admin makes the transfer in their bank and pastes the reference back in. There is no bank API.
-- **The journal records decisions, not everything.** Role changes, permission grants, refunds, plan assignments, payouts and account removal are recorded. Ordinary reads and CRUD are deliberately not: a log of everything is one nobody reads. Nothing purges it yet, so it grows without bound.
+- **The journal records decisions, not everything.** Role changes, permission grants, refunds, plan assignments, payouts and account removal are recorded. Ordinary reads and CRUD are deliberately not: a log of everything is one nobody reads.
 - **An account with money history is anonymised, not deleted.** Its orders, tickets and payouts have to survive — the organiser was paid for them — so the row stays with its personal data stripped. A true erasure would mean rewriting financial records.
-- The demo accounts use public passwords and must be changed before production.
 
-These should all be addressed before going live.
+### Actual gaps
+
+- **The demo accounts use public passwords.** They are printed in this guide and in the seed. Change them before anything is deployed.
+- **Nothing purges the journal.** It only grows. Fine for now; it needs a retention policy before it is years old.
+- **No bank integration.** A payout records what is owed and who sent it, but an admin makes the transfer by hand — see *Payouts are a ledger* above.
+- **CMI is unexercised against real money.** The integration is complete and tested against a signed stand-in for the gateway, but nobody has yet put a real card through the live merchant account.
+
+Only the items under **Actual gaps** need work before going live. The
+deliberate limits are documented here so nobody mistakes them for bugs — and
+so a future change that wants to revisit one knows what it is arguing with.
