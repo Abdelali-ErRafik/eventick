@@ -8,7 +8,7 @@ import { api, money, uploadImage } from "../api";
 import { categoryLabel, useI18n } from "../i18n";
 import { CATEGORIES, CITIES } from "../utils";
 import { parseBrief, EXAMPLE_BRIEF } from "../strategy";
-import { Button, Card, CheckOption, Container, EmptyState, Field, Input, Notice, SectionHeader, Select, Stat, Textarea } from "../ui";
+import { Button, Card, CheckOption, Container, DateField, Dropdown, EmptyState, Field, Input, Notice, SectionHeader, Stat, Textarea, TimeField, triggerControlClass } from "../ui";
 
 const COVERS = [
   "/events/mawazine.jpg",
@@ -334,24 +334,34 @@ function OrganiserInner() {
                   />
                 )}
               </Field>
+              {/* Dropdown, not the native <select>: the browser's popup list
+                  renders with OS chrome and ignores the theme, which on this
+                  dark form meant a white list with a blue highlight the
+                  moment it opened. */}
               <Field label={t("category")}>
                 {({ id, describedBy, invalid }) => (
-                  <Select id={id} describedBy={describedBy} invalid={invalid} value={category} onChange={(e) => setCategory(e.target.value)}>
-                    {CATEGORIES.map((value) => (
-                      <option key={value} value={value}>
-                        {categoryLabel(value, t)}
-                      </option>
-                    ))}
-                  </Select>
+                  <Dropdown
+                    label={t("category")}
+                    value={category}
+                    onChange={setCategory}
+                    options={CATEGORIES.map((value) => ({ value, label: categoryLabel(value, t) }))}
+                    triggerClassName={triggerControlClass({ invalid })}
+                    describedBy={describedBy}
+                    id={id}
+                  />
                 )}
               </Field>
               <Field label={t("city")}>
                 {({ id, describedBy, invalid }) => (
-                  <Select id={id} describedBy={describedBy} invalid={invalid} value={city} onChange={(e) => setCity(e.target.value)}>
-                    {CITIES.map((item) => (
-                      <option key={item}>{item}</option>
-                    ))}
-                  </Select>
+                  <Dropdown
+                    label={t("city")}
+                    value={city}
+                    onChange={setCity}
+                    options={CITIES.map((value) => ({ value, label: value }))}
+                    triggerClassName={triggerControlClass({ invalid })}
+                    describedBy={describedBy}
+                    id={id}
+                  />
                 )}
               </Field>
             </FormSection>
@@ -382,39 +392,41 @@ function OrganiserInner() {
               </Field>
               <Field label={t("date")} required>
                 {({ id, describedBy, invalid, required }) => (
-                  <Input
+                  <DateField
                     id={id}
                     describedBy={describedBy}
                     invalid={invalid}
                     required={required}
-                    type="date"
+                    locale={locale}
                     value={start}
-                    onChange={(e) => setStart(e.target.value)}
+                    onChange={(next) => {
+                      setStart(next);
+                      // A one-night date is the normal case, and an end that
+                      // now precedes the start would be rejected on publish.
+                      if (!end || end < next) setEnd(next);
+                    }}
                   />
                 )}
               </Field>
               <Field label={t("endDate")}>
                 {({ id, describedBy, invalid }) => (
-                  <Input
+                  <DateField
                     id={id}
                     describedBy={describedBy}
                     invalid={invalid}
-                    type="date"
+                    locale={locale}
                     value={end}
-                    onChange={(e) => setEnd(e.target.value)}
+                    // Publish already clamps `end < start` up to the start
+                    // date; stopping it here means the form never shows a
+                    // range it is about to silently rewrite.
+                    min={start}
+                    onChange={setEnd}
                   />
                 )}
               </Field>
               <Field label={t("time")}>
                 {({ id, describedBy, invalid }) => (
-                  <Input
-                    id={id}
-                    describedBy={describedBy}
-                    invalid={invalid}
-                    type="time"
-                    value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                  />
+                  <TimeField id={id} describedBy={describedBy} invalid={invalid} value={time} onChange={setTime} />
                 )}
               </Field>
             </FormSection>

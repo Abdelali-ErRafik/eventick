@@ -14,8 +14,9 @@
  *   - accessibility lives in the component, so no call site has to remember.
  */
 export { Button, IconButton } from "./Button.jsx";
-export { Field, Input, Select, Textarea } from "./Field.jsx";
+export { Field, Input, Select, Textarea, triggerControlClass } from "./Field.jsx";
 export { Dropdown } from "./Dropdown.jsx";
+export { DateField, TimeField } from "./DateField.jsx";
 export { RadioOption, CheckOption } from "./Choice.jsx";
 export { RangeField } from "./RangeField.jsx";
 export { Modal } from "./Modal.jsx";

@@ -7,7 +7,7 @@ import { useAuth } from "../../AuthContext";
 import { useConfirm } from "./ConfirmContext";
 import { Badge, Btn, EmptyState, IconBtn, Modal, PageHead, SectionTitle } from "./ui";
 import { text } from "./copy";
-import { Field, Input, Select } from "../../ui";
+import { Dropdown, Field, Input, triggerControlClass } from "../../ui";
 
 const WAITLIST_TONE = { WAITING: "neutral", OFFERED: "warn", CLAIMED: "success", EXPIRED: "danger" };
 
@@ -197,10 +197,18 @@ export default function Offers() {
           </Field>
           <Field label={t.kind}>
             {({ id, describedBy, invalid }) => (
-              <Select id={id} describedBy={describedBy} invalid={invalid} value={kind} onChange={(e) => setKind(e.target.value)}>
-                <option value="PERCENT">{t.percent}</option>
-                <option value="AMOUNT">{t.amount}</option>
-              </Select>
+              <Dropdown
+                label={t.kind}
+                id={id}
+                describedBy={describedBy}
+                value={kind}
+                onChange={setKind}
+                options={[
+                  { value: "PERCENT", label: t.percent },
+                  { value: "AMOUNT", label: t.amount },
+                ]}
+                triggerClassName={triggerControlClass({ invalid })}
+              />
             )}
           </Field>
           <Field label={kind === "PERCENT" ? t.percent : t.amount}>
@@ -221,14 +229,21 @@ export default function Offers() {
               than letting a plain organiser find out from a 403. */}
           <Field label={t.allEvents} hint={!eventSlug && !can("scope.any") ? t.globalPromoAdminOnly : undefined}>
             {({ id, describedBy, invalid }) => (
-              <Select id={id} describedBy={describedBy} invalid={invalid} value={eventSlug} onChange={(e) => setEventSlug(e.target.value)}>
-                <option value="">{t.allDates}</option>
-                {(events ?? []).map((event) => (
-                  <option key={event.slug} value={event.slug}>
-                    {locale === "ar" ? event.titleAr : event.titleFr}
-                  </option>
-                ))}
-              </Select>
+              <Dropdown
+                label={t.allEvents}
+                id={id}
+                describedBy={describedBy}
+                value={eventSlug}
+                onChange={setEventSlug}
+                options={[
+                  { value: "", label: t.allDates },
+                  ...(events ?? []).map((event) => ({
+                    value: event.slug,
+                    label: locale === "ar" ? event.titleAr : event.titleFr,
+                  })),
+                ]}
+                triggerClassName={triggerControlClass({ invalid })}
+              />
             )}
           </Field>
           <Field label={t.maxUses}>

@@ -7,7 +7,7 @@ import { useI18n } from "../../i18n";
 import { longDate } from "../../utils";
 import { useConfirm } from "./ConfirmContext";
 import { Badge, Btn, EmptyState, FilterBar, InfoTip, PageHead, Pager, PersonCell } from "./ui";
-import { Field, Input, Modal, Select } from "../../ui";
+import { Dropdown, Field, Input, Modal, triggerControlClass } from "../../ui";
 import { text } from "./copy";
 
 const PAGE_SIZE_DEFAULT = 20;
@@ -464,13 +464,15 @@ export default function Users() {
 
             <Field label={t.roleField} required hint={roleHint(form.role)}>
               {({ id, describedBy, required }) => (
-                <Select id={id} describedBy={describedBy} required={required} value={form.role} onChange={set("role")}>
-                  {ASSIGNABLE_ROLES.map((value) => (
-                    <option key={value} value={value}>
-                      {roleLabel(value)}
-                    </option>
-                  ))}
-                </Select>
+                <Dropdown
+                  label={t.roleField}
+                  id={id}
+                  describedBy={describedBy}
+                  value={form.role}
+                  onChange={(value) => setForm((f) => ({ ...f, role: value }))}
+                  options={ASSIGNABLE_ROLES.map((value) => ({ value, label: roleLabel(value) }))}
+                  triggerClassName={triggerControlClass({})}
+                />
               )}
             </Field>
           </form>

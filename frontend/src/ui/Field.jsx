@@ -85,6 +85,29 @@ function controlClass(invalid, className) {
   );
 }
 
+/**
+ * The same box, for a control that is not a real <input>.
+ *
+ * DateField, TimeField and Dropdown render a <span> trigger inside a
+ * Popover, so they cannot use :focus — the focus lives on the Popover's
+ * button, one level up. They take `open` instead and get the identical
+ * border, height and ring, which is what keeps a date field and a text
+ * field on the same row looking like the same control.
+ */
+export function triggerControlClass({ invalid, open, disabled, className }) {
+  return cn(
+    CONTROL_BASE,
+    "flex h-11 items-center justify-between gap-2 text-start",
+    invalid
+      ? "border-danger"
+      : open
+        ? "border-primary ring-[3px] ring-primary/20"
+        : "border-line/15",
+    disabled && "cursor-not-allowed opacity-60",
+    className,
+  );
+}
+
 export function Input({ id, describedBy, invalid, className, ...rest }) {
   return (
     <input

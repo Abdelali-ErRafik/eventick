@@ -9,7 +9,7 @@ import { useConfirm } from "./ConfirmContext";
 import { useOrganisers } from "./useOrganisers";
 import { Badge, Btn, EmptyState, FilterBar, IconBtn, Modal, PageHead } from "./ui";
 import { text } from "./copy";
-import { Field, Input, Select, Textarea } from "../../ui";
+import { Dropdown, Field, Input, Textarea, triggerControlClass } from "../../ui";
 
 export default function Events() {
   const { locale } = useI18n();
@@ -316,11 +316,15 @@ export default function Events() {
           </Field>
           <Field label={t.cityLabel}>
             {({ id, describedBy, invalid }) => (
-              <Select id={id} describedBy={describedBy} invalid={invalid} value={editCity} onChange={(e) => setEditCity(e.target.value)}>
-                {CITIES.map((name) => (
-                  <option key={name}>{name}</option>
-                ))}
-              </Select>
+              <Dropdown
+                label={t.cityLabel}
+                id={id}
+                describedBy={describedBy}
+                value={editCity}
+                onChange={setEditCity}
+                options={CITIES.map((name) => ({ value: name, label: name }))}
+                triggerClassName={triggerControlClass({ invalid })}
+              />
             )}
           </Field>
         </form>

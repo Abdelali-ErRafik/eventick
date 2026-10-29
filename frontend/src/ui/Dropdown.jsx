@@ -20,7 +20,23 @@ import { cn } from "../utils.js";
  * one specifically when the surrounding UI has its own custom chrome that
  * a native popup would visually clash with.
  */
-export function Dropdown({ value, onChange, options, placeholder, label, triggerClassName, panelClassName, align = "start", width = "w-full" }) {
+export function Dropdown({
+  value,
+  onChange,
+  options,
+  placeholder,
+  label,
+  // Accepted so this can sit inside a <Field> like any other control. The
+  // render prop hands down an id and a describedby; without these they were
+  // silently dropped, leaving the label pointing at nothing and the error
+  // text unannounced.
+  id,
+  describedBy,
+  triggerClassName,
+  panelClassName,
+  align = "start",
+  width = "w-full",
+}) {
   const current = options.find((option) => option.value === value);
 
   return (
@@ -34,7 +50,11 @@ export function Dropdown({ value, onChange, options, placeholder, label, trigger
       className="block w-full [&>button]:block [&>button]:w-full"
       panelClassName={panelClassName}
       trigger={({ open }) => (
-        <span className={cn("flex w-full items-center justify-between gap-2 text-start", triggerClassName)}>
+        <span
+          id={id}
+          aria-describedby={describedBy}
+          className={cn("flex w-full items-center justify-between gap-2 text-start", triggerClassName)}
+        >
           <span className={cn("truncate", !current && "text-muted")}>{current ? current.label : placeholder}</span>
           <ChevronDown className={cn("size-4 shrink-0 text-muted transition", open && "rotate-180")} aria-hidden />
         </span>
