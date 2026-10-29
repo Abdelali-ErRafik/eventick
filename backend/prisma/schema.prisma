@@ -258,16 +258,16 @@ model Order {
 
   holdUntil DateTime? @map("hold_until")
 
-  // Payment metadata. With Stripe configured these are filled from the
-  // PaymentIntent; in mock mode (no STRIPE_SECRET_KEY) from payment-sim.ts.
+  // Payment metadata. With CMI configured these are filled from the gateway
+  // callback; in mock mode (no CMI_CLIENT_ID) from payment-sim.ts.
   paymentRef String? @map("payment_ref")
   cardBrand  String? @map("card_brand")
   cardLast4  String? @map("card_last4")
   cardBank   String? @map("card_bank")
 
-  /// Stripe PaymentIntent id. Unique so a webhook replay can never create or
-  /// settle a second order for the same intent.
-  paymentIntentId String? @unique @map("payment_intent_id")
+  /// The gateway's own transaction id (CMI's `TransId`). Unique so a replayed
+  /// callback can never settle a second order against the same payment.
+  gatewayRef String? @unique @map("gateway_ref")
 
   /// Refund audit trail. `refundedCents` accumulates across partial refunds,
   /// so it is the amount already returned — never the amount outstanding.
@@ -435,9 +435,20 @@ model ResaleListing {
   /// Shareable, unguessable listing URL segment.
   token String @unique
 
-  /// The order that bought it, and the ticket issued to that buyer.
+  /// The order that bought it, and the ticket issued to that buyer. Both are
+  /// set at COMPLETION, so they record a finished sale.
   buyerOrderId String? @map("buyer_order_id")
   newTicketId  String? @map("new_ticket_id")
+
+  /// The order currently attempting to buy this listing, set before the buyer
+  /// is sent to the gateway.
+  ///
+  /// CMI echoes back only our order reference — it has no metadata field to
+  /// carry a listing id the way a Stripe PaymentIntent did — so the callback
+  /// needs a way to tell "this order bought a resold seat" from "this order
+  /// bought fresh inventory". Without it a resale would settle through
+  /// settleOrder and issue a ticket against tier stock that was never claimed.
+  pendingOrderId String? @unique @map("pending_order_id")
 
   createdAt DateTime  @default(now()) @map("created_at")
   soldAt    DateTime? @map("sold_at")

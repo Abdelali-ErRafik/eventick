@@ -223,7 +223,7 @@ ticketsRouter.post(
     const target = await prisma.ticketTier.findUnique({ where: { id: body.tierId } });
     if (!target) throw new HttpError(404, "Zone not found");
 
-    // An upgrade owes money. Until that is collected through Stripe the
+    // An upgrade owes money. Until that is collected through CMI the
     // exchange must not happen, so refuse rather than silently give it away.
     const dueCents = target.priceCents - ticket.tier.priceCents;
     if (dueCents > 0) {

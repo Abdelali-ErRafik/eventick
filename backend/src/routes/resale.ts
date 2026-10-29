@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { optionalAuth } from "../middleware/auth.js";
 import { phoneOk, makePaymentRef } from "../lib/payment-sim.js";
-import { isMockPayments, getStripe, CURRENCY } from "../lib/stripe.js";
+import { buildPaymentRequest, cmiConfig, cmiUrls, isMockPayments } from "../lib/cmi.js";
 import { cancelListing, completeResale, listTicketForResale, resolveListing } from "../lib/resale.js";
 import { requireTicketAccessWithSession } from "../lib/order-access.js";
 
@@ -102,6 +102,8 @@ const buySchema = z.object({
   holderName: z.string().min(3),
   email: z.string().email(),
   phone: z.string(),
+  /** Which language CMI should render its hosted card page in. */
+  locale: z.enum(["fr", "en", "ar"]).optional(),
 });
 
 /**
@@ -144,25 +146,30 @@ resaleRouter.post(
       return res.json({ mode: "mock", settled: true, orderId: order.id, ...result });
     }
 
-    const stripe = getStripe()!;
-    const intent = await stripe.paymentIntents.create(
-      {
-        amount: listing.priceCents,
-        currency: CURRENCY,
-        metadata: { orderId: order.id, resaleListingId: listing.id },
-        receipt_email: order.email,
-        automatic_payment_methods: { enabled: true },
-      },
-      { idempotencyKey: `resale_${listing.id}_${order.id}` },
-    );
-    await prisma.order.update({ where: { id: order.id }, data: { paymentIntentId: intent.id } });
-
-    res.json({
-      mode: "stripe",
-      orderId: order.id,
-      clientSecret: intent.client_secret,
-      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+    // Link the listing to this attempt BEFORE the buyer leaves for CMI. The
+    // callback receives only our order reference, so this is the only way it
+    // can tell a resold seat from fresh inventory and route the settlement to
+    // completeResale instead of issuing a ticket against tier stock.
+    await prisma.resaleListing.update({
+      where: { id: listing.id },
+      data: { pendingOrderId: order.id },
     });
+
+    const config = cmiConfig()!;
+    const request = buildPaymentRequest(
+      {
+        reference: order.id,
+        totalCents: order.totalCents,
+        email: order.email,
+        holderName: order.holderName,
+        phone: order.phone,
+        locale: body.locale,
+        ...cmiUrls(order.id, order.accessToken),
+      },
+      config,
+    );
+
+    res.json({ mode: "cmi", orderId: order.id, action: request.action, fields: request.fields });
   }),
 );
 

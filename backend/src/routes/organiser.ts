@@ -9,7 +9,7 @@ import { committedForTier, remainingByTier } from "../lib/availability.js";
 import { broadcastRateLimit } from "../middleware/rateLimit.js";
 import { sendEmail } from "../lib/email.js";
 import { broadcastHtml } from "../lib/email-templates.js";
-import { refundOrder } from "../lib/refund.js";
+import { reconcileExternalRefund, refundOrder } from "../lib/refund.js";
 import { offerFreedSeats } from "../lib/waitlist.js";
 import { reissueTicket, renameHolder } from "../lib/ticket-admin.js";
 
@@ -471,9 +471,12 @@ const refundSchema = z.object({
 });
 
 /**
- * Refund an order. Unlike /cancel above this moves money: with Stripe
- * configured it calls the gateway, and in mock mode it records the refund so
- * the books stay consistent without pretending a card was touched.
+ * Refund an order. Unlike /cancel above this concerns money.
+ *
+ * CMI has no refund API, so this does NOT move money: it records the refund,
+ * voids the tickets on a full one, and emails the buyer. Reversing the
+ * transaction is a manual step in the CMI back office, and the refund
+ * reference says so.
  */
 organiserRouter.post(
   "/orders/:id/refund",
@@ -483,7 +486,34 @@ organiserRouter.post(
     await requireOwnedOrder(req.user, id);
     const body = refundSchema.parse(req.body ?? {});
     const result = await refundOrder(id, body.amountCents ?? null);
-    res.json(result);
+    res.json({ ...result, gatewayAction: "Reverse this transaction in the CMI back office." });
+  }),
+);
+
+const reconcileSchema = z.object({
+  /** The running TOTAL reversed at CMI for this transaction, in cents. */
+  amountRefundedCents: z.number().int().positive(),
+});
+
+/**
+ * Reconcile a refund already made in the CMI back office.
+ *
+ * CMI sends nothing when a merchant reverses a transaction there, so the
+ * books can silently disagree with the gateway — and, worse, the tickets stay
+ * VALID, meaning someone who has had their money back still gets in. This is
+ * the manual correction for that, and it never moves money.
+ */
+organiserRouter.post(
+  "/orders/:id/reconcile-refund",
+  canRefund,
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const order = await requireOwnedOrder(req.user, id);
+    const body = reconcileSchema.parse(req.body ?? {});
+    if (!order.gatewayRef) throw new HttpError(409, "This order has no gateway transaction to reconcile");
+    const result = await reconcileExternalRefund(order.gatewayRef, body.amountRefundedCents);
+    if (!result) return res.json({ reconciled: false, reason: "Already recorded" });
+    res.json({ reconciled: true, ...result });
   }),
 );
 

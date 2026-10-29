@@ -383,7 +383,7 @@ export default function Home() {
                   they read as three distinct features, not three identical
                   text-only boxes. */}
               <Stat icon={<Activity className="size-4" />} value="100%" label={t("statLive")} />
-              <Stat icon={<CreditCard className="size-4" />} value="Stripe" label={t("statPay")} />
+              <Stat icon={<CreditCard className="size-4" />} value="CMI" label={t("statPay")} />
               <Stat icon={<Repeat className="size-4" />} value="✓" label={t("statResale")} />
             </div>
             <div className="mt-6 flex flex-wrap gap-3">

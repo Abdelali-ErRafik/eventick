@@ -27,8 +27,8 @@ export function createApp() {
   const corsOrigins = (process.env.CORS_ORIGINS ?? "http://localhost:3100").split(",");
   app.use(cors({ origin: corsOrigins, credentials: true }));
 
-  // Webhooks mount BEFORE express.json(): Stripe signs the raw bytes, so the
-  // body must not be parsed before the signature is checked.
+  // Webhooks mount BEFORE express.json(): CMI posts form-encoded, not JSON,
+  // so the router applies its own urlencoded parser.
   app.use("/api/webhooks", webhooksRouter);
 
   app.use(express.json());

@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { createApp } from "./app.js";
 import { prisma } from "./lib/prisma.js";
-import { assertPaymentConfig } from "./lib/stripe.js";
+import { assertPaymentConfig } from "./lib/cmi.js";
 import { assertAuthConfig } from "./lib/jwt.js";
 import { closeRealtime, initRealtime } from "./lib/realtime.js";
 import { startSweeper, stopSweeper } from "./lib/sweeper.js";

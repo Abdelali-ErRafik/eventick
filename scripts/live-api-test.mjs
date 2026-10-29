@@ -468,8 +468,14 @@ await expectStatus("upload anonymous → 401", "POST", "/api/uploads/image", 401
 // ───────────────────────────────────────────────────────────── webhooks ──
 setGroup("WEBHOOKS  /api/webhooks");
 
-const wh = await call("POST", "/api/webhooks/stripe", { body: { type: "payment_intent.succeeded" } });
-record("unsigned webhook is not processed", wh.status === 200 && wh.data?.ignored !== undefined, `${wh.status} ${JSON.stringify(wh.data).slice(0, 60)}`);
+// An unsigned callback is a forgery attempt: CMI signs every one it sends,
+// and this endpoint is public. It must answer FAILURE and settle nothing —
+// without that, anyone who guessed an order id would be issued free tickets.
+const wh = await call("POST", "/api/webhooks/cmi", {
+  form: new URLSearchParams({ oid: "forged-order", ProcReturnCode: "00", amount: "1.00" }),
+});
+// call() puts a non-JSON body in `data` as text, which is what CMI gets.
+record("unsigned CMI callback is refused", wh.status === 200 && String(wh.data).includes("FAILURE"), `${wh.status} ${wh.data}`);
 
 // ──────────────────────────────────────────────────────────────── proxy ──
 setGroup("PROXY  via Next.js :3100");

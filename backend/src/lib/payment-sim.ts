@@ -1,7 +1,10 @@
-// Simulated payment — ported from the frontend's src/lib/payment.ts.
-// No real gateway is wired up (no CMI/Stripe credentials exist for this
-// project). This keeps the same demo card/OTP contract the original
-// TanStack Start app shipped, now enforced server-side at checkout.
+// Simulated payment — the MOCK mode fallback used when CMI is not
+// configured (no CMI_CLIENT_ID/CMI_STORE_KEY), so the whole funnel stays
+// demoable and testable offline. With CMI configured none of this runs: the
+// card is collected on CMI's hosted page and the outcome arrives by callback.
+//
+// The card helpers below are kept for the demo card contract the original
+// TanStack Start app shipped; CMI validates real cards itself.
 
 export function digitsOnly(value: string) {
   return value.replace(/\D/g, "");

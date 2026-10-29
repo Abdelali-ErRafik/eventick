@@ -266,7 +266,9 @@ async function main() {
       { token: tokens.organiser, body: { holderName: "Nom Corrigé" } },
     );
     record("PATCH holder reports ok", renamed.data?.ok === true, JSON.stringify(renamed.data));
-    const after = await call("GET", `/api/tickets/${ticketB.id}`);
+    // Reading a ticket takes proof of purchase, so present the buyer's
+    // session: this route serves the signed QR, not just a holder name.
+    const after = await call("GET", `/api/tickets/${ticketB.id}`, { token: tokens.customer });
     record(
       "the corrected name is what the ticket now shows",
       after.data?.ticket?.holderName === "Nom Corrigé",

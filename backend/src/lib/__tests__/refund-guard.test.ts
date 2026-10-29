@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
  * compare-and-swap it relies on: a conditional update keyed to the balance
  * the caller read. The bug this covers was a read-then-write where two
  * concurrent refunds both read the same starting balance, both charged
- * Stripe, and the second write silently overwrote the first — paying the
+ * the gateway, and the second write silently overwrote the first — paying the
  * buyer twice while the ledger recorded once.
  */
 function makeOrder(totalCents: number) {
@@ -48,7 +48,7 @@ describe("refund compare-and-swap", () => {
     expect(order.claim(readA, readA + 30000)).toBe(true);
     expect(order.claim(readB, readB + 30000)).toBe(false);
 
-    // Only one refund was recorded, and only one would have reached Stripe.
+    // Only one refund was recorded, and only one payout is owed.
     expect(order.refunded).toBe(30000);
   });
 
@@ -68,7 +68,7 @@ describe("refund compare-and-swap", () => {
     const read = order.refunded;
     order.claim(read, read + 25000);
 
-    // Stripe refused — release the claim so the organiser can retry.
+    // The gateway refused — release the claim so the organiser can retry.
     expect(order.claim(read + 25000, read)).toBe(true);
     expect(order.refunded).toBe(0);
     expect(order.outstanding()).toBe(70000);

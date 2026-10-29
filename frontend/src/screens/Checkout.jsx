@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Check, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "../components/Shell";
-import StripeForm from "./StripeForm";
+import CmiRedirect from "./CmiRedirect";
 import { api, money } from "../api";
 import { useCart } from "../CartContext";
 import { useAuth } from "../AuthContext";
@@ -66,6 +66,16 @@ export default function Checkout() {
     navigate("/explorer");
   }, [clear, navigate, t]);
 
+  // True once the buyer is on their way to CMI. Leaving for the gateway fires
+  // `pagehide` exactly like abandoning the page does, so without this the
+  // release handler below would cancel the very seats they are about to pay
+  // for — and they would come back from a successful payment to find the
+  // order gone.
+  const leaving = useRef(false);
+  const onLeaveForGateway = useCallback(() => {
+    leaving.current = true;
+  }, []);
+
   // A buyer who leaves before paying shouldn't sit on seats for 15 minutes.
   const heldId = cart?.orderId ?? null;
   const settled = Boolean(payment?.settled);
@@ -76,18 +86,32 @@ export default function Checkout() {
     // *queueing* rather than on a 2xx, an `||` fallback never runs. That bug
     // meant abandoned carts held their seats for the full 15 minutes.
     const release = () => {
+      if (leaving.current) return;
       api.del(`/orders/hold/${heldId}`, { keepalive: true }).catch(() => {});
     };
     window.addEventListener("pagehide", release);
     return () => window.removeEventListener("pagehide", release);
   }, [heldId, settled]);
 
-  const onPayError = useCallback(
-    (message) => {
-      toast.error(message);
-    },
-    [],
-  );
+  /*
+   * A declined payment comes back as a REDIRECT, not a callback: CMI sends the
+   * buyer to failUrl (/paiement?echec=1), so the only trace of the failure is
+   * in the URL when this page loads again. Without reading it the buyer would
+   * return to a silent, apparently-fine form and have no idea the card was
+   * refused.
+   *
+   * The parameter is stripped afterwards so a refresh does not re-announce a
+   * failure they have already seen.
+   */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("echec")) return;
+    toast.error(t("payDeclined"));
+    params.delete("echec");
+    params.delete("commande");
+    const query = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (query ? `?${query}` : ""));
+  }, [t]);
 
   if (!cart || !event) {
     return (
@@ -169,6 +193,7 @@ export default function Checkout() {
         holderName: name.trim(),
         email: email.trim(),
         phone: phone.trim(),
+        locale,
       });
       setPayment(pay);
 
@@ -196,7 +221,7 @@ export default function Checkout() {
     }
   };
 
-  const stripeReady = payment?.mode === "stripe" && payment.clientSecret && payment.publishableKey;
+  const cmiReady = payment?.mode === "cmi" && payment.action && payment.fields;
 
   return (
     <Shell>
@@ -299,13 +324,12 @@ export default function Checkout() {
               <Card className="mt-5">
                 <h2 className="font-display text-heading font-extrabold">{t("payMethod")}</h2>
                 <div className="mt-4">
-                  {stripeReady ? (
-                    <StripeForm
-                      publishableKey={payment.publishableKey}
-                      clientSecret={payment.clientSecret}
+                  {cmiReady ? (
+                    <CmiRedirect
+                      action={payment.action}
+                      fields={payment.fields}
                       dueCents={due}
-                      returnUrl={`${window.location.origin}/confirmation/${cart.orderId}`}
-                      onError={onPayError}
+                      onLeave={onLeaveForGateway}
                     />
                   ) : (
                     <p className="text-sm text-muted">{t("processing")}</p>

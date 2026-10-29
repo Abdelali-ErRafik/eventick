@@ -1,6 +1,6 @@
 import { prisma } from "./prisma.js";
 import { HttpError } from "./http.js";
-import { getStripe, isMockPayments } from "./stripe.js";
+import { isMockPayments } from "./cmi.js";
 import { sendEmail } from "./email.js";
 import { refundHtml, refundSubject } from "./email-templates.js";
 import { logger } from "./logger.js";
@@ -37,18 +37,13 @@ export async function refundOrder(
   const full = refundedTotal >= order.totalCents;
 
   /*
-   * Claim the amount in the database BEFORE calling Stripe.
+   * Claim the amount in the database with a compare-and-swap.
    *
-   * The guard `refundedCents: order.refundedCents` makes this a
-   * compare-and-swap: of two concurrent refunds that both read the same
-   * starting balance, exactly one update matches and the loser is rejected
-   * without ever reaching the gateway. Doing it the other way round — charge
+   * The guard `refundedCents: order.refundedCents` means that of two
+   * concurrent refunds reading the same starting balance, exactly one update
+   * matches and the loser is rejected. Doing it the other way round — pay
    * first, record after — is how a buyer gets paid twice while the ledger
    * shows one refund.
-   *
-   * If the Stripe call then fails we roll the claim back below, which risks
-   * at worst a refund the books show as unmade; the opposite ordering risks
-   * money leaving twice, which is the costlier failure.
    */
   const claimed = await prisma.order.updateMany({
     where: { id: order.id, status: "PAID", refundedCents: order.refundedCents },
@@ -58,31 +53,27 @@ export async function refundOrder(
     throw new HttpError(409, "Another refund for this order is already in progress");
   }
 
-  let refundRef: string;
-  if (isMockPayments() || !order.paymentIntentId) {
-    // No gateway to call: record the refund so the books are consistent, and
-    // make it obvious in the reference that no card was touched.
-    refundRef = `MOCK-REFUND-${Date.now()}`;
-  } else {
-    const stripe = getStripe()!;
-    try {
-      const refund = await stripe.refunds.create(
-        { payment_intent: order.paymentIntentId, amount },
-        // Keyed to the running total, so a retry of THIS refund is a no-op at
-        // Stripe while a genuine second refund gets its own key.
-        { idempotencyKey: `refund_${order.id}_${refundedTotal}` },
-      );
-      refundRef = refund.id;
-    } catch (err) {
-      // Release the claim so the organiser can retry; leaving it would make
-      // the order look partly refunded when no money moved.
-      await prisma.order.updateMany({
-        where: { id: order.id, refundedCents: refundedTotal },
-        data: { refundedCents: order.refundedCents, refundedAt: order.refundedAt },
-      });
-      logger.warn({ err, orderId: order.id }, "stripe refund failed — claim released");
-      throw new HttpError(502, "The payment provider refused the refund. Nothing was charged back.");
-    }
+  /*
+   * CMI has NO refund API: a merchant reverses a transaction in the CMI back
+   * office, by hand. So unlike the Stripe integration this replaces, nothing
+   * here moves money — this records the decision, voids the tickets and
+   * emails the buyer, and the payout itself is a manual step.
+   *
+   * That makes the reference the important part: it has to say plainly that
+   * the money has not left yet, so a refund nobody actioned in the back
+   * office is visible as such rather than looking settled. `gatewayRef` is
+   * the CMI transaction to reverse.
+   */
+  const refundRef =
+    isMockPayments() || !order.gatewayRef
+      ? `MOCK-REFUND-${Date.now()}`
+      : `CMI-MANUAL-${order.gatewayRef}`;
+
+  if (!isMockPayments()) {
+    logger.warn(
+      { orderId: order.id, gatewayRef: order.gatewayRef, amount },
+      "REFUND RECORDED — reverse this transaction in the CMI back office; no money has moved yet",
+    );
   }
 
   await prisma.$transaction(async (tx) => {
@@ -124,27 +115,28 @@ export async function refundOrder(
 }
 
 /**
- * Record a refund that happened AT STRIPE, not here.
+ * Record a refund that happened IN THE CMI BACK OFFICE, not here.
  *
- * An organiser can refund from the Stripe dashboard, and a card network can
- * force one through a dispute. Either way the money is already gone, so this
- * must never call `stripe.refunds.create` — that would refund a refund. It
- * reconciles our ledger with what Stripe reports and applies the same
- * consequences as `refundOrder`: a full refund voids the tickets and returns
- * the seats, a partial one leaves them usable.
+ * CMI sends no notification when a merchant reverses a transaction there, so
+ * nothing calls this automatically — it is reconciliation, invoked when
+ * someone notices the books disagree with CMI's. It must never try to move
+ * money: the money is already gone. It applies the same consequences as
+ * `refundOrder`, so a buyer who got their money back cannot still walk in: a
+ * full refund voids the tickets and returns the seats, a partial one leaves
+ * them usable.
  *
- * `amountRefundedCents` is the running total Stripe holds for the charge, not
- * a delta, so this is idempotent — a replayed webhook writes the same number.
+ * `amountRefundedCents` is the running TOTAL reversed for the transaction,
+ * not a delta, so running this twice writes the same number.
  */
 export async function reconcileExternalRefund(
-  paymentIntentId: string,
+  gatewayRef: string,
   amountRefundedCents: number,
 ): Promise<{ orderId: string; full: boolean } | null> {
-  const order = await prisma.order.findUnique({ where: { paymentIntentId } });
+  const order = await prisma.order.findUnique({ where: { gatewayRef } });
   if (!order) return null;
 
-  // Stripe's total is authoritative. If we already recorded at least this
-  // much, our own refund path handled it and there is nothing to do.
+  // The gateway's total is authoritative. If we already recorded at least
+  // this much, our own refund path handled it and there is nothing to do.
   if (order.refundedCents >= amountRefundedCents) return null;
 
   const full = amountRefundedCents >= order.totalCents;
@@ -172,7 +164,7 @@ export async function reconcileExternalRefund(
 
   logger.info(
     { orderId: order.id, amountRefundedCents, full },
-    "external refund reconciled from stripe",
+    "external refund reconciled from the CMI back office",
   );
   return { orderId: order.id, full };
 }

@@ -1,16 +1,17 @@
 /**
- * Live test — a refund issued AT STRIPE voids the tickets.
+ * Live test — a refund made IN THE CMI BACK OFFICE voids the tickets.
  *
- * The `charge.refunded` webhook used to only log: "stripe refund observed".
- * So an organiser refunding from the Stripe dashboard, or a cardholder
- * winning a dispute, got their money back while their tickets stayed VALID —
- * and the gate let them in.
+ * The danger this covers: someone gets their money back while their tickets
+ * stay VALID, and the gate lets them in. It used to be a webhook that only
+ * logged the event; now the risk is sharper, because CMI sends NOTHING when a
+ * merchant reverses a transaction there — so the books can drift silently and
+ * reconciliation is a manual step.
  *
- * The webhook itself can't be driven without a Stripe signing secret, so this
- * calls `reconcileExternalRefund` directly: the function the handler now
- * delegates to, which holds all the behaviour under test. What it must prove
- * is that reconciliation voids tickets, returns seats, is idempotent under
- * webhook replay, and leaves a PARTIAL refund's tickets usable.
+ * This calls `reconcileExternalRefund` directly: the function the
+ * /orders/:id/reconcile-refund route delegates to, which holds all the
+ * behaviour under test. What it must prove is that reconciliation voids
+ * tickets, returns seats, is idempotent when run more than once, and leaves a
+ * PARTIAL refund's tickets usable.
  *
  * Run from the backend directory with tsx, which has Prisma and the env:
  *   cd backend && npx tsx ../scripts/live-refund-webhook-test.mjs
@@ -32,9 +33,9 @@ const SUFFIX = Date.now();
 const created = { events: [], orders: [] };
 let seq = 0;
 
-/** A PAID order of `qty` tickets with a Stripe intent id, as a real card
- * payment would leave it. */
-async function paidOrder(qty, totalCents, intentId) {
+/** A PAID order of `qty` tickets carrying a gateway transaction reference,
+ * as a real card payment through CMI would leave it. */
+async function paidOrder(qty, totalCents, gatewayRef) {
   const start = new Date(Date.now() + 30 * 86_400_000);
   const event = await prisma.event.create({
     data: {
@@ -86,8 +87,8 @@ async function paidOrder(qty, totalCents, intentId) {
       phone: "0612345678",
       subtotalCents: totalCents,
       totalCents,
-      paymentIntentId: intentId,
-      paymentRef: intentId,
+      gatewayRef,
+      paymentRef: gatewayRef,
       lines: { create: { tierId: tier.id, qty } },
       tickets: {
         create: Array.from({ length: qty }, () => ({
@@ -109,15 +110,15 @@ async function statuses(orderId) {
 }
 
 async function main() {
-  // ── A full refund at Stripe must void every ticket ────────────────────
-  console.log("\n\x1b[1mFull refund made at Stripe\x1b[0m");
+  // ── A full refund at CMI must void every ticket ───────────────────────
+  console.log("\n\x1b[1mFull refund made in the CMI back office\x1b[0m");
   {
-    const intentId = `pi_test_full_${SUFFIX}`;
-    const { order, tier, event } = await paidOrder(2, 40000, intentId);
+    const gatewayRef = `cmi_test_full_${SUFFIX}`;
+    const { order, tier, event } = await paidOrder(2, 40000, gatewayRef);
 
     check("tickets start VALID", (await statuses(order.id)).every((s) => s === "VALID"));
 
-    const result = await reconcileExternalRefund(intentId, 40000);
+    const result = await reconcileExternalRefund(gatewayRef, 40000);
     check("reconciliation reports a full refund", result?.full === true, JSON.stringify(result));
 
     const after = await statuses(order.id);
@@ -125,7 +126,7 @@ async function main() {
 
     const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
     check("the order is REFUNDED", reloaded.status === "REFUNDED", reloaded.status);
-    check("the ledger records what Stripe refunded", reloaded.refundedCents === 40000, `${reloaded.refundedCents}`);
+    check("the ledger records what CMI reversed", reloaded.refundedCents === 40000, `${reloaded.refundedCents}`);
     check("refundedAt is stamped", reloaded.refundedAt !== null);
 
     // The seats must come back, or the event stays falsely sold out.
@@ -136,15 +137,15 @@ async function main() {
     void event;
   }
 
-  // ── Replay safety: webhooks are delivered more than once ──────────────
-  console.log("\n\x1b[1mWebhook replay\x1b[0m");
+  // ── Idempotence: reconciliation may be run more than once ─────────────
+  console.log("\n\x1b[1mReconciliation run twice\x1b[0m");
   {
-    const intentId = `pi_test_replay_${SUFFIX}`;
-    const { order } = await paidOrder(1, 20000, intentId);
+    const gatewayRef = `cmi_test_replay_${SUFFIX}`;
+    const { order } = await paidOrder(1, 20000, gatewayRef);
 
-    const first = await reconcileExternalRefund(intentId, 20000);
-    const second = await reconcileExternalRefund(intentId, 20000);
-    const third = await reconcileExternalRefund(intentId, 20000);
+    const first = await reconcileExternalRefund(gatewayRef, 20000);
+    const second = await reconcileExternalRefund(gatewayRef, 20000);
+    const third = await reconcileExternalRefund(gatewayRef, 20000);
 
     check("the first delivery reconciles", first?.full === true);
     check("a replay is a no-op, not a second refund", second === null && third === null, `${second} / ${third}`);
@@ -156,10 +157,10 @@ async function main() {
   // ── A partial refund must NOT void the tickets ────────────────────────
   console.log("\n\x1b[1mPartial refund\x1b[0m");
   {
-    const intentId = `pi_test_partial_${SUFFIX}`;
-    const { order } = await paidOrder(4, 80000, intentId);
+    const gatewayRef = `cmi_test_partial_${SUFFIX}`;
+    const { order } = await paidOrder(4, 80000, gatewayRef);
 
-    const result = await reconcileExternalRefund(intentId, 20000);
+    const result = await reconcileExternalRefund(gatewayRef, 20000);
     check("reconciliation reports it is not full", result?.full === false, JSON.stringify(result));
 
     const after = await statuses(order.id);
@@ -174,7 +175,7 @@ async function main() {
     check("the partial amount is recorded", reloaded.refundedCents === 20000, `${reloaded.refundedCents}`);
 
     // Topping it up to the full amount must then void them.
-    const topUp = await reconcileExternalRefund(intentId, 80000);
+    const topUp = await reconcileExternalRefund(gatewayRef, 80000);
     check("a later top-up to the full amount is full", topUp?.full === true, JSON.stringify(topUp));
     const final = await statuses(order.id);
     check("now every ticket is CANCELLED", final.every((s) => s === "CANCELLED"), final.join(","));
@@ -183,8 +184,8 @@ async function main() {
   // ── Our own refund path must not be undone ────────────────────────────
   console.log("\n\x1b[1mRefund already recorded here\x1b[0m");
   {
-    const intentId = `pi_test_ours_${SUFFIX}`;
-    const { order } = await paidOrder(1, 20000, intentId);
+    const gatewayRef = `cmi_test_ours_${SUFFIX}`;
+    const { order } = await paidOrder(1, 20000, gatewayRef);
     // Simulate refundOrder having already settled it.
     await prisma.order.update({
       where: { id: order.id },
@@ -192,17 +193,17 @@ async function main() {
     });
     await prisma.ticket.updateMany({ where: { orderId: order.id }, data: { status: "CANCELLED" } });
 
-    const result = await reconcileExternalRefund(intentId, 20000);
-    check("the matching webhook changes nothing", result === null, JSON.stringify(result));
+    const result = await reconcileExternalRefund(gatewayRef, 20000);
+    check("a matching reconciliation changes nothing", result === null, JSON.stringify(result));
     const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
     check("our own refund reference survives", reloaded.refundRef === "re_ours", reloaded.refundRef ?? "null");
   }
 
   // ── An unknown intent is ignored, not an error ────────────────────────
-  console.log("\n\x1b[1mUnknown payment intent\x1b[0m");
+  console.log("\n\x1b[1mUnknown transaction\x1b[0m");
   {
     const result = await reconcileExternalRefund(`pi_does_not_exist_${SUFFIX}`, 10000);
-    check("an unknown intent reconciles to null", result === null, JSON.stringify(result));
+    check("an unknown transaction reconciles to null", result === null, JSON.stringify(result));
   }
 
   // ── Cleanup ───────────────────────────────────────────────────────────

@@ -12,9 +12,9 @@ import type { Event, Order, Ticket, TicketTier } from "@prisma/client";
 /**
  * Settlement — the one place a successful payment turns into tickets.
  *
- * Both paths funnel through here so they can never drift: the Stripe webhook
+ * Both paths funnel through here so they can never drift: the CMI callback
  * (real mode) and the direct confirm (mock mode). IDEMPOTENT by necessity —
- * Stripe retries deliveries and can reorder them, so applying the same outcome
+ * CMI retries a callback it considers unanswered, so applying the same outcome
  * twice must be a no-op rather than minting a second set of tickets.
  */
 export async function settleOrder(orderId: string, payment: {

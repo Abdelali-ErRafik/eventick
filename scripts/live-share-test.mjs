@@ -117,11 +117,18 @@ async function buyTickets(orgToken, custToken, qty, slugSuffix) {
 }
 
 /** Present a ticket at the gate exactly as a camera would: the signed payload
- * the server itself generated, through the strict `camera` source. */
-async function scanSigned(orgToken, ticketId) {
-  const detail = await call("GET", `/api/tickets/${ticketId}`);
+ * the server itself generated, through the strict `camera` source.
+ *
+ * Reading the ticket takes the HOLDER's credential, not the organiser's:
+ * /api/tickets/:id serves the signed QR, so it is gated on proof of purchase
+ * rather than on knowing the id. `owner` is either a session token (the
+ * buyer) or the ticket's own access token (a guest recipient), which is why
+ * both forms are accepted here. */
+async function scanSigned(orgToken, ticketId, owner = {}) {
+  const query = owner.key ? `?k=${encodeURIComponent(owner.key)}` : "";
+  const detail = await call("GET", `/api/tickets/${ticketId}${query}`, { token: owner.token });
   const payload = detail.data.qrPayload;
-  if (!payload) throw new Error(`no qrPayload for ticket ${ticketId}`);
+  if (!payload) throw new Error(`no qrPayload for ticket ${ticketId} (HTTP ${detail.status})`);
   return call("POST", "/api/gate/check-in", {
     token: orgToken,
     body: { ref: payload, source: "camera" },
@@ -175,14 +182,14 @@ async function main() {
     );
 
     // THE test. Old QR must be refused; new QR must be admitted.
-    const oldScan = await scanSigned(orgToken, senderTicket.id);
+    const oldScan = await scanSigned(orgToken, senderTicket.id, { token: custToken });
     check(
       "sender's QR is REFUSED at the gate (moved)",
       oldScan.status === 409 && oldScan.data.result === "moved",
       `HTTP ${oldScan.status} result=${oldScan.data.result}`,
     );
 
-    const newScan = await scanSigned(orgToken, newTicketId);
+    const newScan = await scanSigned(orgToken, newTicketId, { key: claim.data.accessToken });
     check(
       "recipient's QR is ADMITTED at the gate",
       newScan.status === 200 && newScan.data.result === "ok",
@@ -246,7 +253,7 @@ async function main() {
     });
     check("a revoked link cannot be claimed", afterRevoke.status === 410, `HTTP ${afterRevoke.status}`);
 
-    const stillValid = await scanSigned(orgToken, first.id);
+    const stillValid = await scanSigned(orgToken, first.id, { token: custToken });
     check(
       "revoking leaves the sender's ticket working",
       stillValid.status === 200 && stillValid.data.result === "ok",
@@ -258,7 +265,7 @@ async function main() {
     check("cannot share a ticket you don't hold", notYours.status === 403, `HTTP ${notYours.status}`);
 
     // A used ticket cannot be given away.
-    await scanSigned(orgToken, second.id);
+    await scanSigned(orgToken, second.id, { token: custToken });
     const usedShare = await call("POST", "/api/share", { token: custToken, body: { ticketId: second.id } });
     check("cannot share a used ticket", usedShare.status === 409, `HTTP ${usedShare.status}`);
   }

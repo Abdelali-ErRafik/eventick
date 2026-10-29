@@ -1,6 +1,6 @@
 // Buyer-field validation. Card validation (Luhn, expiry, formatting) lived
-// here when the app collected card numbers itself; Stripe Elements owns that
-// now, so only the contact fields remain.
+// here when the app collected card numbers itself; CMI's hosted page owns
+// that now, so only the contact fields remain.
 //
 // Must stay in step with backend/src/lib/payment-sim.ts — the server rejects
 // what this accepts, so a looser rule here just produces a confusing 400.

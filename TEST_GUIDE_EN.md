@@ -44,7 +44,14 @@ curl --url 'http://localhost:4100/api/events'
 
 Payments run in **mock** mode — **no card is ever charged**. Checkout settles instantly and issues real tickets.
 
-> If you ever switch on Stripe, the demo card is `4242 4242 4242 4242` with 3-D Secure code `482913`.
+> **Switching on the real gateway (CMI).** Put `CMI_CLIENT_ID` and `CMI_STORE_KEY` in `backend/.env` and restart. Checkout then shows a *"Payer … sur CMI"* button that posts a signed form to CMI's own card page instead of settling on the spot.
+>
+> Two things to know before trying it:
+>
+> - The **store key is not emailed to you.** You set it yourself in the CMI back office under *Administration → Changer les clés du magasin*, and `CMI_STORE_KEY` must match it exactly — otherwise CMI refuses every payment with `INVALID_HASH`.
+> - **CMI calls back from its own servers**, so it cannot reach `localhost`. Without a public callback URL the payment succeeds at CMI and **no ticket is ever issued**. Expose the API with a tunnel (ngrok, cloudflared) and set `CMI_CALLBACK_URL` to the public address.
+>
+> Test cards come with the CMI integration kit; they are not reproduced here.
 
 ---
 
@@ -638,7 +645,8 @@ cd backend && npm run test:live && npm run test:live:authz && npm run test:live:
 
 # ⚠️ Still open (not failures of the checks above)
 
-- **Payments are simulated.** No card is ever charged; there are no CMI or Stripe credentials.
+- **Payments default to simulated.** With no `CMI_CLIENT_ID`/`CMI_STORE_KEY` no card is charged. The CMI integration itself is complete — signed redirect, hash-verified callback, replay-safe settlement — but it needs real merchant credentials to exercise, and production refuses to boot without them.
+- **Refunds do not move money.** CMI has no refund API: `/organiser/orders/:id/refund` records the refund, voids the tickets and emails the buyer, but someone must then reverse the transaction by hand in the CMI back office. Use `/organiser/orders/:id/reconcile-refund` to sync the books after a reversal made there, since CMI notifies us of nothing.
 - **The commission is not real.** On **Finance**, the organiser picks their own plan and the fee is computed in the browser — nothing is stored and nothing is charged. The backend has no concept of a plan.
 - **There are no payouts.** The Pilotage board shows a "Reversement" step, but there is no bank detail, no payout run and no record of a transfer.
 - **No audit trail.** Role changes, permission grants, refunds and deletions are not recorded anywhere. Only organiser-application decisions keep a record.

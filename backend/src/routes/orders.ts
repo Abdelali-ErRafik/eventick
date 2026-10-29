@@ -8,7 +8,7 @@ import { quotePromo, type PromoCandidate } from "../domain/pricing.js";
 import { phoneOk, makePaymentRef } from "../lib/payment-sim.js";
 import { publicOrder, publicOrderWithContext } from "../lib/serialize.js";
 import { remainingByTier } from "../lib/availability.js";
-import { getStripe, isMockPayments, CURRENCY } from "../lib/stripe.js";
+import { buildPaymentRequest, cmiConfig, cmiUrls, isMockPayments } from "../lib/cmi.js";
 import { settleOrder } from "../lib/settle.js";
 import { withSerializableRetry } from "../lib/serializable.js";
 import { markClaimed, offerFreedSeats, resolveClaim } from "../lib/waitlist.js";
@@ -39,7 +39,7 @@ const holdSchema = z.object({
  *
  * This replaces the old one-shot /checkout, which took a raw card number over
  * the wire and marked the order PAID in the same request. No card data reaches
- * this API any more: step 2 hands the card straight to Stripe.
+ * this API any more: step 2 sends the buyer to CMI's own card page.
  */
 ordersRouter.post(
   "/hold",
@@ -207,15 +207,21 @@ const paySchema = z.object({
   phone: z.string().optional(),
   /** Waitlist entry this order came from, so paying it closes the offer. */
   claimEntryId: z.string().optional(),
+  /** Which language CMI should render its hosted card page in. */
+  locale: z.enum(["fr", "en", "ar"]).optional(),
 });
 
 /**
- * Step 2 — pay. Creates a Stripe PaymentIntent for the held order and returns
- * its client secret; the browser confirms it with Stripe directly, so the card
- * never touches this server. 3-D Secure is handled by Stripe's own challenge.
+ * Step 2 — pay. Returns a signed form that sends the browser to CMI's hosted
+ * 3-D Secure page, where the card is collected. The number never touches this
+ * server, and the hash stops a buyer editing the amount on the way.
  *
- * In mock mode (no STRIPE_SECRET_KEY) there is no gateway, so the order is
- * settled on the spot and the response says so.
+ * Nothing here marks the order paid: that happens only when CMI calls our
+ * webhook back (routes/webhooks.ts), because the browser cannot be trusted to
+ * report its own payment and may never return at all.
+ *
+ * In mock mode (no CMI_CLIENT_ID) there is no gateway, so the order is settled
+ * on the spot and the response says so.
  */
 ordersRouter.post(
   "/:id/pay",
@@ -258,23 +264,29 @@ ordersRouter.post(
       return res.json({ mode: "mock", settled: true });
     }
 
-    const stripe = getStripe()!;
-    const intent = await stripe.paymentIntents.create(
+    // The waitlist offer closes now rather than after the callback: the
+    // callback has no way to know which entry this order came from, and the
+    // offer must not stay claimable while the buyer is at the gateway.
+    if (body.claimEntryId) await markClaimed(body.claimEntryId);
+
+    const config = cmiConfig()!;
+    const urls = cmiUrls(order.id, order.accessToken);
+    const request = buildPaymentRequest(
       {
-        amount: order.totalCents,
-        currency: CURRENCY,
-        metadata: { orderId: order.id, eventSlug: order.event.slug },
-        receipt_email: order.email,
-        automatic_payment_methods: { enabled: true },
+        // CMI echoes `oid` back verbatim, and it is how the callback finds the
+        // order again — so it is the order id, nothing composite.
+        reference: order.id,
+        totalCents: order.totalCents,
+        email: order.email,
+        holderName: order.holderName,
+        phone: order.phone,
+        locale: body.locale,
+        ...urls,
       },
-      // Idempotency: a double-clicked Pay button reuses the same intent
-      // instead of creating a second charge for the same order.
-      { idempotencyKey: `order_${order.id}` },
+      config,
     );
 
-    await prisma.order.update({ where: { id: order.id }, data: { paymentIntentId: intent.id } });
-
-    res.json({ mode: "stripe", clientSecret: intent.client_secret, publishableKey: process.env.STRIPE_PUBLISHABLE_KEY });
+    res.json({ mode: "cmi", action: request.action, fields: request.fields });
   }),
 );
 

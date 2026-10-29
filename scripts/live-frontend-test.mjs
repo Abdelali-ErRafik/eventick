@@ -292,8 +292,9 @@ async function main() {
     const pay = await check("POST /orders/:id/pay settles the order", "POST", `/orders/${orderId}/pay`, 200, {
       token: tokens.customer,
       body: { holderName: "Client Interface", email: "client@eventick.ma", phone: "0612345678" },
-      // Checkout branches on mode: mock settles now, stripe needs the secret.
-      shape: (d) => d?.mode === "mock" || typeof d?.clientSecret === "string",
+      // Checkout branches on mode: mock settles now, cmi returns a signed
+      // form for the browser to POST to the gateway.
+      shape: (d) => d?.mode === "mock" || (d?.mode === "cmi" && typeof d?.action === "string"),
     });
     record("mock mode settles without a gateway", pay.data?.settled === true, `mode=${pay.data?.mode}`);
 
