@@ -29,6 +29,14 @@ export function publicEvent(event: EventWithTiers, remainingByTier: Record<strin
     ageAr: event.ageAr,
     popularity: event.popularity,
     instant: event.instant,
+    // The sales rules. A buyer screen needs maxPerBuyer to say "4 maximum"
+    // before the hold is refused, and allowResale decides whether the resell
+    // action exists at all — both were stored but never sent, so the only way
+    // to read them back was the organiser's settings endpoint.
+    maxPerBuyer: event.maxPerBuyer,
+    allowResale: event.allowResale,
+    cancelledAt: event.cancelledAt?.toISOString() ?? null,
+    cancelReason: event.cancelReason,
     tiers: event.tiers.map((tier) => ({
       id: tier.id,
       nameFr: tier.nameFr,
@@ -42,6 +50,11 @@ export function publicEvent(event: EventWithTiers, remainingByTier: Record<strin
       recommended: tier.recommended,
       saveCents: tier.saveCents,
       perks: tier.perks,
+      // Null on either side means unbounded on that side. A buyer screen uses
+      // these to say "on sale from 1 November" rather than showing a tier
+      // whose only explanation for refusing is an error.
+      salesStartAt: tier.salesStartAt?.toISOString() ?? null,
+      salesEndAt: tier.salesEndAt?.toISOString() ?? null,
       zoneFr: tier.zoneFr,
       zoneAr: tier.zoneAr,
       gateFr: tier.gateFr,
