@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Route, Routes } from "react-router-dom";
-import { CalendarDays, KeyRound, LayoutDashboard, LayoutGrid, QrCode, ReceiptText, ShieldCheck, Tags, Wallet } from "lucide-react";
+import { Activity, CalendarDays, KeyRound, LayoutDashboard, LayoutGrid, QrCode, ReceiptText, ShieldCheck, Tags, Wallet } from "lucide-react";
 import { Protected } from "../../components/Protected";
 import { useAuth } from "../../AuthContext";
 import { api } from "../../api";
@@ -17,6 +17,7 @@ import Offers from "./Offers";
 import Placements from "./Placements";
 import Users from "./Users";
 import Permissions from "./Permissions";
+import Platform from "./Platform";
 
 const ic = (Icon) => <Icon size={19} strokeWidth={2} aria-hidden />;
 
@@ -45,14 +46,6 @@ function ProInner() {
     };
   }, []);
 
-  // The Administration group only appears for whoever holds users.manage --
-  // this is the actual fix for "ORGANISER and ADMIN see the same pages":
-  // every other section here is shown to both, so a distinct capability
-  // needed its own group, not a new item folded into an existing one.
-  //
-  // Gated on the permission rather than the role so that granting
-  // users.manage to ORGANISER from the permissions screen reveals this item
-  // without a code change -- which is the whole point of the table.
   // Each item names the capability its screen needs, and filters itself out
   // when the viewer lacks it. The backend enforces the same list per route
   // (see organiser.ts), so without this an admin revoking finance.view would
@@ -69,6 +62,7 @@ function ProInner() {
     { group: t.grpCatalogue, to: "/pro/offers", label: t.offers, icon: ic(Tags), permission: "promo.manage" },
     { group: t.grpOperations, to: "/pro/gate", label: t.gate, icon: ic(QrCode), permission: "gate.checkin" },
     { group: t.grpFinances, to: "/pro/finance", label: t.finance, icon: ic(Wallet), permission: "finance.view" },
+    { group: t.grpAdmin, to: "/pro/platform", label: t.platform, icon: ic(Activity), permission: "scope.any" },
     { group: t.grpAdmin, to: "/pro/users", label: t.team, icon: ic(ShieldCheck), permission: "users.manage" },
     { group: t.grpAdmin, to: "/pro/permissions", label: t.permissions, icon: ic(KeyRound), permission: "users.manage" },
   ].filter((item) => !item.permission || can(item.permission));
@@ -126,6 +120,14 @@ function ProInner() {
           element={
             <Protected permission="promo.manage">
               <Offers />
+            </Protected>
+          }
+        />
+        <Route
+          path="platform"
+          element={
+            <Protected permission="scope.any">
+              <Platform />
             </Protected>
           }
         />

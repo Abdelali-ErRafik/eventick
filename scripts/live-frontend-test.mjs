@@ -164,6 +164,7 @@ async function main() {
     // still serve them on a cold load -- a 404 here would mean an admin
     // reloading the page lands on nothing.
     "/pro/users",
+    "/pro/platform",
     "/pro/permissions",
     "/aide",
     "/legal",
@@ -314,6 +315,72 @@ async function main() {
     });
     await check("DELETE /orders/hold/:id releases an abandoned cart", "DELETE", `/orders/hold/${second.data.order.id}`, 204, {
       token: tokens.customer,
+    });
+  }
+
+  // ── Platform.jsx ──────────────────────────────────────────────────────
+  setGroup("PLATFORM  Platform.jsx");
+  {
+    // An admin's Pilotage was an ORGANISER dashboard with bigger numbers:
+    // the same tiles, summed across everyone because scope.any widens the
+    // query. It never answered how many organisers exist, who is waiting
+    // for approval, or whether refunds are climbing.
+    const stats = await check("GET /platform/stats fills the console", "GET", "/platform/stats", 200, {
+      token: tokens.admin,
+      // Every field the screen reads. A 200 with a missing branch renders
+      // "undefined MAD", which is worse than an error.
+      shape: (d) =>
+        typeof d?.users?.total === "number" &&
+        typeof d?.users?.organisers === "number" &&
+        typeof d?.pendingApplications === "number" &&
+        typeof d?.events?.published === "number" &&
+        typeof d?.orders?.paid === "number" &&
+        typeof d?.revenue?.grossCents === "number" &&
+        typeof d?.revenue?.netCents === "number" &&
+        typeof d?.revenue?.refundRateBp === "number" &&
+        typeof d?.revenue?.thisWeekCents === "number" &&
+        typeof d?.revenue?.prevWeekCents === "number",
+    });
+    // net = gross - refunded, or the two tiles would contradict each other
+    // on screen.
+    record(
+      "net is gross minus refunds",
+      stats.data.revenue.netCents === stats.data.revenue.grossCents - stats.data.revenue.refundedCents,
+      `${stats.data.revenue.netCents}`,
+    );
+
+    const sellers = await check("GET /platform/organisers ranks who sells", "GET", "/platform/organisers", 200, {
+      token: tokens.admin,
+      shape: (d) =>
+        Array.isArray(d?.organisers) &&
+        d.organisers.every(
+          (o) => typeof o.grossCents === "number" && typeof o.events === "number" && typeof o.role === "string",
+        ),
+    });
+    // Ranked by volume, so the list is useful without being re-sorted.
+    const gross = (sellers.data?.organisers ?? []).map((o) => o.grossCents);
+    record(
+      "ranked by gross, highest first",
+      gross.every((v, i) => i === 0 || gross[i - 1] >= v),
+      gross.join(" >= "),
+    );
+    // Selected by "holds the role OR owns events". Filtering on role alone
+    // reported 3 events while the platform had 17 — the rest belong to the
+    // admin account, which runs house events.
+    const listed = (sellers.data?.organisers ?? []).reduce((sum, o) => sum + o.events, 0);
+    const published = stats.data.events.published + stats.data.events.hidden + stats.data.events.draft;
+    record("every event has a seller on the list", listed >= published, `${listed} listed / ${published} events`);
+
+    // Platform money across every organiser, so it needs both "may act
+    // beyond your own rows" and "may see revenue" — not users.manage,
+    // which is about editing accounts.
+    await check("an ORGANISER cannot read platform stats", "GET", "/platform/stats", 403, {
+      token: tokens.organiser,
+    });
+    await check("a CUSTOMER cannot either", "GET", "/platform/stats", 403, { token: tokens.customer });
+    await check("anonymous is refused", "GET", "/platform/stats", 401);
+    await check("the seller list is just as closed", "GET", "/platform/organisers", 403, {
+      token: tokens.organiser,
     });
   }
 
