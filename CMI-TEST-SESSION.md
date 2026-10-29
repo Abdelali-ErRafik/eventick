@@ -1,136 +1,118 @@
-# CMI test session — live right now
+# CMI test session — live and verified
 
-Everything is configured and running. **One step is yours** (step 1), because
-CMI does not issue the store key — you set it.
+The admin's credentials are in. **No back-office step is needed**: the key
+below is already set for this merchant, which is why it verifies.
 
----
-
-## ⚠️ Step 1 — set the store key in the CMI back office
-
-This is the only blocker. The onboarding email says so explicitly:
-*"Vous êtes appelés à renseigner la clé à travers votre espace back office."*
-
-1. Open **https://testpayment.cmi.co.ma/cmi/report**
-2. Merchant **600001388** · user **mtzon_a** · password **Mtzon_a2020**
-   *(it will force a password change on first login)*
-3. Go to **Administration → Changer les clés du magasin**
-4. Set the key to exactly:
-
-```
-Eventick2026Cmi
-```
-
-That value is already in `backend/.env`. If you prefer a different key, change
-it in **both** places — they must match character for character, or CMI
-rejects every payment with `INVALID_HASH`, which looks like a code bug.
+> ⚠️ This is a **different merchant** from the MTZON account in the onboarding
+> email (`600001388`). These are Storeino's shared test credentials, and the
+> key is already registered against them.
 
 ---
 
-## What is already set up
+## Live right now
 
 | Piece | Value |
 |---|---|
-| Merchant id | `600001388` |
+| Merchant id | `600002996` |
+| Store key | `M1234567` |
 | Gateway | `https://testpayment.cmi.co.ma/fim/est3Dgate` |
-| Store key (in `.env`) | `Eventick2026Cmi` |
-| Public callback | `https://circumstances-bean-league-innovative.trycloudflare.com/api/webhooks/cmi` |
+| Public callback | see `CMI_CALLBACK_URL` in `backend/.env` |
 | Backend | `http://localhost:4100` — CMI mode, **not** mock |
 | Frontend | `http://localhost:3100` |
 
-Verified: the callback URL is reachable from the public internet, and an
-unsigned POST to it is correctly refused with `FAILURE`.
+**Verified end to end through the public tunnel — 19 checks, all passing:**
 
-> ⚠️ The tunnel hostname **changes every time cloudflared restarts**. If the
-> callback stops arriving, that is the first thing to check — see *Restarting
-> the tunnel* below.
+- the form is signed with `M1234567` and the hash recomputes independently
+- amount `850.00` in MAD units, `TranType: Auth`, `currency: 504`
+- an **unsigned** approval → refused
+- an amount **tampered after signing** → refused
+- a hash signed with the **wrong key** → refused
+- after three forgery attempts: still `PENDING`, zero tickets
+- a genuine approval → `ACTION=POSTAUTH`, order `PAID`, ticket issued, CMI's
+  `TransId` stored, card metadata captured, commission recorded
+- a **replay** → accepts the money, issues **no second ticket**
+- a **decline** → refused, buyer can retry while the hold lasts
 
 ---
 
-## Step 2 — buy a ticket in the browser
+## Buy a ticket in the browser
 
 1. Open **http://localhost:3100**
-2. Pick an event → choose a tier → **Réserver**
-3. Fill in name, email, phone (`0612345678` works) → submit
-4. You now see **"Payer … sur CMI"** instead of instant settlement
+2. Pick an event → a tier → **Réserver**
+3. Fill in Nom complet, E-mail, Téléphone (`0612345678` works) → submit
+4. Click **"Payer … sur CMI"**
 
-   *(This is the deliberate design: an auto-submitting page flashes and jumps
-   exactly when someone is about to type a card number.)*
+   *Not an auto-submit, on purpose: a page that jumps on its own looks like a
+   hijack exactly when someone is about to type a card number.*
 
-5. Click it. You land on **CMI's own 3-D Secure page** — a different domain,
-   their branding. Your card number never touches Eventick.
+5. You land on **CMI's own 3-D Secure page** — their domain, their branding.
+   Your card number never touches Eventick.
 6. Pay with a test card from the **certification-test file inside the
    integration kit** (download auth `kitmtc` / `AK16M9`). The cards are not in
    the email.
-7. You return to `/confirmation/<order-id>` and should see your ticket.
+7. You return to `/confirmation/<order-id>` with your ticket.
 
----
-
-## Step 3 — what to verify
+### What to verify
 
 | Where | What should be true |
 |---|---|
-| The CMI page | A different domain, their branding, your card typed there |
-| After paying | You land on the confirmation page with a ticket |
-| `/billets` | The ticket is listed, with a QR |
+| The CMI page | A different domain, their branding |
+| After paying | Confirmation page, with a ticket |
+| `/billets` | The ticket, with a QR |
 | Pro → Réservations | The order reads **PAID** |
-| Pro → Finance | Revenue went up, and so did the commission |
+| Pro → Finance | Revenue up, and commission with it |
 
-**The callback is what issues the ticket.** If you land on the confirmation
-page but see no ticket, the payment succeeded at CMI and the callback did not
-arrive — check the tunnel.
+**The callback is what issues the ticket.** Landing on the confirmation page
+with no ticket means the payment succeeded at CMI and the callback never
+arrived — check the tunnel.
 
 ---
 
-## Watching it happen
+## Watching it land
 
 ```bash
-# The callback arriving, and what the server decided
 tail -f "C:/Users/abdel/AppData/Local/Temp/claude/c--Users-abdel-OneDrive-Desktop-Storeino-Eventick/67468aa1-7949-4801-94d7-279aa4ed8da3/scratchpad/backend.log" | grep -i cmi
 ```
 
-What you want to see: `CMI payment settled`.
-
-What a key mismatch looks like: `CMI callback REJECTED — hash mismatch`.
-That means the back-office key and `.env` disagree.
+`CMI payment settled` — worked.
+`CMI callback REJECTED — hash mismatch` — the key and `.env` disagree.
 
 ---
 
-## Restarting the tunnel
+## If the tunnel dies
 
-The quick tunnel has no uptime guarantee and gets a new hostname each time.
+The quick tunnel has no uptime guarantee and takes a **new hostname every
+restart** — it already died once during this session.
 
 ```bash
 cd "C:/Users/abdel/AppData/Local/Temp/claude/c--Users-abdel-OneDrive-Desktop-Storeino-Eventick/67468aa1-7949-4801-94d7-279aa4ed8da3/scratchpad/tools"
-./cloudflared.exe tunnel --url http://localhost:4100 --no-autoupdate
+./cloudflared.exe tunnel --url http://localhost:4100 --no-autoupdate --edge-ip-version 4
 ```
 
-Take the new `https://…trycloudflare.com` URL, put it in `CMI_CALLBACK_URL` in
-`backend/.env`, and **restart the backend** — `tsx watch` only watches `src/`,
-so an `.env` change needs a restart.
+`--edge-ip-version 4` matters: without it, registration timed out here.
+
+Put the new `https://…trycloudflare.com` URL in `CMI_CALLBACK_URL` in
+`backend/.env` and **restart the backend** — `tsx watch` only watches `src/`.
 
 ---
 
-## ⚠️ While CMI is live, most test suites cannot pass
+## ⚠️ While CMI is live, most suites cannot pass
 
-This is expected, not a defect. With CMI configured, `POST /orders/:id/pay`
-returns a **redirect form** instead of settling the order — so every suite
-that buys a ticket and expects an instant ticket stops partway:
+Expected, not a defect. `POST /orders/:id/pay` returns a **redirect form**
+instead of settling, so anything that buys a ticket stops partway:
 
 | Suite | In CMI mode |
 |---|---|
 | `test:live:cmi` | **passes** — it signs its own callbacks |
 | `vitest` | **passes** — pure logic, no gateway |
-| `test:live:orders`, `money`, `share`, `coverage`, `refund`, `frontend` | stop at the first purchase |
+| `orders`, `money`, `share`, `coverage`, `refund`, `ticketing`, `frontend` | stop at the first purchase |
 
-So: **test CMI in the browser, then switch back to mock mode to run the
-suites.** Do not read a `harness error` in CMI mode as a regression.
+Test CMI in the browser, then switch back to mock mode for the suites.
 
 ## Going back to mock mode
 
-The other tests and the 15 guide checks expect instant settlement:
-
 ```bash
 cd backend
-cp .env.before-cmi .env   # the pre-CMI file, saved before any changes
+cp .env.before-cmi .env   # saved before any CMI change
 # then restart the backend
 ```
