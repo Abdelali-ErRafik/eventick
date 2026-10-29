@@ -8,7 +8,7 @@ import { api, money, uploadImage } from "../api";
 import { categoryLabel, useI18n } from "../i18n";
 import { CATEGORIES, CITIES } from "../utils";
 import { parseBrief, EXAMPLE_BRIEF } from "../strategy";
-import { Button, Card, CheckOption, Container, DateField, Dropdown, EmptyState, Field, Input, Notice, SectionHeader, Stat, Textarea, TimeField, triggerControlClass } from "../ui";
+import { Button, Card, CheckOption, Container, DateField, Dropdown, EmptyState, Field, Input, Notice, SalesWindow, salesWindowAt, SectionHeader, Stat, Textarea, TimeField, triggerControlClass } from "../ui";
 
 const COVERS = [
   "/events/mawazine.jpg",
@@ -42,84 +42,6 @@ function FormSection({ title, hint, children }) {
       {hint ? <p className="mt-0.5 text-sm text-muted">{hint}</p> : null}
       <div className="mt-4 grid gap-3 md:grid-cols-2">{children}</div>
     </section>
-  );
-}
-
-/**
- * An optional "on sale from … until …" pair for one ticket tier.
- *
- * Both bounds are genuinely optional and independent: opening alone schedules
- * a drop, closing alone sets a deadline, neither means on sale for as long as
- * the event is. So the time pickers stay disabled until a date is chosen —
- * a time with no date would read as a bound that is silently not sent — and
- * clearing the date is how you remove the bound.
- */
-function SalesWindow({
-  title,
-  hint,
-  locale,
-  t,
-  openDate,
-  openTime,
-  closeDate,
-  closeTime,
-  onOpenDate,
-  onOpenTime,
-  onCloseDate,
-  onCloseTime,
-}) {
-  return (
-    <div className="rounded-control border border-line/10 bg-paper/60 p-3">
-      <p className="text-[13px] font-semibold text-ink">{title}</p>
-      {hint ? <p className="mt-0.5 text-xs text-muted">{hint}</p> : null}
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <Field label={t("salesOpensAt")}>
-          {({ id, describedBy }) => (
-            <div className="flex gap-2">
-              <div className="min-w-0 flex-1">
-                <DateField id={id} describedBy={describedBy} locale={locale} value={openDate} onChange={onOpenDate} />
-              </div>
-              <div className="w-28 shrink-0">
-                <TimeField value={openTime} onChange={onOpenTime} disabled={!openDate} />
-              </div>
-            </div>
-          )}
-        </Field>
-        <Field label={t("salesClosesAt")}>
-          {({ id, describedBy }) => (
-            <div className="flex gap-2">
-              <div className="min-w-0 flex-1">
-                <DateField
-                  id={id}
-                  describedBy={describedBy}
-                  locale={locale}
-                  value={closeDate}
-                  // Stops the pair being set to a window the organiser would
-                  // only find out was invalid on publish.
-                  min={openDate || undefined}
-                  onChange={onCloseDate}
-                />
-              </div>
-              <div className="w-28 shrink-0">
-                <TimeField value={closeTime} onChange={onCloseTime} disabled={!closeDate} />
-              </div>
-            </div>
-          )}
-        </Field>
-      </div>
-      {openDate || closeDate ? (
-        <button
-          type="button"
-          className="mt-2 text-xs font-semibold text-primary hover:underline"
-          onClick={() => {
-            onOpenDate("");
-            onCloseDate("");
-          }}
-        >
-          {t("reset")}
-        </button>
-      ) : null}
-    </div>
   );
 }
 
@@ -281,19 +203,6 @@ function OrganiserInner() {
       const slug = `${slugify(title)}-${uid().toLowerCase()}`;
       const baseName = tierName.trim() || "Billet";
       const earlyN = earlyPct > 0 && earlyCount > 0 ? Math.min(earlyCount, Math.max(stock - 1, 0)) : 0;
-      /*
-       * A date+time pair -> the ISO string the tier schema accepts, or null
-       * when no date was picked.
-       *
-       * The "Z" is required: the tier window is `z.string().datetime()`,
-       * which takes UTC only — a bare "2026-12-20T09:00:00" is a 400, and an
-       * offset like "+01:00" is too. Treating the typed wall-clock as UTC is
-       * also what keeps the window comparable to the event's own `start`,
-       * which this form already sends naive for Postgres to read as UTC.
-       * Converting to a real Morocco offset here would put the window an
-       * hour out from the event time shown right above it.
-       */
-      const windowAt = (date, time) => (date ? `${date}T${time || "00:00"}:00Z` : null);
       const tiers = [];
       if (earlyN > 0) {
         tiers.push({
@@ -306,8 +215,8 @@ function OrganiserInner() {
           // Early-bird is a cheaper slice of the same general access, so it
           // opens and closes with the base tier rather than having a window
           // of its own to keep in sync.
-          salesStartAt: windowAt(baseOpenDate, baseOpenTime),
-          salesEndAt: windowAt(baseCloseDate, baseCloseTime),
+          salesStartAt: salesWindowAt(baseOpenDate, baseOpenTime),
+          salesEndAt: salesWindowAt(baseCloseDate, baseCloseTime),
           zoneFr: "Accès général",
           zoneAr: "ولوج عام",
           gateFr: "Entrée",
@@ -321,8 +230,8 @@ function OrganiserInner() {
         blurbAr: "تذكرة اسمية ورمز عند الدخول.",
         priceCents: Math.round(price * 100),
         capacity: stock - earlyN,
-        salesStartAt: windowAt(baseOpenDate, baseOpenTime),
-        salesEndAt: windowAt(baseCloseDate, baseCloseTime),
+        salesStartAt: salesWindowAt(baseOpenDate, baseOpenTime),
+        salesEndAt: salesWindowAt(baseCloseDate, baseCloseTime),
         zoneFr: "Accès général",
         zoneAr: "ولوج عام",
         gateFr: "Entrée",
@@ -336,8 +245,8 @@ function OrganiserInner() {
           blurbAr: "دخول بأولوية.",
           priceCents: Math.round(vipPrice * 100),
           capacity: vipStock,
-          salesStartAt: windowAt(vipOpenDate, vipOpenTime),
-          salesEndAt: windowAt(vipCloseDate, vipCloseTime),
+          salesStartAt: salesWindowAt(vipOpenDate, vipOpenTime),
+          salesEndAt: salesWindowAt(vipCloseDate, vipCloseTime),
           perks: ["qr", "lounge"],
           zoneFr: "Carré",
           zoneAr: "المربع",
@@ -674,7 +583,7 @@ function OrganiserInner() {
                     <SalesWindow
                       title={t("salesWindowVip")}
                       locale={locale}
-                      t={t}
+                      labels={{ opens: t("salesOpensAt"), closes: t("salesClosesAt"), reset: t("reset") }}
                       openDate={vipOpenDate}
                       openTime={vipOpenTime}
                       closeDate={vipCloseDate}
@@ -713,7 +622,7 @@ function OrganiserInner() {
                   title={t("salesWindow")}
                   hint={t("salesWindowHint")}
                   locale={locale}
-                  t={t}
+                  labels={{ opens: t("salesOpensAt"), closes: t("salesClosesAt"), reset: t("reset") }}
                   openDate={baseOpenDate}
                   openTime={baseOpenTime}
                   closeDate={baseCloseDate}

@@ -7,7 +7,8 @@ import { useConfirm } from "./ConfirmContext";
 import { EventSwitcher } from "./EventSwitcher";
 import { Badge, Btn, EmptyState, IconBtn, Modal, PageHead } from "./ui";
 import { text } from "./copy";
-import { Field, Input } from "../../ui";
+import { Field, Input, SalesWindow, salesWindowAt, splitSalesWindow } from "../../ui";
+import { longDate } from "../../utils";
 
 const BLANK = {
   nameFr: "",
@@ -20,7 +21,27 @@ const BLANK = {
   capacity: 100,
   numbered: false,
   seatsPerRow: 12,
+  // The sales window, held as date+time pairs because the pickers are
+  // separate controls. Empty date = no bound on that side.
+  openDate: "",
+  openTime: "09:00",
+  closeDate: "",
+  closeTime: "23:59",
 };
+
+/**
+ * Is this zone on sale right now, and if not, why not?
+ *
+ * The same question the backend's salesState answers — reimplemented here
+ * rather than fetched, because it is a pure comparison of two timestamps
+ * against the clock and a round trip to learn it would be absurd. The window
+ * is stored UTC-naive, so the comparison is done on the raw ISO strings.
+ */
+function saleState(tier, nowIso) {
+  if (tier.salesStartAt && nowIso < tier.salesStartAt) return { open: false, reason: "not_yet", at: tier.salesStartAt };
+  if (tier.salesEndAt && nowIso >= tier.salesEndAt) return { open: false, reason: "closed", at: tier.salesEndAt };
+  return { open: true };
+}
 
 /**
  * Placements — the seating zones of an event.
@@ -77,6 +98,8 @@ export default function Placements() {
   };
 
   const openEdit = (tier) => {
+    const opens = splitSalesWindow(tier.salesStartAt, "09:00");
+    const closes = splitSalesWindow(tier.salesEndAt, "23:59");
     setForm({
       nameFr: tier.nameFr,
       nameAr: tier.nameAr,
@@ -88,6 +111,10 @@ export default function Placements() {
       capacity: tier.capacity,
       numbered: tier.numbered,
       seatsPerRow: tier.seatsPerRow ?? 12,
+      openDate: opens.date,
+      openTime: opens.time,
+      closeDate: closes.date,
+      closeTime: closes.time,
     });
     setEditing(tier);
   };
@@ -95,12 +122,27 @@ export default function Placements() {
   const save = async (e) => {
     e.preventDefault();
     if (busy) return;
+    // Named here rather than left to the server, which cannot say which of
+    // the two bounds the organiser got wrong.
+    if (form.openDate && form.closeDate && `${form.openDate}T${form.openTime}` >= `${form.closeDate}T${form.closeTime}`) {
+      toast.error(t.salesWindowInverted);
+      return;
+    }
     setBusy(true);
     try {
+      // The four picker fields are a UI shape; the API takes two timestamps.
+      // Zod would strip the extras silently, but sending them anyway invites
+      // a future `.strict()` to start rejecting saves from this screen.
+      const { openDate, openTime, closeDate, closeTime, ...rest } = form;
+      const payload = {
+        ...rest,
+        salesStartAt: salesWindowAt(openDate, openTime),
+        salesEndAt: salesWindowAt(closeDate, closeTime),
+      };
       if (editing === "new") {
-        await api.post(`/organiser/events/${slug}/tiers`, { ...form, blurbFr: form.nameFr, blurbAr: form.nameAr });
+        await api.post(`/organiser/events/${slug}/tiers`, { ...payload, blurbFr: form.nameFr, blurbAr: form.nameAr });
       } else {
-        await api.patch(`/organiser/tiers/${editing.id}`, form);
+        await api.patch(`/organiser/tiers/${editing.id}`, payload);
       }
       setEditing(null);
       load();
@@ -132,6 +174,17 @@ export default function Placements() {
   };
 
   const field = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+
+  /*
+   * One timestamp for the whole render, so every zone is judged against the
+   * same instant — and taken fresh each time the tiers are reloaded, which
+   * is what the organiser does after changing a window.
+   *
+   * The stored window is UTC-naive wall-clock, so "now" has to be expressed
+   * the same way to compare: toISOString() is UTC, which is the convention
+   * the rest of the app stores event times in.
+   */
+  const nowIso = new Date().toISOString();
 
   return (
     <div>
@@ -167,6 +220,7 @@ export default function Placements() {
               tier={tier}
               locale={locale}
               t={t}
+              nowIso={nowIso}
               onEdit={() => openEdit(tier)}
               onRemove={() => remove(tier)}
             />
@@ -269,6 +323,22 @@ export default function Placements() {
               )}
             </Field>
           ) : null}
+          <div className="sm:col-span-2">
+            <SalesWindow
+              title={t.salesWindow}
+              hint={t.salesWindowHint}
+              locale={locale}
+              labels={{ opens: t.salesOpensAt, closes: t.salesClosesAt, reset: t.reset }}
+              openDate={form.openDate}
+              openTime={form.openTime}
+              closeDate={form.closeDate}
+              closeTime={form.closeTime}
+              onOpenDate={(v) => field("openDate", v)}
+              onOpenTime={(v) => field("openTime", v)}
+              onCloseDate={(v) => field("closeDate", v)}
+              onCloseTime={(v) => field("closeTime", v)}
+            />
+          </div>
         </form>
       </Modal>
     </div>
@@ -277,7 +347,8 @@ export default function Placements() {
 
 /** One zone. Price and the jauge bar get a full row each rather than being
  * squeezed into fixed-width table cells, so the bar actually reads as a bar. */
-function ZoneCard({ tier, locale, t, onEdit, onRemove }) {
+function ZoneCard({ tier, locale, t, nowIso, onEdit, onRemove }) {
+  const sale = saleState(tier, nowIso);
   const left = tier.remaining;
   const total = tier.capacity;
   const ratio = total > 0 ? left / total : 0;
@@ -319,6 +390,21 @@ function ZoneCard({ tier, locale, t, onEdit, onRemove }) {
           <Badge tone="neutral">{t.freeSeating}</Badge>
         )}
       </div>
+
+      {/* Only shown when a window actually constrains the zone. Printing "En
+          vente" on every unconstrained zone would be noise — the useful
+          signal is the one that is NOT selling, and why. */}
+      {tier.salesStartAt || tier.salesEndAt ? (
+        <div>
+          {sale.open ? (
+            <Badge tone="success">{t.onSale}</Badge>
+          ) : (
+            <Badge tone={sale.reason === "closed" ? "danger" : "warn"}>
+              {sale.reason === "closed" ? t.salesClosed : t.notYetOnSale.replace("{d}", longDate(sale.at, locale))}
+            </Badge>
+          )}
+        </div>
+      ) : null}
 
       <div>
         <div className="mb-1.5 flex items-baseline justify-between gap-2">

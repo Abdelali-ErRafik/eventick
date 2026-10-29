@@ -17,6 +17,7 @@ export { Button, IconButton } from "./Button.jsx";
 export { Field, Input, Select, Textarea, triggerControlClass } from "./Field.jsx";
 export { Dropdown } from "./Dropdown.jsx";
 export { DateField, TimeField } from "./DateField.jsx";
+export { SalesWindow, salesWindowAt, splitSalesWindow } from "./SalesWindow.jsx";
 export { RadioOption, CheckOption } from "./Choice.jsx";
 export { RangeField } from "./RangeField.jsx";
 export { Modal } from "./Modal.jsx";

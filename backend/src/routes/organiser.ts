@@ -674,7 +674,11 @@ organiserRouter.post(
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
     const event = await requireOwnedEvent(req.user, slug);
-    const body = tierInput.parse(req.body);
+    // toTierData, not the raw body: it parses the window and refuses an
+    // inverted one. Creating straight from tierInput accepted a zone whose
+    // sales close before they open — which is silently never on sale, the
+    // exact failure the PATCH below is careful to prevent.
+    const body = toTierData(tierInput.parse(req.body));
     const tier = await prisma.ticketTier.create({ data: { ...body, eventId: event.id } });
     res.status(201).json({ tier });
   }),
