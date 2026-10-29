@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Route, Routes } from "react-router-dom";
-import { Activity, CalendarDays, KeyRound, LayoutDashboard, LayoutGrid, QrCode, ReceiptText, ScrollText, ShieldCheck, Tags, Wallet } from "lucide-react";
+import { Activity, CalendarDays, KeyRound, LayoutDashboard, LayoutGrid, MailPlus, QrCode, ReceiptText, ScrollText, ShieldCheck, Tags, Wallet } from "lucide-react";
 import { Protected } from "../../components/Protected";
 import { useAuth } from "../../AuthContext";
 import { api } from "../../api";
@@ -15,6 +15,7 @@ import Gate from "./Gate";
 import Finance from "./Finance";
 import Offers from "./Offers";
 import Placements from "./Placements";
+import Invitations from "./Invitations";
 import Users from "./Users";
 import Permissions from "./Permissions";
 import Platform from "./Platform";
@@ -60,6 +61,7 @@ function ProInner() {
     { group: t.grpPilotage, to: "/pro/orders", label: t.orders, icon: ic(ReceiptText), badge: todayCount, permission: "orders.manage" },
     { group: t.grpCatalogue, to: "/pro/events", label: t.events, icon: ic(CalendarDays), permission: "events.manage" },
     { group: t.grpCatalogue, to: "/pro/placements", label: t.placements, icon: ic(LayoutGrid), permission: "events.manage" },
+    { group: t.grpCatalogue, to: "/pro/invitations", label: t.invitations, icon: ic(MailPlus), permission: "events.manage" },
     { group: t.grpCatalogue, to: "/pro/offers", label: t.offers, icon: ic(Tags), permission: "promo.manage" },
     { group: t.grpOperations, to: "/pro/gate", label: t.gate, icon: ic(QrCode), permission: "gate.checkin" },
     { group: t.grpFinances, to: "/pro/finance", label: t.finance, icon: ic(Wallet), permission: "finance.view" },
@@ -116,6 +118,14 @@ function ProInner() {
           element={
             <Protected permission="events.manage">
               <Placements />
+            </Protected>
+          }
+        />
+        <Route
+          path="invitations"
+          element={
+            <Protected permission="events.manage">
+              <Invitations />
             </Protected>
           }
         />
