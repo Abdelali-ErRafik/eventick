@@ -12,7 +12,19 @@ import { cn } from "../utils";
  * Doing it once here means every popover in the app dismisses the way people
  * expect, and the trigger/panel relationship is announced properly.
  */
-export function Popover({ label, trigger, align = "start", width = "w-56", children, className, panelClassName }) {
+export function Popover({
+  label,
+  trigger,
+  align = "start",
+  width = "w-56",
+  children,
+  className,
+  panelClassName,
+  // DateField and TimeField already style their trigger as disabled, but
+  // without this the panel still opened on click — a control that looks
+  // unavailable and isn't.
+  disabled = false,
+}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
@@ -50,6 +62,7 @@ export function Popover({ label, trigger, align = "start", width = "w-56", child
         aria-haspopup="true"
         aria-expanded={open}
         aria-controls={open ? id : undefined}
+        disabled={disabled || undefined}
         onClick={() => setOpen((prev) => !prev)}
       >
         {typeof trigger === "function" ? trigger({ open }) : trigger}

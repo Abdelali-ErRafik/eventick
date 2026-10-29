@@ -94,6 +94,7 @@ export function DateField({ id, value, onChange, describedBy, invalid, required,
     <Popover
       className="w-full"
       width="w-[19rem]"
+      disabled={disabled}
       label={value ? dtf.format(new Date(`${value}T00:00:00Z`)) : "…"}
       trigger={({ open }) => (
         <span
@@ -188,6 +189,7 @@ export function TimeField({ id, value, onChange, describedBy, invalid, required,
     <Popover
       className="w-full"
       width="w-44"
+      disabled={disabled}
       label={value || "…"}
       trigger={({ open }) => (
         <span

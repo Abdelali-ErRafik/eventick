@@ -45,6 +45,84 @@ function FormSection({ title, hint, children }) {
   );
 }
 
+/**
+ * An optional "on sale from … until …" pair for one ticket tier.
+ *
+ * Both bounds are genuinely optional and independent: opening alone schedules
+ * a drop, closing alone sets a deadline, neither means on sale for as long as
+ * the event is. So the time pickers stay disabled until a date is chosen —
+ * a time with no date would read as a bound that is silently not sent — and
+ * clearing the date is how you remove the bound.
+ */
+function SalesWindow({
+  title,
+  hint,
+  locale,
+  t,
+  openDate,
+  openTime,
+  closeDate,
+  closeTime,
+  onOpenDate,
+  onOpenTime,
+  onCloseDate,
+  onCloseTime,
+}) {
+  return (
+    <div className="rounded-control border border-line/10 bg-paper/60 p-3">
+      <p className="text-[13px] font-semibold text-ink">{title}</p>
+      {hint ? <p className="mt-0.5 text-xs text-muted">{hint}</p> : null}
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <Field label={t("salesOpensAt")}>
+          {({ id, describedBy }) => (
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <DateField id={id} describedBy={describedBy} locale={locale} value={openDate} onChange={onOpenDate} />
+              </div>
+              <div className="w-28 shrink-0">
+                <TimeField value={openTime} onChange={onOpenTime} disabled={!openDate} />
+              </div>
+            </div>
+          )}
+        </Field>
+        <Field label={t("salesClosesAt")}>
+          {({ id, describedBy }) => (
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <DateField
+                  id={id}
+                  describedBy={describedBy}
+                  locale={locale}
+                  value={closeDate}
+                  // Stops the pair being set to a window the organiser would
+                  // only find out was invalid on publish.
+                  min={openDate || undefined}
+                  onChange={onCloseDate}
+                />
+              </div>
+              <div className="w-28 shrink-0">
+                <TimeField value={closeTime} onChange={onCloseTime} disabled={!closeDate} />
+              </div>
+            </div>
+          )}
+        </Field>
+      </div>
+      {openDate || closeDate ? (
+        <button
+          type="button"
+          className="mt-2 text-xs font-semibold text-primary hover:underline"
+          onClick={() => {
+            onOpenDate("");
+            onCloseDate("");
+          }}
+        >
+          {t("reset")}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function slugify(value) {
   return (
     value
@@ -84,6 +162,21 @@ function OrganiserInner() {
   const [vipStock, setVipStock] = useState(80);
   const [earlyPct, setEarlyPct] = useState(0);
   const [earlyCount, setEarlyCount] = useState(0);
+  // Sales rules. maxPerBuyer mirrors the schema default; 0 means no limit.
+  const [maxPerBuyer, setMaxPerBuyer] = useState(10);
+  const [allowResale, setAllowResale] = useState(false);
+  // Sales windows are per tier, and there is no tier array on this screen —
+  // the three tiers are built from scalars at publish time — so each window
+  // is its own date+time pair. Empty date = no bound, which is the default
+  // and the common case.
+  const [baseOpenDate, setBaseOpenDate] = useState("");
+  const [baseOpenTime, setBaseOpenTime] = useState("09:00");
+  const [baseCloseDate, setBaseCloseDate] = useState("");
+  const [baseCloseTime, setBaseCloseTime] = useState("23:59");
+  const [vipOpenDate, setVipOpenDate] = useState("");
+  const [vipOpenTime, setVipOpenTime] = useState("09:00");
+  const [vipCloseDate, setVipCloseDate] = useState("");
+  const [vipCloseTime, setVipCloseTime] = useState("23:59");
   const [instruction, setInstruction] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -170,12 +263,37 @@ function OrganiserInner() {
       setError(t("errName"));
       return;
     }
+    // The backend refuses an inverted window with a 400, but saying so here
+    // names which window is wrong instead of leaving the organiser to guess
+    // between the base tier's and the VIP's.
+    const inverted = (openDate, openTime, closeDate, closeTime) =>
+      openDate && closeDate && `${openDate}T${openTime}` >= `${closeDate}T${closeTime}`;
+    if (
+      inverted(baseOpenDate, baseOpenTime, baseCloseDate, baseCloseTime) ||
+      (vipOn && inverted(vipOpenDate, vipOpenTime, vipCloseDate, vipCloseTime))
+    ) {
+      setError(t("salesWindowInverted"));
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const slug = `${slugify(title)}-${uid().toLowerCase()}`;
       const baseName = tierName.trim() || "Billet";
       const earlyN = earlyPct > 0 && earlyCount > 0 ? Math.min(earlyCount, Math.max(stock - 1, 0)) : 0;
+      /*
+       * A date+time pair -> the ISO string the tier schema accepts, or null
+       * when no date was picked.
+       *
+       * The "Z" is required: the tier window is `z.string().datetime()`,
+       * which takes UTC only — a bare "2026-12-20T09:00:00" is a 400, and an
+       * offset like "+01:00" is too. Treating the typed wall-clock as UTC is
+       * also what keeps the window comparable to the event's own `start`,
+       * which this form already sends naive for Postgres to read as UTC.
+       * Converting to a real Morocco offset here would put the window an
+       * hour out from the event time shown right above it.
+       */
+      const windowAt = (date, time) => (date ? `${date}T${time || "00:00"}:00Z` : null);
       const tiers = [];
       if (earlyN > 0) {
         tiers.push({
@@ -185,6 +303,11 @@ function OrganiserInner() {
           blurbAr: `خصم ${earlyPct}% على التذاكر الأولى.`,
           priceCents: Math.max(0, Math.round(price * (1 - earlyPct / 100) * 100)),
           capacity: earlyN,
+          // Early-bird is a cheaper slice of the same general access, so it
+          // opens and closes with the base tier rather than having a window
+          // of its own to keep in sync.
+          salesStartAt: windowAt(baseOpenDate, baseOpenTime),
+          salesEndAt: windowAt(baseCloseDate, baseCloseTime),
           zoneFr: "Accès général",
           zoneAr: "ولوج عام",
           gateFr: "Entrée",
@@ -198,6 +321,8 @@ function OrganiserInner() {
         blurbAr: "تذكرة اسمية ورمز عند الدخول.",
         priceCents: Math.round(price * 100),
         capacity: stock - earlyN,
+        salesStartAt: windowAt(baseOpenDate, baseOpenTime),
+        salesEndAt: windowAt(baseCloseDate, baseCloseTime),
         zoneFr: "Accès général",
         zoneAr: "ولوج عام",
         gateFr: "Entrée",
@@ -211,6 +336,8 @@ function OrganiserInner() {
           blurbAr: "دخول بأولوية.",
           priceCents: Math.round(vipPrice * 100),
           capacity: vipStock,
+          salesStartAt: windowAt(vipOpenDate, vipOpenTime),
+          salesEndAt: windowAt(vipCloseDate, vipCloseTime),
           perks: ["qr", "lounge"],
           zoneFr: "Carré",
           zoneAr: "المربع",
@@ -238,6 +365,8 @@ function OrganiserInner() {
         aboutAr: about.trim() || title.trim(),
         ageFr: "Selon l'organisateur.",
         ageAr: "حسب المنظم.",
+        maxPerBuyer,
+        allowResale,
         tiers,
       });
       toast.success(t("published"));
@@ -541,8 +670,60 @@ function OrganiserInner() {
                       />
                     )}
                   </Field>
+                  <div className="md:col-span-2">
+                    <SalesWindow
+                      title={t("salesWindowVip")}
+                      locale={locale}
+                      t={t}
+                      openDate={vipOpenDate}
+                      openTime={vipOpenTime}
+                      closeDate={vipCloseDate}
+                      closeTime={vipCloseTime}
+                      onOpenDate={setVipOpenDate}
+                      onOpenTime={setVipOpenTime}
+                      onCloseDate={setVipCloseDate}
+                      onCloseTime={setVipCloseTime}
+                    />
+                  </div>
                 </>
               ) : null}
+            </FormSection>
+
+            <FormSection title={t("secRules")} hint={t("secRulesHint")}>
+              <Field label={t("maxPerBuyer")} hint={t("maxPerBuyerHint")}>
+                {({ id, describedBy, invalid }) => (
+                  <Input
+                    id={id}
+                    describedBy={describedBy}
+                    invalid={invalid}
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={maxPerBuyer}
+                    onChange={(e) => setMaxPerBuyer(Number(e.target.value))}
+                  />
+                )}
+              </Field>
+              <div className="md:col-span-2">
+                <CheckOption label={t("allowResale")} checked={allowResale} onChange={setAllowResale} />
+                <p className="px-2 text-xs text-muted">{t("allowResaleHint")}</p>
+              </div>
+              <div className="md:col-span-2">
+                <SalesWindow
+                  title={t("salesWindow")}
+                  hint={t("salesWindowHint")}
+                  locale={locale}
+                  t={t}
+                  openDate={baseOpenDate}
+                  openTime={baseOpenTime}
+                  closeDate={baseCloseDate}
+                  closeTime={baseCloseTime}
+                  onOpenDate={setBaseOpenDate}
+                  onOpenTime={setBaseOpenTime}
+                  onCloseDate={setBaseCloseDate}
+                  onCloseTime={setBaseCloseTime}
+                />
+              </div>
             </FormSection>
 
             <FormSection title={t("secMedia")} hint={t("secMediaHint")}>
