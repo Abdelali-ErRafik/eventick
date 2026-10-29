@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Upload } from "lucide-react";
+import { ArrowRight, CalendarPlus, LayoutDashboard, Sparkles, Ticket, Upload, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "../components/Shell";
 import { Protected } from "../components/Protected";
@@ -8,7 +8,7 @@ import { api, money, uploadImage } from "../api";
 import { categoryLabel, useI18n } from "../i18n";
 import { CATEGORIES, CITIES } from "../utils";
 import { parseBrief, EXAMPLE_BRIEF } from "../strategy";
-import { Field, Input, Select, Textarea } from "../ui";
+import { Button, Card, CheckOption, Container, EmptyState, Field, Input, Notice, SectionHeader, Select, Stat, Textarea } from "../ui";
 
 const COVERS = [
   "/events/mawazine.jpg",
@@ -24,6 +24,26 @@ const COVERS = [
   "/events/jazz.jpg",
   "/events/sacred.jpg",
 ];
+
+/** How many recent events the side column shows before deferring to /pro. */
+const SIDEBAR_LIMIT = 4;
+
+/**
+ * One labelled group of fields.
+ *
+ * The form was a single undifferentiated run of fifteen inputs, so there was
+ * no answer to "where am I" and no way to skim it. Four named groups turn it
+ * into something you can scan and come back to.
+ */
+function FormSection({ title, hint, children }) {
+  return (
+    <section className="mt-4 rounded-card border border-line/10 bg-card p-4 shadow-card md:p-6">
+      <h2 className="font-display text-lg font-bold">{title}</h2>
+      {hint ? <p className="mt-0.5 text-sm text-muted">{hint}</p> : null}
+      <div className="mt-4 grid gap-3 md:grid-cols-2">{children}</div>
+    </section>
+  );
+}
 
 function slugify(value) {
   return (
@@ -234,44 +254,74 @@ function OrganiserInner() {
     return acc;
   }, {});
 
+  // Summed across every event, not just the few shown below, so the figure
+  // does not silently disagree with the list it sits above.
+  const totals = (myOrders ?? []).reduce(
+    (acc, order) => ({ sold: acc.sold + order.ticketCount, revenue: acc.revenue + order.totalCents }),
+    { sold: 0, revenue: 0 },
+  );
+
   return (
     <Shell>
-      <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-        <p className="text-sm font-semibold text-primary">{t("proPage")}</p>
-        <h1 className="mt-1 font-display text-4xl font-extrabold">{t("orgTitle")}</h1>
-        <div className="mt-4 flex flex-wrap gap-3">
-          {/* A deliberately dark pill regardless of app theme, same as the
-              --et-stage surfaces elsewhere. */}
-          <Link to="/pro" className="inline-flex h-12 items-center rounded-full bg-stage px-5 text-sm font-semibold text-stage-fg">
+      {/* Same dark stage band as the other pages that open on a statement —
+          Confirmation, BecomeOrganiser, EventDetail's header. */}
+      <section className="bg-stage py-10 text-stage-fg md:py-12">
+        <Container className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-primary">{t("proPage")}</p>
+            <h1 className="mt-1 max-w-2xl font-display text-3xl font-extrabold md:text-4xl">{t("orgTitle")}</h1>
+            <p className="mt-3 max-w-xl text-sm text-stage-muted">{t("proLead")}</p>
+          </div>
+          <Link
+            to="/pro"
+            className="inline-flex h-11 shrink-0 items-center gap-2 rounded-full bg-stage-fg/15 px-5 text-sm font-semibold text-stage-fg backdrop-blur-sm transition hover:bg-stage-fg/25"
+          >
+            <LayoutDashboard className="size-4" />
             {locale === "ar" ? "المنصة" : "Espace Pro"}
+            <ArrowRight className="size-4 rtl:rotate-180" />
           </Link>
-          <p className="max-w-xl self-center text-sm text-muted">{t("proLead")}</p>
-        </div>
-        <p className="mt-2 max-w-2xl text-sm text-muted">{t("payout")}</p>
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <form className="rounded-card border border-line/10 bg-card p-4 shadow-card md:p-6" onSubmit={publish}>
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-2xl font-bold">{t("formTitle")}</h2>
-              <button type="button" className="text-sm font-semibold text-primary" onClick={fillDemo}>
-                {t("fillDemo")}
-              </button>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <Field label={t("briefLabel")} className="md:col-span-2">
-                {({ id, describedBy, invalid }) => (
-                  <Textarea
-                    id={id}
-                    describedBy={describedBy}
-                    invalid={invalid}
-                    value={instruction}
-                    placeholder={t("briefHint")}
-                    onChange={(e) => setInstruction(e.target.value)}
-                  />
-                )}
-              </Field>
-              <button type="button" className="h-11 rounded-full bg-action px-4 text-sm font-semibold text-action-fg md:col-span-2" onClick={applyInstruction}>
-                {t("briefApply")}
-              </button>
+        </Container>
+      </section>
+
+      <Container className="py-8">
+        <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+          <form onSubmit={publish}>
+            {/*
+              The AI brief, as a shortcut rather than the form's first field.
+              It used to sit inside the form above "Nom de l'événement",
+              which read as a required step — people filled it in because it
+              was first, not because they wanted it. It is an accelerator,
+              so it gets its own card, visually before the form rather than
+              part of it.
+            */}
+            <Card className="border-primary/25 bg-brume/40">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="flex items-center gap-2 font-display text-base font-bold">
+                    <Sparkles className="size-4 text-primary" />
+                    {t("briefShortcut")}
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted">{t("briefShortcutHint")}</p>
+                </div>
+                <button type="button" className="shrink-0 text-sm font-semibold text-primary hover:underline" onClick={fillDemo}>
+                  {t("fillDemo")}
+                </button>
+              </div>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <Textarea
+                  aria-label={t("briefLabel")}
+                  className="min-h-20 flex-1"
+                  value={instruction}
+                  placeholder={t("briefHint")}
+                  onChange={(e) => setInstruction(e.target.value)}
+                />
+                <Button type="button" variant="secondary" className="shrink-0 self-start" onClick={applyInstruction}>
+                  {t("briefApply")}
+                </Button>
+              </div>
+            </Card>
+
+            <FormSection title={t("secBasics")} hint={t("secBasicsHint")}>
               <Field label={t("eventName")} required className="md:col-span-2">
                 {({ id, describedBy, invalid, required }) => (
                   <Input
@@ -304,6 +354,9 @@ function OrganiserInner() {
                   </Select>
                 )}
               </Field>
+            </FormSection>
+
+            <FormSection title={t("secWhen")} hint={t("secWhenHint")}>
               <Field label={t("venueLabel")} required>
                 {({ id, describedBy, invalid, required }) => (
                   <Input
@@ -364,6 +417,9 @@ function OrganiserInner() {
                   />
                 )}
               </Field>
+            </FormSection>
+
+            <FormSection title={t("secTickets")} hint={t("secTicketsHint")}>
               <Field label={t("price")}>
                 {({ id, describedBy, invalid }) => (
                   <Input
@@ -428,10 +484,12 @@ function OrganiserInner() {
                   />
                 )}
               </Field>
-              <label className="flex items-center gap-2 text-sm md:col-span-2">
-                <input type="checkbox" checked={vipOn} onChange={(e) => setVipOn(e.target.checked)} />
-                {t("vipOn")}
-              </label>
+              {/* The one input the form-kit rollout missed: a bare
+                  <input type="checkbox"> with the browser's default box,
+                  next to fields that all use the shared controls. */}
+              <div className="md:col-span-2">
+                <CheckOption label={t("vipOn")} checked={vipOn} onChange={setVipOn} />
+              </div>
               {vipOn ? (
                 <>
                   <Field label="VIP">
@@ -473,74 +531,140 @@ function OrganiserInner() {
                   </Field>
                 </>
               ) : null}
+            </FormSection>
+
+            <FormSection title={t("secMedia")} hint={t("secMediaHint")}>
               <Field label={t("about")} className="md:col-span-2">
                 {({ id, describedBy, invalid }) => (
                   <Textarea id={id} describedBy={describedBy} invalid={invalid} value={about} onChange={(e) => setAbout(e.target.value)} />
                 )}
               </Field>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold">{t("cover")}</p>
-              <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-line/20 px-3 text-sm font-semibold hover:border-primary hover:bg-brume hover:text-primary">
-                <Upload className="size-4" />
-                {uploading ? t("posterUploading") : t("posterUpload")}
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  disabled={uploading}
-                  onChange={uploadCover}
-                />
-              </label>
-            </div>
-            <p className="mt-1 text-xs text-muted">{t("posterHint")}</p>
-            <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6">
+
+              <div className="md:col-span-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[13px] font-semibold text-ink">{t("cover")}</p>
+                  <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-line/20 px-3 text-sm font-semibold transition hover:border-primary hover:bg-brume hover:text-primary">
+                    <Upload className="size-4" />
+                    {uploading ? t("posterUploading") : t("posterUpload")}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      disabled={uploading}
+                      onChange={uploadCover}
+                    />
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-muted">{t("posterHint")}</p>
+                <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6">
               {/* An uploaded poster appears first, already selected. */}
               {!COVERS.includes(cover) ? (
                 <span className="overflow-hidden rounded-control border-2 border-primary">
                   <img src={cover} alt="" className="h-16 w-full object-cover" />
                 </span>
               ) : null}
-              {COVERS.map((src) => (
-                <button key={src} type="button" className={`overflow-hidden rounded-control border-2 ${cover === src ? "border-primary" : "border-transparent"}`} onClick={() => setCover(src)}>
-                  <img src={src} alt="" className="h-16 w-full object-cover" />
-                </button>
-              ))}
+                  {COVERS.map((src) => (
+                    <button
+                      key={src}
+                      type="button"
+                      aria-pressed={cover === src}
+                      className={`overflow-hidden rounded-control border-2 transition ${
+                        cover === src ? "border-primary" : "border-transparent hover:border-line/30"
+                      }`}
+                      onClick={() => setCover(src)}
+                    >
+                      <img src={src} alt="" className="h-16 w-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </FormSection>
+
+            {error ? (
+              <Notice tone="danger" className="mt-4">
+                {error}
+              </Notice>
+            ) : null}
+
+            {/* Sticky on desktop: the form is tall enough that the publish
+                button was always a scroll away from whatever you had just
+                filled in. */}
+            <div className="sticky bottom-0 z-10 mt-4 border-t border-line/10 bg-paper/95 py-4 backdrop-blur">
+              <Button type="submit" size="lg" full loading={busy}>
+                {t("publish")}
+              </Button>
             </div>
-            {error ? <p className="mt-4 rounded-control bg-danger/10 px-4 py-3 text-sm text-danger">{error}</p> : null}
-            <button type="submit" disabled={busy} className="mt-5 h-12 w-full rounded-full bg-action text-sm font-semibold text-action-fg transition hover:bg-action-hover disabled:opacity-50">
-              {busy ? "..." : t("publish")}
-            </button>
           </form>
-          <section>
-            <h2 className="font-display text-2xl font-bold">{t("myEvents")}</h2>
-            {myEvents && myEvents.length === 0 ? <p className="mt-3 text-muted">{t("noOrg")}</p> : null}
-            <div className="mt-4 space-y-3">
-              {myEvents?.map((event) => {
-                const eventOrders = ordersByEvent[event.slug] ?? [];
-                const soldCount = eventOrders.reduce((sum, order) => sum + order.ticketCount, 0);
-                const revenue = eventOrders.reduce((sum, order) => sum + order.totalCents, 0);
-                return (
-                  <article key={event.slug} className="rounded-card border border-line/10 bg-card p-4 shadow-card">
-                    <div className="flex gap-3">
-                      <img src={event.image} alt="" className="size-16 rounded-control object-cover" />
-                      <div>
-                        <Link to={`/evenements/${event.slug}`} className="font-display text-lg font-bold">
-                          {locale === "ar" ? event.titleAr : event.titleFr}
-                        </Link>
-                        <p className="text-sm text-muted">{event.city}</p>
-                        <p className="text-sm">
-                          {t("soldCount")} {soldCount} · {t("revenue")} {money(revenue)} MAD
-                        </p>
+          {/*
+            Sticky, and capped at SIDEBAR_LIMIT. This column used to render
+            every event the organiser has — 17 of them in the screenshot,
+            thirteen reading "Billets émis 0 · Recettes démo 0,00 MAD". A
+            list that long beside a form is not a reference, it is noise:
+            the useful thing while publishing is "what did I already put on,
+            and is anything selling". So: the most recent few, with the
+            totals summarised above them and the full list one click away.
+          */}
+          <aside className="lg:sticky lg:top-24 lg:self-start">
+            <SectionHeader
+              title={t("myEvents")}
+              sub={myEvents ? t("orgEventsCount").replace("{n}", String(myEvents.length)) : undefined}
+              action={
+                <Link to="/pro/events" className="shrink-0 text-sm font-semibold text-primary hover:underline">
+                  {t("orgSeeAll")}
+                </Link>
+              }
+            />
+
+            {myEvents && myEvents.length > 0 ? (
+              <div className="mb-3 grid grid-cols-2 gap-3">
+                <Stat label={t("orgSold")} value={String(totals.sold)} icon={<Ticket className="size-4" />} />
+                <Stat
+                  label={t("orgRevenue")}
+                  value={`${money(totals.revenue)} MAD`}
+                  tone="accent"
+                  icon={<Wallet className="size-4" />}
+                />
+              </div>
+            ) : null}
+
+            {myEvents && myEvents.length === 0 ? (
+              <EmptyState icon={<CalendarPlus className="size-6" />} title={t("orgNoneTitle")} body={t("orgNoneBody")} />
+            ) : (
+              <div className="space-y-2.5">
+                {(myEvents ?? []).slice(0, SIDEBAR_LIMIT).map((event) => {
+                  const eventOrders = ordersByEvent[event.slug] ?? [];
+                  const soldCount = eventOrders.reduce((sum, order) => sum + order.ticketCount, 0);
+                  const revenue = eventOrders.reduce((sum, order) => sum + order.totalCents, 0);
+                  return (
+                    <Link
+                      key={event.slug}
+                      to={`/evenements/${event.slug}`}
+                      className="flex items-center gap-3 rounded-card border border-line/10 bg-card p-3 shadow-card transition hover:border-primary/30"
+                    >
+                      <img src={event.image} alt="" className="size-12 shrink-0 rounded-control object-cover" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold">{locale === "ar" ? event.titleAr : event.titleFr}</p>
+                        <p className="truncate text-xs text-muted">{event.city}</p>
                       </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
+                      {/* Only shown once something has actually sold. Printing
+                          "0 · 0,00 MAD" on every unsold date was the bulk of
+                          what made this column unreadable. */}
+                      {soldCount > 0 ? (
+                        <p className="shrink-0 text-end">
+                          <span className="block text-sm font-bold tabular-nums">{money(revenue)}</span>
+                          <span className="block text-[11px] text-muted">
+                            {soldCount} {t("orgSold")}
+                          </span>
+                        </p>
+                      ) : null}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </aside>
         </div>
-      </div>
+      </Container>
     </Shell>
   );
 }
