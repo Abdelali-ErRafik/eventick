@@ -77,10 +77,10 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
           open ? "translate-x-0" : "-translate-x-full rtl:translate-x-full lg:rtl:translate-x-0",
         )}
       >
-        {/* Brand. A taller block than a plain header row, with the mark
-            on its own line from the wordmark on desktop — closer to a
-            masthead than a logo-plus-name strip. */}
-        <div className={cn("flex shrink-0 flex-col gap-3 border-b border-line/10 px-4 py-4", collapsed && "items-center px-0")}>
+        {/* Brand. The mark sits on its own line from the eyebrow, so this
+            reads as a masthead rather than a logo-plus-name strip — but
+            tightly, because every pixel here is one the nav does not get. */}
+        <div className={cn("flex shrink-0 flex-col gap-2 border-b border-line/10 px-4 py-3", collapsed && "items-center px-0")}>
           <div className="flex items-center gap-2">
             <Link
               to="/pro"
@@ -108,13 +108,20 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
         </div>
 
         {/* Nav */}
-        <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+        {/*
+          scroll-thin, not a bare overflow-y-auto: the nav overflows below
+          roughly 820px of viewport (nine items across five groups), and the
+          browser's default scrollbar is a thick light bar that ignores the
+          theme — the one element left rendering as system chrome inside the
+          dashboard. Same class the Popover panels already use.
+        */}
+        <nav className="scroll-thin min-h-0 flex-1 overflow-y-auto px-3 py-3">
           {groups.map((group, groupIndex) => (
-            <div key={group.name} className={cn(groupIndex > 0 && "mt-5")}>
+            <div key={group.name} className={cn(groupIndex > 0 && "mt-3.5")}>
               {collapsed ? (
                 <div className="mx-2 mb-2 border-t border-line/10" aria-hidden />
               ) : (
-                <p className="px-3 pb-2 text-[11px] font-extrabold uppercase tracking-[0.09em] text-muted">{group.name}</p>
+                <p className="px-3 pb-1.5 text-[11px] font-extrabold uppercase tracking-[0.09em] text-muted">{group.name}</p>
               )}
 
               <ul className="grid gap-1">
@@ -128,7 +135,7 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
                       title={collapsed ? item.label : undefined}
                       className={({ isActive }) =>
                         cn(
-                          "group relative flex items-center gap-2.5 rounded-control py-2 text-sm font-semibold transition",
+                          "group relative flex items-center gap-2.5 rounded-control py-1.5 text-sm font-semibold transition",
                           collapsed ? "justify-center px-0" : "px-2",
                           // Solid violet fill for the active row — matches the
                           // reference dashboard's nav exactly (pink is kept
@@ -143,7 +150,7 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
                         <>
                           <span
                             className={cn(
-                              "flex size-8 shrink-0 items-center justify-center rounded-control transition",
+                              "flex size-7.5 shrink-0 items-center justify-center rounded-control transition",
                               isActive ? "bg-secondary-fg/15" : "bg-sunken text-muted group-hover:bg-card group-hover:text-primary",
                             )}
                             aria-hidden
@@ -192,9 +199,9 @@ export function Sidebar({ sections, open, onClose, collapsed, onToggleCollapsed,
             )}
           >
             {collapsed ? (
-              <PanelLeftOpen className="size-[18px] shrink-0 rtl:rotate-180" aria-hidden />
+              <PanelLeftOpen className="size-4.5 shrink-0 rtl:rotate-180" aria-hidden />
             ) : (
-              <PanelLeftClose className="size-[18px] shrink-0 rtl:rotate-180" aria-hidden />
+              <PanelLeftClose className="size-4.5 shrink-0 rtl:rotate-180" aria-hidden />
             )}
             {!collapsed ? <span className="truncate">{labels.collapse}</span> : null}
           </button>
