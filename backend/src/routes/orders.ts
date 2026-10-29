@@ -8,7 +8,7 @@ import { quotePromo, type PromoCandidate } from "../domain/pricing.js";
 import { phoneOk, makePaymentRef } from "../lib/payment-sim.js";
 import { publicOrder, publicOrderWithContext } from "../lib/serialize.js";
 import { remainingByTier } from "../lib/availability.js";
-import { buildPaymentRequest, cmiConfig, cmiUrls, isMockPayments } from "../lib/cmi.js";
+import { buildOid, buildPaymentRequest, cmiConfig, cmiUrls, isMockPayments } from "../lib/cmi.js";
 import { settleOrder } from "../lib/settle.js";
 import { withSerializableRetry } from "../lib/serializable.js";
 import { markClaimed, offerFreedSeats, resolveClaim } from "../lib/waitlist.js";
@@ -342,11 +342,27 @@ ordersRouter.post(
 
     const config = cmiConfig()!;
     const urls = cmiUrls(order.id, order.accessToken);
+
+    /*
+     * Each trip to the gateway is its own CMI transaction.
+     *
+     * CMI refuses a second attempt on the same oid — "There is an ongoing
+     * transaction related to the order. (99)" — so reusing the bare order id
+     * meant a buyer whose card was declined could never retry. Bumping a
+     * counter gives CMI a fresh transaction while the order stays the one
+     * thing being paid for.
+     */
+    const attempt = await prisma.order.update({
+      where: { id: order.id },
+      data: { payAttempts: { increment: 1 } },
+      select: { payAttempts: true },
+    });
+
     const request = buildPaymentRequest(
       {
-        // CMI echoes `oid` back verbatim, and it is how the callback finds the
-        // order again — so it is the order id, nothing composite.
-        reference: order.id,
+        // `<orderId>-<attempt>`; the callback strips the suffix to find the
+        // order again.
+        reference: buildOid(order.id, attempt.payAttempts),
         totalCents: order.totalCents,
         email: order.email,
         holderName: order.holderName,

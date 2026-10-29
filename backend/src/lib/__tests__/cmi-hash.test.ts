@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { buildHash, buildPaymentRequest, isApproved, verifyCallbackHash } from "../cmi.js";
+import { buildHash, buildOid, buildPaymentRequest, isApproved, orderIdFromOid, verifyCallbackHash } from "../cmi.js";
 
 /**
  * CMI's "ver3" hash.
@@ -183,5 +183,47 @@ describe("isApproved", () => {
     expect(isApproved({ ProcReturnCode: "99" })).toBe(false);
     expect(isApproved({ ProcReturnCode: "" })).toBe(false);
     expect(isApproved({})).toBe(false);
+  });
+});
+
+describe("oid round-trip", () => {
+  /*
+   * CMI treats an oid as ONE transaction. Reusing the bare order id made it
+   * refuse every retry with "There is an ongoing transaction related to the
+   * order. (99)", so a buyer whose card was declined was stuck until the hold
+   * lapsed. Found by paying twice against the real test gateway.
+   */
+  it("carries the attempt number", () => {
+    expect(buildOid("cmvu1hlgd000kctve", 1)).toBe("cmvu1hlgd000kctve-1");
+    expect(buildOid("cmvu1hlgd000kctve", 7)).toBe("cmvu1hlgd000kctve-7");
+  });
+
+  it("gives CMI a different oid for each attempt", () => {
+    expect(buildOid("abc", 1)).not.toBe(buildOid("abc", 2));
+  });
+
+  it("recovers the order id from what CMI echoes back", () => {
+    expect(orderIdFromOid("cmvu1hlgd000kctve-1")).toBe("cmvu1hlgd000kctve");
+    expect(orderIdFromOid("cmvu1hlgd000kctve-42")).toBe("cmvu1hlgd000kctve");
+  });
+
+  it("round-trips for any attempt", () => {
+    for (const n of [1, 2, 9, 10, 99]) {
+      expect(orderIdFromOid(buildOid("cmvtest123", n))).toBe("cmvtest123");
+    }
+  });
+
+  it("still resolves an oid with no suffix", () => {
+    // Anything in flight from before this existed must keep working.
+    expect(orderIdFromOid("cmvu1hlgd000kctve")).toBe("cmvu1hlgd000kctve");
+  });
+
+  it("only strips a NUMERIC suffix", () => {
+    // A hyphen followed by non-digits is part of the id, not an attempt.
+    expect(orderIdFromOid("order-abc")).toBe("order-abc");
+  });
+
+  it("leaves a leading-hyphen value alone rather than returning empty", () => {
+    expect(orderIdFromOid("-1")).toBe("-1");
   });
 });

@@ -191,6 +191,33 @@ export function buildPaymentRequest(input: CmiOrderInput, config: CmiConfig): Cm
   return { action: config.gatewayUrl, fields, oid: input.reference };
 }
 
+/*
+ * The `oid` carries the order AND the attempt.
+ *
+ * CMI treats an oid as ONE transaction: send the same value twice and the
+ * second is refused with "There is an ongoing transaction related to the
+ * order. (99)". With the bare order id as oid, a buyer whose card was
+ * declined could never retry — found by paying twice against the real test
+ * gateway. The reference project this was learned from carries a paymentId in
+ * its oid for exactly this reason; that was the piece originally missed.
+ *
+ * Format: `<orderId>-<attempt>`. cuid() ids contain no hyphen, so splitting on
+ * the LAST one is unambiguous, and an oid with no suffix still resolves — old
+ * in-flight payments keep working.
+ */
+export function buildOid(orderId: string, attempt: number): string {
+  return `${orderId}-${attempt}`;
+}
+
+/** Recover the order id from an oid CMI echoed back. */
+export function orderIdFromOid(oid: string): string {
+  const cut = oid.lastIndexOf("-");
+  if (cut <= 0) return oid;
+  const suffix = oid.slice(cut + 1);
+  // Only strip a numeric suffix: anything else is part of the id itself.
+  return /^\d+$/.test(suffix) ? oid.slice(0, cut) : oid;
+}
+
 /** CMI's "approved" response code. Anything else is a decline or an error. */
 export function isApproved(body: Record<string, unknown>): boolean {
   return String(body.ProcReturnCode ?? "") === "00";

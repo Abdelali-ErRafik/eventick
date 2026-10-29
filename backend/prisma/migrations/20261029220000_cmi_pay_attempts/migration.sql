@@ -1,0 +1,15 @@
+-- Let a buyer retry a declined payment.
+--
+-- CMI treats its `oid` as ONE transaction. The oid was the bare order id, so
+-- a second attempt on the same order came back as:
+--
+--   "There is an ongoing transaction related to the order. (99)"
+--
+-- which meant a buyer whose card was declined could never try again — they
+-- were stuck until the hold lapsed and the seats went back on sale. Found by
+-- paying twice against the real test gateway.
+--
+-- The oid is now `<orderId>-<attempt>`; this is the counter. The callback
+-- strips the suffix to find the order, so CMI sees a fresh transaction each
+-- time while the order stays the one thing being paid for.
+ALTER TABLE "orders" ADD COLUMN "pay_attempts" INTEGER NOT NULL DEFAULT 0;

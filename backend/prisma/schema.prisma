@@ -317,6 +317,15 @@ model Order {
   /// callback can never settle a second order against the same payment.
   gatewayRef String? @unique @map("gateway_ref")
 
+  /// How many times the buyer has been sent to the gateway for this order.
+  ///
+  /// CMI treats its `oid` as ONE transaction: send the same value twice and
+  /// the second attempt is refused with "There is an ongoing transaction
+  /// related to the order. (99)" — so a buyer whose card was declined could
+  /// never retry. The oid is therefore `<orderId>-<attempt>`, and this is the
+  /// counter. The callback strips the suffix to find the order again.
+  payAttempts Int @default(0) @map("pay_attempts")
+
   /// Platform commission on this order, in cents, recorded AT SETTLEMENT from
   /// the organiser's plan at that moment — never recomputed. Moving an
   /// organiser to a cheaper plan must not retroactively change what they owed

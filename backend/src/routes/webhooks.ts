@@ -1,7 +1,7 @@
 import { Router, urlencoded } from "express";
 import { prisma } from "../lib/prisma.js";
 import { asyncHandler } from "../lib/http.js";
-import { cmiConfig, isApproved, verifyCallbackHash } from "../lib/cmi.js";
+import { cmiConfig, isApproved, orderIdFromOid, verifyCallbackHash } from "../lib/cmi.js";
 import { OversoldError, recordCommission, settleOrder } from "../lib/settle.js";
 import { completeResale } from "../lib/resale.js";
 import { logger } from "../lib/logger.js";
@@ -53,11 +53,14 @@ webhooksRouter.post(
       return res.type("text/plain").send("FAILURE");
     }
 
-    const reference = body.oid;
-    if (!reference) {
+    if (!body.oid) {
       logger.warn("CMI callback REJECTED — no order reference");
       return res.type("text/plain").send("FAILURE");
     }
+    // The oid is `<orderId>-<attempt>`: CMI needs a fresh one per attempt or
+    // it refuses the retry, so the suffix is stripped to find the order. An
+    // oid with no suffix still resolves, for anything in flight from before.
+    const reference = orderIdFromOid(body.oid);
 
     if (!isApproved(body)) {
       // Leave the order PENDING so the buyer can retry while the hold lasts;

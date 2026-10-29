@@ -124,6 +124,9 @@ async function hold(slug, tierId, qty = 1) {
   return {
     ok: res.status === 201,
     id: data.order?.id,
+    // Paying is a write, so it needs the buyer's credential — without this
+    // the retry block's /pay calls 403 and collect no oids.
+    key: data.accessToken,
     amount: ((data.order?.totalCents ?? 0) / 100).toFixed(2),
   };
 }
@@ -223,6 +226,43 @@ async function main() {
     check("the buyer's order is not left looking PAID", (await statusOf(buy.orderId)) === "PENDING");
     const seller = await prisma.ticket.findUnique({ where: { id: sellerTicket.id }, select: { status: true } });
     check("the seller keeps their seat", seller.status === "VALID", seller.status);
+  }
+
+  // ═══ A buyer whose card was declined can try again ═══════════════════
+  console.log("\n\x1b[1mRetrying after a decline\x1b[0m");
+  {
+    /*
+     * CMI treats its `oid` as ONE transaction. The oid was the bare order id,
+     * so the second attempt came back as "There is an ongoing transaction
+     * related to the order. (99)" and the buyer was stuck until the hold
+     * lapsed. Found by paying twice against the real test gateway.
+     */
+    const { event, tier } = await makeEvent(5, "retry");
+    const first = await hold(event.slug, tier.id);
+
+    const oids = [];
+    for (let i = 0; i < 3; i++) {
+      const r = await fetch(`${API}/api/orders/${first.id}/pay?k=${encodeURIComponent(first.key)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ holderName: "Retry", email: `retry-${SUFFIX}@eventick.ma`, phone: "0612345678" }),
+      });
+      const d = await r.json();
+      if (d.fields?.oid) oids.push(d.fields.oid);
+    }
+    check("each attempt gets its own oid", new Set(oids).size === 3, oids.join(" "));
+    check("every oid resolves to the same order", oids.every((o) => o.startsWith(first.id)), oids[0]);
+
+    // Decline the second, approve the third.
+    const declined = await callback(oids[1], first.amount, { ProcReturnCode: "99", Response: "Declined" });
+    check("a decline leaves the order payable", declined === "FAILURE", declined);
+    const approved = await callback(oids[2], first.amount);
+    check("the retry settles", approved === "ACTION=POSTAUTH", approved);
+    check("a ticket is issued", (await ticketsFor(first.id)) === 1, `${await ticketsFor(first.id)}`);
+
+    // An oid with no suffix still resolves, for anything in flight.
+    const plain = await callback(first.id, first.amount, { ProcReturnCode: "99", Response: "Declined", TransId: `LT${SUFFIX}plain` });
+    check("an unsuffixed oid still resolves", plain === "FAILURE", plain);
   }
 
   // ── Cleanup ─────────────────────────────────────────────────────────────
