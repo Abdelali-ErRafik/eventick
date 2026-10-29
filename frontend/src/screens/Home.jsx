@@ -21,6 +21,7 @@ import { QrMark } from "../components/QrMark";
 import { Shell } from "../components/Shell";
 import { EventCard } from "../components/EventCard";
 import { useCatalog } from "../useCatalog";
+import { useAuth } from "../AuthContext";
 import { Button, Container, Dropdown, ErrorState, LoadingState } from "../ui";
 import { categoryLabel, useI18n } from "../i18n";
 import { CITIES, addDays, cn, dateKey, todayKey } from "../utils";
@@ -49,6 +50,7 @@ export default function Home() {
   const { locale, t } = useI18n();
   const navigate = useNavigate();
   const { events, loading, error, reload } = useCatalog();
+  const { canUsePro } = useAuth();
   const [cat, setCat] = useState("");
   const [quand, setQuand] = useState("");
   const [ville, setVille] = useState("");
@@ -385,7 +387,7 @@ export default function Home() {
               <Stat icon={<Repeat className="size-4" />} value="✓" label={t("statResale")} />
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Button size="lg" onClick={() => navigate("/organiser")}>
+              <Button size="lg" onClick={() => navigate(canUsePro ? "/organiser" : "/devenir-organisateur")}>
                 {t("createFree")}
               </Button>
               <Button variant="inverse" size="lg" onClick={() => navigate("/pro")}>

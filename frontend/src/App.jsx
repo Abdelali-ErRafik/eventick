@@ -9,6 +9,7 @@ import TicketDetail from "./screens/TicketDetail";
 import ClaimShare from "./screens/ClaimShare";
 import Login from "./screens/Login";
 import Organiser from "./screens/Organiser";
+import BecomeOrganiser from "./screens/BecomeOrganiser";
 import Pro from "./screens/pro/Pro";
 import Help from "./screens/Help";
 import Legal from "./screens/Legal";
@@ -28,6 +29,7 @@ export default function App() {
       <Route path="/billet-offert/:token" element={<ClaimShare />} />
       <Route path="/login" element={<Login />} />
       <Route path="/organiser" element={<Organiser />} />
+      <Route path="/devenir-organisateur" element={<BecomeOrganiser />} />
       <Route path="/pro/*" element={<Pro />} />
       <Route path="/aide" element={<Help />} />
       <Route path="/legal" element={<Legal />} />

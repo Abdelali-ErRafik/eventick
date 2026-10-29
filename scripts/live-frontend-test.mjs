@@ -150,6 +150,7 @@ async function main() {
     "/explorer",
     "/paiement",
     "/billets",
+    "/devenir-organisateur",
     "/login",
     "/organiser",
     "/pro",
@@ -314,6 +315,96 @@ async function main() {
     await check("DELETE /orders/hold/:id releases an abandoned cart", "DELETE", `/orders/hold/${second.data.order.id}`, 204, {
       token: tokens.customer,
     });
+  }
+
+  // ── BecomeOrganiser.jsx / Users.jsx request queue ─────────────────────
+  setGroup("BECOME ORGANISER  BecomeOrganiser.jsx, Users.jsx queue");
+  {
+    // "Créer un événement" — the brand button in the header and the main
+    // CTA on Home — used to point at /organiser, which is guarded on
+    // events.manage. So the most prominent call to action on the site was a
+    // dead end: logged out it bounced to /login with no mention of
+    // organisers, and a logged-in customer was redirected to the homepage
+    // with no explanation at all.
+    const applicant = await api("POST", "/auth/register", {
+      body: { name: "Candidat FE", email: `fe-apply-${SUFFIX}@example.com`, password: "fe-apply-2026" },
+    });
+    const applicantToken = applicant.data?.token;
+    record("a new account starts with no permissions", (applicant.data?.user?.permissions ?? []).length === 0);
+
+    await check("the page loads with no application yet", "GET", "/organiser-applications/mine", 200, {
+      token: applicantToken,
+      // The screen renders the form on null rather than treating it as an
+      // error, so null has to come back as a 200.
+      shape: (d) => d?.application === null,
+    });
+
+    await check("a too-short pitch is refused", "POST", "/organiser-applications", 400, {
+      token: applicantToken,
+      body: { displayName: "Studio FE", phone: "0612345678", pitch: "trop court" },
+    });
+
+    const created = await check("applying creates a PENDING request", "POST", "/organiser-applications", 201, {
+      token: applicantToken,
+      body: {
+        displayName: "Studio FE",
+        phone: "0612345678",
+        pitch: "Nous organisons des concerts de jazz a Casablanca chaque mois.",
+      },
+      shape: (d) => d?.application?.status === "PENDING" && typeof d?.application?.id === "string",
+    });
+    const applicationId = created.data?.application?.id;
+
+    await check("a second request while one is pending is refused", "POST", "/organiser-applications", 409, {
+      token: applicantToken,
+      body: {
+        displayName: "Studio FE",
+        phone: "0612345678",
+        pitch: "Nous organisons des concerts de jazz a Casablanca chaque mois.",
+      },
+    });
+
+    // The queue decides who may sell tickets, so it is users.manage only.
+    await check("an applicant cannot read the review queue", "GET", "/organiser-applications", 403, {
+      token: applicantToken,
+    });
+    await check("an ORGANISER cannot either", "GET", "/organiser-applications", 403, {
+      token: tokens.organiser,
+    });
+    await check("the admin queue carries what Users.jsx renders", "GET", "/organiser-applications?status=PENDING", 200, {
+      token: tokens.admin,
+      shape: (d) =>
+        Array.isArray(d?.applications) &&
+        d.applications.some(
+          (a) => a.id === applicationId && typeof a.applicant?.email === "string" && typeof a.pitch === "string",
+        ),
+    });
+
+    await check("an applicant cannot approve themselves", "POST", `/organiser-applications/${applicationId}/decide`, 403, {
+      token: applicantToken,
+      body: { approve: true },
+    });
+
+    await check("an admin approves it", "POST", `/organiser-applications/${applicationId}/decide`, 200, {
+      token: tokens.admin,
+      body: { approve: true },
+      // Approving promotes in the same transaction, so the response already
+      // carries the new role.
+      shape: (d) => d?.application?.status === "APPROVED" && d?.application?.applicant?.role === "ORGANISER",
+    });
+    await check("deciding twice is refused", "POST", `/organiser-applications/${applicationId}/decide`, 409, {
+      token: tokens.admin,
+      body: { approve: false },
+    });
+
+    // Permissions resolve per request, so the promotion reaches the session
+    // the applicant already has — no re-login, which is what lets the page
+    // offer "open the organiser area" straight after approval.
+    await check("their existing session is now an organiser", "GET", "/auth/me", 200, {
+      token: applicantToken,
+      shape: (d) => d?.user?.role === "ORGANISER" && (d?.user?.permissions ?? []).includes("events.manage"),
+    });
+    await check("and the dashboard opens", "GET", "/organiser/events", 200, { token: applicantToken });
   }
 
   // ── Billets.jsx / TicketDetail.jsx ────────────────────────────────────

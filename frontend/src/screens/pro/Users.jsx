@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCw, ShieldCheck, UserPlus } from "lucide-react";
+import { Check, RefreshCw, ShieldCheck, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { useAuth } from "../../AuthContext";
@@ -65,6 +65,14 @@ export default function Users() {
   const [limit, setLimit] = useState(PAGE_SIZE_DEFAULT);
   const [busyId, setBusyId] = useState(null);
 
+  // Pending organiser applications. Lives on this screen because deciding
+  // one promotes a user, which is what the directory below is for —
+  // splitting it onto its own route would separate the decision from the
+  // list it changes.
+  const [applications, setApplications] = useState([]);
+  const [declining, setDeclining] = useState(null);
+  const [declineNote, setDeclineNote] = useState("");
+
   // Create-user form. Kept in this screen rather than on its own route: it
   // is one POST, and landing back on the directory with the new row visible
   // is the confirmation that it worked.
@@ -80,7 +88,29 @@ export default function Users() {
   };
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const load = () => api.get("/auth/users").then((data) => setUsers(data.users));
+  const load = () =>
+    Promise.all([
+      api.get("/auth/users").then((data) => setUsers(data.users)),
+      api
+        .get("/organiser-applications?status=PENDING")
+        .then((data) => setApplications(data.applications))
+        .catch(() => setApplications([])),
+    ]);
+
+  const decide = async (application, approve, note) => {
+    setBusyId(application.id);
+    try {
+      await api.post(`/organiser-applications/${application.id}/decide`, { approve, note });
+      await load();
+      toast.success(approve ? t.appsApproved : t.appsDeclined);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusyId(null);
+      setDeclining(null);
+      setDeclineNote("");
+    }
+  };
 
   useEffect(() => {
     load();
@@ -169,6 +199,69 @@ export default function Users() {
         }
       />
 
+      {/* Only rendered when there is something to decide: an empty queue
+          is the normal state, and a permanently-visible empty panel would
+          push the directory down for nothing. */}
+      {applications.length > 0 ? (
+        <section className="mb-6">
+          <div className="mb-3">
+            <h2 className="font-display text-lg font-bold">
+              {t.appsTitle}
+              <Badge tone="warn" className="ms-2 align-middle">
+                {applications.length}
+              </Badge>
+            </h2>
+            <p className="mt-0.5 text-sm text-muted">{t.appsSub}</p>
+          </div>
+
+          <div className="grid gap-3">
+            {applications.map((application) => (
+              <article
+                key={application.id}
+                className="rounded-card border border-line/10 bg-card p-4 shadow-card"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-display text-base font-bold">{application.displayName}</p>
+                    <p className="text-sm text-muted">
+                      {application.applicant.name} · {application.applicant.email}
+                    </p>
+                  </div>
+                  <Badge tone="warn">{t.appsPending}</Badge>
+                </div>
+
+                <dl className="mt-3 grid gap-2 sm:grid-cols-[10rem_1fr]">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-muted">{t.appsPhone}</dt>
+                  <dd className="text-sm">{application.phone}</dd>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-muted">{t.appsPitch}</dt>
+                  <dd className="text-sm leading-relaxed">{application.pitch}</dd>
+                </dl>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Btn
+                    size="sm"
+                    icon={<Check className="size-4" />}
+                    disabled={busyId === application.id}
+                    onClick={() => decide(application, true)}
+                  >
+                    {t.appsApprove}
+                  </Btn>
+                  <Btn
+                    variant="secondary"
+                    size="sm"
+                    icon={<X className="size-4" />}
+                    disabled={busyId === application.id}
+                    onClick={() => setDeclining(application)}
+                  >
+                    {t.appsDecline}
+                  </Btn>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <FilterBar
         search={{ value: query, onChange: setQuery, placeholder: t.search }}
         controls={[
@@ -256,6 +349,43 @@ export default function Users() {
       )}
 
       <Pager page={page} pages={pages} onPage={setPage} limit={limit} onLimit={setLimit} labels={{ rows: t.rows, prev: t.prev, next: t.next }} />
+
+      {/* Declining is the one that needs words: the applicant sees this
+          note on their own page, so refusing with no reason would leave
+          them with nothing to act on. */}
+      <Modal
+        open={declining !== null}
+        onClose={() => setDeclining(null)}
+        title={t.appsDeclineTitle}
+        size="sm"
+        footer={
+          <>
+            <Btn variant="secondary" onClick={() => setDeclining(null)}>
+              {t.close}
+            </Btn>
+            <Btn
+              variant="danger"
+              loading={busyId === declining?.id}
+              onClick={() => decide(declining, false, declineNote.trim() || undefined)}
+            >
+              {t.appsDecline}
+            </Btn>
+          </>
+        }
+      >
+        <Field label={t.appsDeclineNote}>
+          {({ id, describedBy, invalid }) => (
+            <Input
+              id={id}
+              describedBy={describedBy}
+              invalid={invalid}
+              value={declineNote}
+              onChange={(e) => setDeclineNote(e.target.value)}
+              maxLength={500}
+            />
+          )}
+        </Field>
+      </Modal>
 
       <Modal
         open={open}

@@ -66,6 +66,11 @@ model User {
   listings ResaleListing[]
   shares   TicketShare[]
 
+  /// Applications this person submitted to become an organiser.
+  organiserApplications OrganiserApplication[] @relation("OrganiserApplicant")
+  /// Applications this person decided, as an admin.
+  reviewedApplications  OrganiserApplication[] @relation("OrganiserReviewer")
+
   @@map("users")
 }
 
@@ -495,4 +500,60 @@ enum ShareStatus {
   CLAIMED
   /// Withdrawn by the sender, or voided because the ticket changed state.
   REVOKED
+}
+
+// ---------------------------------------------------------------------------
+// Becoming an organiser
+//
+// Public registration always creates a CUSTOMER (PUBLIC_SIGNUP_ROLE), and
+// admins can mint organisers directly — but nothing let someone ASK. The
+// "Créer un événement" button in the header was a dead end: logged out it
+// bounced to /login, and a logged-in customer was silently redirected to the
+// homepage with no explanation.
+//
+// An application is deliberately a separate row rather than fields on User:
+// it survives the decision (a declined applicant keeps their history, and a
+// second application is a second row), and the reviewer needs to see who
+// asked, when, and what they said — none of which belongs on the account
+// itself.
+// ---------------------------------------------------------------------------
+
+model OrganiserApplication {
+  id     String                     @id @default(cuid())
+  userId String                     @map("user_id")
+  status OrganiserApplicationStatus @default(PENDING)
+
+  /// Trading name — the artist, venue or company the events run under. Not
+  /// the account's own name, which is a person.
+  displayName String @map("display_name")
+  /// Reachable number. Approving someone to take money is a decision worth
+  /// being able to follow up on.
+  phone       String
+  /// What they intend to put on, in their words.
+  pitch       String
+
+  /// Set when an admin decides. Kept even after a decline, so a repeat
+  /// application can be read against the earlier one.
+  reviewedAt     DateTime? @map("reviewed_at")
+  reviewedById   String?   @map("reviewed_by_id")
+  /// Why it was declined, shown to the applicant.
+  decisionNote   String?   @map("decision_note")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user       User  @relation("OrganiserApplicant", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("OrganiserReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([userId])
+  @@map("organiser_applications")
+}
+
+enum OrganiserApplicationStatus {
+  /// Waiting for an admin to decide.
+  PENDING
+  /// Approved; the applicant's role was promoted to ORGANISER.
+  APPROVED
+  /// Turned down. decisionNote says why.
+  DECLINED
 }

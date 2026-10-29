@@ -13,6 +13,7 @@ import { webhooksRouter } from "./routes/webhooks.js";
 import { uploadsRouter, UPLOAD_DIR } from "./routes/uploads.js";
 import { resaleRouter } from "./routes/resale.js";
 import { shareRouter } from "./routes/share.js";
+import { organiserApplicationsRouter } from "./routes/organiser-applications.js";
 import { prisma } from "./lib/prisma.js";
 import { errorHandler, HttpError } from "./lib/http.js";
 
@@ -57,6 +58,7 @@ export function createApp() {
   app.use("/api/uploads", uploadsRouter);
   app.use("/api/resale", resaleRouter);
   app.use("/api/share", shareRouter);
+  app.use("/api/organiser-applications", organiserApplicationsRouter);
 
   // Serve uploaded posters. No directory listing, and the random filenames
   // mean a URL is only guessable if it was shared.

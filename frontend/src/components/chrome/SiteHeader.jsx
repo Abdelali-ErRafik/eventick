@@ -321,7 +321,7 @@ export function SiteHeader({ overlay = false }) {
               a CTA is the neutral action pill, but this is the single button
               that should pull the eye on every page, so it keeps the brand
               fill instead of blending into the rest of the bar. */}
-          <Button variant="brand" size="sm" className="hidden sm:inline-flex" onClick={() => navigate("/organiser")}>
+          <Button variant="brand" size="sm" className="hidden sm:inline-flex" onClick={() => navigate(canUsePro ? "/organiser" : "/devenir-organisateur")}>
             {t("create")}
           </Button>
 
