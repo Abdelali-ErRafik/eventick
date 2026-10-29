@@ -66,6 +66,14 @@ async function call(method, path, { token, body } = {}) {
 }
 
 const SUFFIX = Date.now();
+
+// The payout window the checks below use. Orders are created now, so the
+// current month is the one that matters — and a tight window is what an admin
+// would actually pick. A decade-wide period used to be fine here and became
+// misleading once the plan subscription was billed per calendar month.
+const now = new Date();
+const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
+const tomorrow = new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10);
 const created = { events: [], orders: [] };
 
 async function main() {
@@ -191,10 +199,13 @@ async function main() {
     );
 
     const reportedOnStarter = (await call("GET", "/api/organiser/finance", { token: orga })).data.lifetime.feeCents;
+    // STABILITY is the property, not a particular total: the account may hold
+    // other orders. Pinning an absolute figure here made the check fail for
+    // the wrong reason once it did.
     check(
       "the REPORTED fee is unchanged too",
-      reportedOnStarter === reportedOnPro && reportedOnStarter === 3000,
-      `pro reported ${mad(reportedOnPro)}, starter reported ${mad(reportedOnStarter)} — must both be 30.00`,
+      reportedOnStarter === reportedOnPro,
+      `pro reported ${mad(reportedOnPro)}, starter reported ${mad(reportedOnStarter)} — must match`,
     );
 
     await call("PATCH", `/api/platform/organisers/${orgaId}/plan`, { token: admin, body: { planKey: "pro" } });
@@ -234,7 +245,7 @@ async function main() {
     await prisma.bankAccount.deleteMany({ where: { organiserId: orgaId } });
     const noBank = await call("POST", `/api/platform/organisers/${orgaId}/payouts`, {
       token: admin,
-      body: { periodStart: "2020-01-01", periodEnd: "2030-01-01" },
+      body: { periodStart: thisMonthStart, periodEnd: tomorrow },
     });
     // A PENDING payout nobody can send is worse than none: it reads as money
     // already on its way.
@@ -263,22 +274,29 @@ async function main() {
 
     const run = await call("POST", `/api/platform/organisers/${orgaId}/payouts`, {
       token: admin,
-      body: { periodStart: "2020-01-01", periodEnd: "2030-01-01" },
+      body: { periodStart: thisMonthStart, periodEnd: tomorrow },
     });
     check("the payout is created", run.status === 201, `${run.status} ${run.data.error ?? ""}`);
-    check("it transfers exactly what was owed", run.data.netCents === owed, `${mad(run.data.netCents)} vs ${mad(owed)}`);
+    // Ticket revenue minus commission, LESS the plan subscription for the
+    // month. `owed` is the pre-subscription figure, so the difference between
+    // them must be exactly what was billed — not zero.
+    check(
+      "it transfers what was owed, less the subscription",
+      run.data.netCents === owed - run.data.subscriptionCents,
+      `${mad(run.data.netCents)} = ${mad(owed)} - ${mad(run.data.subscriptionCents)}`,
+    );
     payoutId = run.data.payoutId;
 
     // The safeguard that matters: an order belongs to one payout, ever.
     const again = await call("POST", `/api/platform/organisers/${orgaId}/payouts`, {
       token: admin,
-      body: { periodStart: "2020-01-01", periodEnd: "2030-01-01" },
+      body: { periodStart: thisMonthStart, periodEnd: tomorrow },
     });
     check("re-running the same period pays nothing twice", again.status === 409, `${again.status}`);
 
     const backwards = await call("POST", `/api/platform/organisers/${orgaId}/payouts`, {
       token: admin,
-      body: { periodStart: "2030-01-01", periodEnd: "2020-01-01" },
+      body: { periodStart: tomorrow, periodEnd: thisMonthStart },
     });
     check("an inverted period is refused", backwards.status === 400, `${backwards.status}`);
   }

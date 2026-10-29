@@ -110,6 +110,33 @@ export function summariseRevenue(lines: RevenueLine[], fallbackPlan?: PlanTerms)
   };
 }
 
+/** First instant of the UTC calendar month containing `date`. */
+export function monthStart(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+/**
+ * Every calendar month a half-open period [start, end) touches.
+ *
+ * Used to bill a plan's fixed monthly fee from a payout: a run covering March
+ * and April owes two months, and one covering a single afternoon owes one.
+ *
+ * Half-open is what makes this safe to use for consecutive runs — a period
+ * ending exactly at a month boundary does NOT include that month, so
+ * [Mar 1, Apr 1) and [Apr 1, May 1) bill March and April once each rather
+ * than billing April twice.
+ */
+export function monthsInPeriod(start: Date, end: Date): Date[] {
+  if (end <= start) return [];
+  const months: Date[] = [];
+  const cursor = monthStart(start);
+  while (cursor < end) {
+    months.push(new Date(cursor));
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+  return months;
+}
+
 /** Moroccan RIB: exactly 24 digits. */
 export function ribOk(value: string): boolean {
   return /^\d{24}$/.test(value.replace(/[\s-]/g, ""));

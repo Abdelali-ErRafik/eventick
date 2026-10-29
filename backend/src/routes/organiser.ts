@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { authenticate, requirePermission, userHasPermission } from "../middleware/auth.js";
 import { organiserScope } from "../domain/auth.js";
-import { normaliseRib, ribOk, summariseRevenue } from "../domain/commission.js";
+import { feeForOrder, normaliseRib, ribOk, summariseRevenue } from "../domain/commission.js";
 import { organiserEarnings } from "../lib/payout.js";
 import { publicEvent, publicOrderWithContext } from "../lib/serialize.js";
 import { committedForTier, remainingByTier } from "../lib/availability.js";
@@ -462,10 +462,16 @@ organiserRouter.get(
      * So the headline revenue was neither gross nor net, and an organiser who
      * refunded half an order still saw all of it as earnings.
      */
-    const [settled, tickets, inside] = await Promise.all([
+    const [settled, tickets, inside, defaultPlan] = await Promise.all([
       prisma.order.findMany({
         where: { eventId: { in: eventIds }, status: { in: ["PAID", "REFUNDED"] } },
-        select: { totalCents: true, refundedCents: true, feeCents: true },
+        select: {
+          totalCents: true,
+          refundedCents: true,
+          feeCents: true,
+          // Needed only to price an UNRECORDED fee — see below.
+          event: { select: { organiser: { select: { plan: true } } } },
+        },
       }),
       prisma.ticket.count({
         where: { order: { eventId: { in: eventIds } }, status: { not: "CANCELLED" } },
@@ -473,10 +479,31 @@ organiserRouter.get(
       prisma.ticket.count({
         where: { order: { eventId: { in: eventIds } }, status: "USED" },
       }),
+      prisma.plan.findFirst({ where: { isDefault: true } }),
     ]);
 
-    const fallback = (await prisma.plan.findFirst({ where: { isDefault: true } })) ?? undefined;
-    const summary = summariseRevenue(settled, fallback);
+    /*
+     * An order with no recorded fee is priced at ITS OWN organiser's plan.
+     *
+     * This route can span every organiser on the platform (an admin holding
+     * scope.any), so one fallback plan for the whole set would charge some of
+     * them at a rate they are not on — which is the bug the per-order lookup
+     * avoids. Only legacy orders, settled before commission existed, take
+     * this path at all.
+     */
+    const summary = summariseRevenue(
+      settled.map((order) => ({
+        totalCents: order.totalCents,
+        refundedCents: order.refundedCents,
+        feeCents:
+          order.feeCents ??
+          (order.event.organiser?.plan
+            ? feeForOrder(order.totalCents, order.event.organiser.plan)
+            : defaultPlan
+              ? feeForOrder(order.totalCents, defaultPlan)
+              : null),
+      })),
+    );
 
     res.json({
       // Kept as `gmvCents` so existing callers do not break, but it is now
@@ -742,12 +769,14 @@ organiserRouter.get(
         periodEnd: true,
         grossCents: true,
         feeCents: true,
+        subscriptionCents: true,
         netCents: true,
         reference: true,
         note: true,
         createdAt: true,
         paidAt: true,
         _count: { select: { orders: true } },
+        subscriptions: { select: { month: true, amountCents: true, planKey: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -759,6 +788,14 @@ organiserRouter.get(
         periodEnd: p.periodEnd.toISOString(),
         grossCents: p.grossCents,
         feeCents: p.feeCents,
+        subscriptionCents: p.subscriptionCents,
+        // Which months the subscription covered, so a deduction can be
+        // explained rather than just subtracted.
+        subscriptionMonths: p.subscriptions.map((sub) => ({
+          month: sub.month.toISOString().slice(0, 7),
+          amountCents: sub.amountCents,
+          plan: sub.planKey,
+        })),
         netCents: p.netCents,
         reference: p.reference,
         note: p.note,

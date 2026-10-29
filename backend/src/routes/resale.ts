@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { optionalAuth } from "../middleware/auth.js";
 import { phoneOk, makePaymentRef } from "../lib/payment-sim.js";
+import { recordCommission } from "../lib/settle.js";
 import { buildPaymentRequest, cmiConfig, cmiUrls, isMockPayments } from "../lib/cmi.js";
 import { cancelListing, completeResale, listTicketForResale, resolveListing } from "../lib/resale.js";
 import { requireTicketAccessWithSession } from "../lib/order-access.js";
@@ -142,6 +143,10 @@ resaleRouter.post(
         where: { id: order.id },
         data: { status: "PAID", paymentRef: makePaymentRef(), cardBank: "Démo" },
       });
+      // A resale is a sale: the platform brokered it and takes its cut. This
+      // path sets PAID directly instead of going through settleOrder, so the
+      // commission has to be recorded explicitly or the resale is free.
+      await recordCommission(prisma, order.id);
       const result = await completeResale(listing.id, order.id);
       return res.json({ mode: "mock", settled: true, orderId: order.id, ...result });
     }

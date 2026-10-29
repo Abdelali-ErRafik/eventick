@@ -77,6 +77,7 @@ share is transferred separately. Three screens are involved:
 | Where | Who | What |
 |---|---|---|
 | **Admin → Plateforme** | admin | Assign each organiser a plan (Starter 5%, Pro 3% + 499/mo, Business 2% + 1 999/mo), and run payouts |
+| | | The monthly part is withheld from the payout, once per calendar month that had sales |
 | **Pro → Finance** | organiser | See net revenue, commission, what is owed — and enter their RIB |
 | **Pro → Finance** | organiser | Their own payout history |
 
@@ -91,8 +92,14 @@ Worth testing deliberately, because each one protects money:
 | Run the same period twice | The second run finds nothing: an order belongs to one payout, ever |
 | Mark a payout paid without a reference | Refused — the row could not be reconciled against a statement |
 | Refund something *after* its payout was marked paid | The payout's total does not move; it is a record of money already sent |
+| Resell a ticket | The platform takes its commission on the resale too, and the seller's ticket reads **transferred**, not refunded |
+| Run a payout twice over one month | The subscription is charged **once**; only new orders add commission |
+| Run a payout over a very wide period | Only months that actually had sales are charged a subscription — a dormant month is free |
+| Cancel a pending payout | Its orders *and* its subscription months are released for a later run |
 
-`npm run test:live:money` (from `backend/`) checks all of this automatically.
+`npm run test:live:orders` (from `backend/`) walks the whole path — hold, pay,
+settle, refund, resell, commission, subscription, payout — in 75 checks.
+`npm run test:live:money` covers the commission and payout rules on their own.
 
 ---
 
@@ -689,7 +696,8 @@ cd backend && npm run test:live && npm run test:live:authz && npm run test:live:
 - **Payments default to simulated.** With no `CMI_CLIENT_ID`/`CMI_STORE_KEY` no card is charged. The CMI integration itself is complete — signed redirect, hash-verified callback, replay-safe settlement — but it needs real merchant credentials to exercise, and production refuses to boot without them.
 - **Refunds do not move money.** CMI has no refund API: `/organiser/orders/:id/refund` records the refund, voids the tickets and emails the buyer, but someone must then reverse the transaction by hand in the CMI back office. Use `/organiser/orders/:id/reconcile-refund` to sync the books after a reversal made there, since CMI notifies us of nothing.
 - **A refused late payment leaves the order PENDING, not CANCELLED.** When the seats are gone the server declines the money and stops; the sweeper tidies the order up on its next pass (within five minutes). Nothing is charged in the meantime, but the order looks unpaid rather than explicitly failed until then.
-- **Commission is recorded but never collected.** The fee is real — computed server-side from the organiser's plan and written onto each order when it settles — but Eventick does not invoice or charge it. It is withheld on paper, by being deducted from the payout.
+- **Commission and subscription are withheld, not invoiced.** Both are real and computed server-side — the percentage is written onto each order when it settles, the monthly fee is charged per calendar month that had sales — but Eventick never issues an invoice or takes a card. Both are collected by being deducted from the payout, so an organiser with no payout due is never charged.
+- **A dormant month is not billed, and no debt accrues.** If a month's sales do not cover the plan's monthly fee, the shortfall is simply not collected rather than carried forward. Charging it would mean a debt model, which is a bigger decision than the payout run should make.
 - **Payouts are a ledger, not a bank integration.** A run calculates what is owed and records the transfer, but nobody sends money automatically: an admin makes the transfer in their bank and pastes the reference back in. There is no bank API.
 - **No audit trail.** Role changes, permission grants, refunds and deletions are not recorded anywhere. Only organiser-application decisions keep a record.
 - **No delete-user endpoint.** The Équipe screen cannot remove an account.

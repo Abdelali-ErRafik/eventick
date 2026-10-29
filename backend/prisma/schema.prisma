@@ -71,9 +71,10 @@ model User {
   listings ResaleListing[]
   shares   TicketShare[]
 
-  plan        Plan?        @relation(fields: [planId], references: [key], onDelete: SetNull)
-  bankAccount BankAccount?
-  payouts     Payout[]
+  plan          Plan?                @relation(fields: [planId], references: [key], onDelete: SetNull)
+  bankAccount   BankAccount?
+  payouts       Payout[]
+  subscriptions SubscriptionCharge[]
 
   /// Applications this person submitted to become an organiser.
   organiserApplications OrganiserApplication[] @relation("OrganiserApplicant")
@@ -671,15 +672,21 @@ model Payout {
   periodEnd   DateTime @map("period_end")
 
   /// Ticket revenue in the period, already net of refunds.
-  grossCents Int @map("gross_cents")
+  grossCents        Int @map("gross_cents")
   /// Platform commission withheld, summed from the orders themselves.
-  feeCents   Int @map("fee_cents")
-  /// What is actually transferred: gross - fee. Stored rather than derived so
-  /// the row remains readable if either input is ever corrected.
-  netCents   Int @map("net_cents")
+  feeCents          Int @map("fee_cents")
+  /// Plan subscription withheld — the fixed monthly part of the plan, charged
+  /// once per calendar month the period covers. Zero on Starter, and zero for
+  /// a month already billed by an earlier payout.
+  subscriptionCents Int @default(0) @map("subscription_cents")
+  /// What is actually transferred: gross - fee - subscription. Stored rather
+  /// than derived so the row remains readable if any input is corrected.
+  netCents          Int @map("net_cents")
 
   /// Orders included, so a payout can be reconciled line by line.
-  orders PayoutOrder[]
+  orders        PayoutOrder[]
+  /// Months this payout billed the subscription for.
+  subscriptions SubscriptionCharge[]
 
   /// Bank's transfer reference, filled when marked PAID.
   reference String?
@@ -716,4 +723,36 @@ model PayoutOrder {
   @@unique([orderId])
   @@index([payoutId])
   @@map("payout_orders")
+}
+
+/// One month's plan subscription, billed once.
+///
+/// The fixed part of a plan ("Pro · 3% + 499/mo") used to be displayed and
+/// never charged, which made Pro cheaper than Starter at every volume. It is
+/// now withheld from the payout — and this table is what stops it being
+/// withheld twice: `@@unique([organiserId, month])` means the database, not a
+/// query, guarantees one charge per organiser per month however many payout
+/// runs cover it.
+model SubscriptionCharge {
+  id          String @id @default(cuid())
+  organiserId String @map("organiser_id")
+  payoutId    String @map("payout_id")
+
+  /// First instant of the billed calendar month, UTC. The month IS the key,
+  /// so it is normalised on write rather than stored as given.
+  month DateTime
+
+  /// Charged amount, copied from the plan at the time of the run so a later
+  /// price change cannot alter a month already billed.
+  amountCents Int    @map("amount_cents")
+  planKey     String @map("plan_key")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  organiser User   @relation(fields: [organiserId], references: [id], onDelete: Cascade)
+  payout    Payout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+
+  @@unique([organiserId, month])
+  @@index([payoutId])
+  @@map("subscription_charges")
 }

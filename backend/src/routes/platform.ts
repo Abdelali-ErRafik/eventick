@@ -153,7 +153,7 @@ platformRouter.get(
         role: true,
         createdAt: true,
         events: { select: { id: true } },
-        plan: { select: { key: true, label: true } },
+        plan: { select: { key: true, label: true, rateBps: true, monthlyCents: true } },
       },
     });
 
@@ -171,7 +171,10 @@ platformRouter.get(
                 where: { eventId: { in: eventIds }, status: { in: ["PAID", "REFUNDED"] } },
                 select: { totalCents: true, refundedCents: true, feeCents: true },
               });
-        const totals = summariseRevenue(orders, defaultPlan ?? undefined);
+        // An unrecorded fee is priced at THIS organiser's plan, not the
+        // platform default: charging a Pro organiser at Starter's rate was
+        // the bug, and the row already knows which plan they are on.
+        const totals = summariseRevenue(orders, organiser.plan ?? defaultPlan ?? undefined);
 
         return {
           id: organiser.id,
@@ -280,6 +283,7 @@ platformRouter.get(
         periodEnd: true,
         grossCents: true,
         feeCents: true,
+        subscriptionCents: true,
         netCents: true,
         reference: true,
         createdAt: true,
@@ -308,6 +312,7 @@ platformRouter.get(
         periodEnd: p.periodEnd.toISOString(),
         grossCents: p.grossCents,
         feeCents: p.feeCents,
+        subscriptionCents: p.subscriptionCents,
         netCents: p.netCents,
         orders: p._count.orders,
         reference: p.reference,

@@ -1,6 +1,6 @@
 import { prisma } from "./prisma.js";
 import { HttpError } from "./http.js";
-import { feeAfterRefund, summariseRevenue, type RevenueLine } from "../domain/commission.js";
+import { feeAfterRefund, monthStart, monthsInPeriod, summariseRevenue, type RevenueLine } from "../domain/commission.js";
 import { logger } from "./logger.js";
 
 /**
@@ -21,6 +21,9 @@ import { logger } from "./logger.js";
  *  - A payout's totals are FROZEN when it is created. They are copied from
  *    the orders, not recomputed on read, so a refund processed next week
  *    cannot change the value of a transfer already made.
+ *  - A plan's fixed monthly fee is charged at most ONCE per calendar month,
+ *    enforced by a unique index on (organiserId, month) rather than by a
+ *    query, so overlapping runs cannot bill the same month twice.
  */
 
 /**
@@ -31,6 +34,25 @@ import { logger } from "./logger.js";
  */
 async function defaultPlan() {
   return (await prisma.plan.findFirst({ where: { isDefault: true } })) ?? undefined;
+}
+
+/**
+ * The plan to price an UNRECORDED fee at.
+ *
+ * Orders settled before commission existed carry feeCents: null, and pricing
+ * them at nothing would overstate what an organiser is owed. The first
+ * version priced them at the platform default, which was worse than it
+ * sounds: a Pro organiser (3%) had those orders charged at Starter's 5%, so
+ * their reported commission went UP at a rate they were never on. Their own
+ * plan is the only defensible guess; the default is for organisers who have
+ * none.
+ */
+async function pricingPlanFor(organiserId: string) {
+  const organiser = await prisma.user.findUnique({
+    where: { id: organiserId },
+    select: { plan: true },
+  });
+  return organiser?.plan ?? (await defaultPlan());
 }
 
 /**
@@ -57,7 +79,7 @@ export async function organiserEarnings(organiserId: string) {
     orderBy: { createdAt: "desc" },
   });
 
-  const fallback = await defaultPlan();
+  const fallback = await pricingPlanFor(organiserId);
   const toLine = (o: (typeof orders)[number]): RevenueLine => ({
     totalCents: o.totalCents,
     refundedCents: o.refundedCents,
@@ -81,6 +103,14 @@ export async function organiserEarnings(organiserId: string) {
 
   const plan = organiser?.plan ?? (await defaultPlan()) ?? null;
 
+  // Months already billed, so the UI can say what the subscription has cost
+  // rather than leaving the deduction on a payout unexplained.
+  const billed = await prisma.subscriptionCharge.aggregate({
+    where: { organiserId },
+    _sum: { amountCents: true },
+    _count: { _all: true },
+  });
+
   return {
     plan: plan
       ? {
@@ -98,6 +128,13 @@ export async function organiserEarnings(organiserId: string) {
     pending,
     paidOutCents: paidOut._sum.netCents ?? 0,
     unpaidOrders: unpaid.length,
+    subscription: {
+      /** The plan's fixed monthly part, 0 on Starter. */
+      monthlyCents: plan?.monthlyCents ?? 0,
+      /** Charged to date, across every payout. */
+      billedCents: billed._sum.amountCents ?? 0,
+      billedMonths: billed._count._all,
+    },
     bankAccount: organiser?.bankAccount
       ? {
           holderName: organiser.bankAccount.holderName,
@@ -122,7 +159,13 @@ export async function runPayout(
   organiserId: string,
   periodStart: Date,
   periodEnd: Date,
-): Promise<{ payoutId: string; netCents: number; orders: number }> {
+): Promise<{
+  payoutId: string;
+  netCents: number;
+  orders: number;
+  subscriptionCents: number;
+  months: number;
+}> {
   if (periodEnd <= periodStart) throw new HttpError(400, "The period must end after it starts");
 
   const organiser = await prisma.user.findUnique({
@@ -137,7 +180,7 @@ export async function runPayout(
     throw new HttpError(409, "This organiser has no bank details on file — add them before running a payout");
   }
 
-  const fallback = await defaultPlan();
+  const fallback = await pricingPlanFor(organiserId);
 
   const payout = await prisma.$transaction(async (tx) => {
     const orders = await tx.order.findMany({
@@ -149,7 +192,7 @@ export async function runPayout(
         // a re-run safe.
         payoutOrder: null,
       },
-      select: { id: true, totalCents: true, refundedCents: true, feeCents: true },
+      select: { id: true, totalCents: true, refundedCents: true, feeCents: true, createdAt: true },
     });
 
     if (orders.length === 0) throw new HttpError(409, "Nothing to pay out for this period");
@@ -159,10 +202,74 @@ export async function runPayout(
       fallback,
     );
 
+    /*
+     * The plan's fixed monthly fee, for each calendar month this period covers
+     * that has not been billed yet.
+     *
+     * "Pro · 3% + 499/mo" used to charge only the 3%, which made Pro cheaper
+     * than Starter's 5% at every volume — the tiers were backwards. Charging
+     * it here rather than inventing a billing cycle means it is withheld from
+     * money we already hold, and the organiser sees exactly what was taken.
+     *
+     * Months already billed are skipped, so two runs covering March bill it
+     * once. The unique index on (organiserId, month) is the real guarantee;
+     * this query just avoids provoking it.
+     */
+    const plan = await tx.user
+      .findUnique({ where: { id: organiserId }, select: { plan: true } })
+      .then((u) => u?.plan ?? null);
+    const monthlyCents = plan?.monthlyCents ?? 0;
+
+    let billableMonths: Date[] = [];
+    if (monthlyCents > 0) {
+      /*
+       * Only months the organiser actually SOLD IN are billable.
+       *
+       * Billing every month the period spans sounds right until someone runs
+       * a payout over a wide window to sweep up everything outstanding — the
+       * UI's own default was 2020 to today, which is 120 months, or 59 880 MAD
+       * of subscription against a few hundred of revenue. The run then refused
+       * itself, which is a worse outcome than not charging: the organiser
+       * cannot be paid at all.
+       *
+       * A subscription is for a month the platform carried their sales, so a
+       * month with no orders in this payout is not one of them. Dormant months
+       * are simply not charged rather than accrued as debt — a debt model is a
+       * bigger decision than this run should make.
+       */
+      const monthsWithSales = new Set(orders.map((o) => monthStart(o.createdAt).getTime()));
+      const covered = monthsInPeriod(periodStart, periodEnd).filter((month) =>
+        monthsWithSales.has(month.getTime()),
+      );
+      const already = await tx.subscriptionCharge.findMany({
+        where: { organiserId, month: { in: covered } },
+        select: { month: true },
+      });
+      const billed = new Set(already.map((row) => row.month.getTime()));
+      billableMonths = covered.filter((month) => !billed.has(month.getTime()));
+    }
+    const subscriptionCents = monthlyCents * billableMonths.length;
+
+    /*
+     * Subscription comes out of what is payable, and the result is floored at
+     * zero rather than allowed to go negative: a quiet month must not turn a
+     * payout into an invoice. The unbilled remainder is simply not collected,
+     * which is the lenient direction — the alternative is a debt model, and
+     * that is a bigger decision than this run should make on its own.
+     */
+    const netCents = Math.max(0, summary.payableCents - subscriptionCents);
+
     // A period of fully refunded orders nets zero. Recording it would create a
     // transfer of 0 MAD that someone has to action.
     if (summary.payableCents <= 0) {
       throw new HttpError(409, "This period nets nothing payable — every order in it was refunded");
+    }
+    if (netCents <= 0) {
+      throw new HttpError(
+        409,
+        `This period nets ${(summary.payableCents / 100).toFixed(2)} MAD, which does not cover the ` +
+          `${(subscriptionCents / 100).toFixed(2)} MAD plan subscription for it — nothing to transfer`,
+      );
     }
 
     const created = await tx.payout.create({
@@ -172,7 +279,8 @@ export async function runPayout(
         periodEnd,
         grossCents: summary.netRevenueCents,
         feeCents: summary.feeCents,
-        netCents: summary.payableCents,
+        subscriptionCents,
+        netCents,
         orders: {
           create: orders.map((o) => ({
             orderId: o.id,
@@ -184,15 +292,37 @@ export async function runPayout(
             ),
           })),
         },
+        subscriptions: {
+          create: billableMonths.map((month) => ({
+            organiserId,
+            month,
+            amountCents: monthlyCents,
+            // Copied so the charge can still be explained after a rate edit.
+            planKey: plan!.key,
+          })),
+        },
       },
       select: { id: true, netCents: true },
     });
 
-    return { payoutId: created.id, netCents: created.netCents, orders: orders.length };
+    return {
+      payoutId: created.id,
+      netCents: created.netCents,
+      orders: orders.length,
+      subscriptionCents,
+      months: billableMonths.length,
+    };
   });
 
   logger.info(
-    { organiserId, payoutId: payout.payoutId, netCents: payout.netCents, orders: payout.orders },
+    {
+      organiserId,
+      payoutId: payout.payoutId,
+      netCents: payout.netCents,
+      orders: payout.orders,
+      subscriptionCents: payout.subscriptionCents,
+      months: payout.months,
+    },
     "payout created",
   );
   return payout;
@@ -241,6 +371,10 @@ export async function cancelPayout(payoutId: string, note: string): Promise<void
       throw new HttpError(409, `Only a pending payout can be cancelled — this one is ${existing.status.toLowerCase()}`);
     }
     await tx.payoutOrder.deleteMany({ where: { payoutId } });
+    // The subscription months go back too. Leaving them would block those
+    // months from ever being billed, because the unique index would still see
+    // them as charged by a payout nobody is going to send.
+    await tx.subscriptionCharge.deleteMany({ where: { payoutId } });
   });
-  logger.info({ payoutId }, "payout cancelled, orders released");
+  logger.info({ payoutId }, "payout cancelled, orders and subscription months released");
 }

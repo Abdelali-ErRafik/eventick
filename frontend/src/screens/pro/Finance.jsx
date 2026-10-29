@@ -138,10 +138,30 @@ export default function Finance() {
             </span>
             <span className="text-sm font-semibold tabular-nums">
               {RATE(finance.plan.rateBps)}
-              {finance.plan.monthlyCents > 0 ? ` + ${money(finance.plan.monthlyCents)} MAD / mois` : ""}
+              {finance.plan.monthlyCents > 0
+                ? ` + ${t.subscriptionMonthly.replace("{amount}", money(finance.plan.monthlyCents))}`
+                : ""}
             </span>
             <span className="text-xs text-muted">{finance.plan.assigned ? t.planAssigned : t.planDefault}</span>
           </div>
+
+          {/* The fixed monthly part used to be printed on the plan and never
+              charged, which made Pro cheaper than Starter at every volume. It
+              is withheld from the payout now, so the card says where it goes
+              and how much has actually been taken. */}
+          {finance.subscription?.monthlyCents > 0 ? (
+            <p className="mt-3 text-xs text-muted">
+              <span className="font-semibold text-ink">{t.subscription}:</span> {t.subscriptionOnPayout}
+              {finance.subscription.billedMonths > 0
+                ? ` · ${t.subscriptionBilled
+                    .replace("{amount}", money(finance.subscription.billedCents))
+                    .replace("{n}", String(finance.subscription.billedMonths))}`
+                : ""}
+            </p>
+          ) : (
+            <p className="mt-3 text-xs text-muted">{t.subscriptionNone}</p>
+          )}
+
           <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-muted">
             <Info className="mt-px size-3.5 shrink-0" aria-hidden />
             {t.planNote}
@@ -209,11 +229,15 @@ function PayoutRow({ row, t, locale }) {
         <p className="text-sm font-bold tabular-nums">
           {money(row.netCents)} MAD
           <span className="ms-2 text-xs font-semibold text-muted">
-            ({t.gross} {money(row.grossCents)} − {t.fee} {money(row.feeCents)})
+            ({t.gross} {money(row.grossCents)} − {t.fee} {money(row.feeCents)}
+            {/* Shown only when non-zero: a month already billed by an earlier
+                run deducts nothing, and a 0.00 line would read as a mistake. */}
+            {row.subscriptionCents > 0 ? ` − ${t.subscription} ${money(row.subscriptionCents)}` : ""})
           </span>
         </p>
         <p className="mt-0.5 text-xs text-muted">
           {t.payoutPeriod} {fmt(row.periodStart)} → {fmt(row.periodEnd)} · {row.orders} {t.payoutOrders}
+          {row.subscriptionMonths?.length ? ` · ${row.subscriptionMonths.map((m) => m.month).join(", ")}` : ""}
           {row.reference ? ` · ${t.payoutRef} ${row.reference}` : ""}
         </p>
       </div>

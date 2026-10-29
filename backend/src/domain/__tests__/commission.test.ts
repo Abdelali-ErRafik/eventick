@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   feeAfterRefund,
   feeForOrder,
+  monthStart,
+  monthsInPeriod,
   normaliseRib,
   ribOk,
   summariseRevenue,
@@ -157,5 +159,53 @@ describe("normaliseRib", () => {
   it("stores digits only, so two spellings of one RIB compare equal", () => {
     expect(normaliseRib("1234 5678 9012 3456 7890 1234")).toBe("123456789012345678901234");
     expect(normaliseRib("1234-5678-9012-3456-7890-1234")).toBe("123456789012345678901234");
+  });
+});
+
+describe("monthsInPeriod", () => {
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+  it("returns the single month a short period sits in", () => {
+    expect(monthsInPeriod(new Date("2026-03-10"), new Date("2026-03-11")).map(iso)).toEqual(["2026-03-01"]);
+  });
+
+  it("returns every month a long period touches", () => {
+    expect(monthsInPeriod(new Date("2026-02-15"), new Date("2026-05-02")).map(iso)).toEqual([
+      "2026-02-01",
+      "2026-03-01",
+      "2026-04-01",
+      "2026-05-01",
+    ]);
+  });
+
+  it("treats the end as EXCLUSIVE, so consecutive runs never share a month", () => {
+    // This is the property that stops a month being billed twice: a period
+    // ending exactly on 1 April does not include April, which the next run
+    // then bills exactly once.
+    expect(monthsInPeriod(new Date("2026-03-01"), new Date("2026-04-01")).map(iso)).toEqual(["2026-03-01"]);
+    expect(monthsInPeriod(new Date("2026-04-01"), new Date("2026-05-01")).map(iso)).toEqual(["2026-04-01"]);
+  });
+
+  it("crosses a year boundary", () => {
+    expect(monthsInPeriod(new Date("2026-12-20"), new Date("2027-01-05")).map(iso)).toEqual([
+      "2026-12-01",
+      "2027-01-01",
+    ]);
+  });
+
+  it("is empty for an inverted or empty period", () => {
+    expect(monthsInPeriod(new Date("2026-05-01"), new Date("2026-05-01"))).toEqual([]);
+    expect(monthsInPeriod(new Date("2026-05-02"), new Date("2026-05-01"))).toEqual([]);
+  });
+
+  it("normalises to the first instant of the month, in UTC", () => {
+    const [first] = monthsInPeriod(new Date("2026-03-31T23:30:00Z"), new Date("2026-04-01T00:30:00Z"));
+    expect(first.toISOString()).toBe("2026-03-01T00:00:00.000Z");
+  });
+});
+
+describe("monthStart", () => {
+  it("floors a date to its UTC month", () => {
+    expect(monthStart(new Date("2026-07-19T13:45:00Z")).toISOString()).toBe("2026-07-01T00:00:00.000Z");
   });
 });

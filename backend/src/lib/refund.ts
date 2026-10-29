@@ -83,9 +83,22 @@ export async function refundOrder(
       where: { id: order.id },
       data: { refundRef, ...(full ? { status: "REFUNDED" as const } : {}) },
     });
-    // Only a full refund voids the tickets; a partial one leaves them usable.
+    /*
+     * Only a full refund voids the tickets; a partial one leaves them usable.
+     *
+     * TRANSFERRED is excluded deliberately. A resale refunds the seller their
+     * face value, which is a FULL refund of their order — so without this
+     * filter it overwrote the ticket it had just marked TRANSFERRED, and the
+     * seat's history read "refunded" rather than "sold on". Both states block
+     * entry, so nothing was exploitable, but the gate tells a turned-away
+     * holder which of the two happened, and support cannot answer "where did
+     * my ticket go" from a status that lost the distinction.
+     */
     if (full) {
-      await tx.ticket.updateMany({ where: { orderId: order.id }, data: { status: "CANCELLED" } });
+      await tx.ticket.updateMany({
+        where: { orderId: order.id, status: { not: "TRANSFERRED" } },
+        data: { status: "CANCELLED" },
+      });
     }
   });
 

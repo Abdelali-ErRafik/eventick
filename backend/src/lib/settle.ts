@@ -29,6 +29,51 @@ export class OversoldError extends Error {
   }
 }
 
+/** Prisma client or an open transaction — recordCommission works with either. */
+type Db = Pick<typeof prisma, "order" | "user" | "plan">;
+
+/**
+ * Write the platform's commission onto an order, from the plan in force NOW.
+ *
+ * Shared because there are three ways an order becomes PAID — a direct sale
+ * through settleOrder, a resale in mock mode, and a resale through the CMI
+ * callback — and the first version recorded the fee only in the first. That
+ * made every resale commission-free: the platform brokered the sale, moved
+ * the seat, refunded the seller and earned nothing. Worse, the null fee was
+ * then priced at the DEFAULT plan when Finance summed revenue, so a Pro
+ * organiser's reported commission went UP after a resale, at a rate they
+ * were not on.
+ *
+ * Idempotent: an order that already carries a fee is left alone, so a
+ * replayed callback cannot re-price a sale against a plan that changed since.
+ */
+export async function recordCommission(db: Db, orderId: string): Promise<void> {
+  const order = await db.order.findUnique({
+    where: { id: orderId },
+    select: { id: true, totalCents: true, feeCents: true, event: { select: { organiserId: true } } },
+  });
+  if (!order) return;
+  // Already priced — see idempotence above.
+  if (order.feeCents !== null) return;
+  // A platform-owned event has no organiser to charge.
+  if (!order.event.organiserId) return;
+
+  const organiser = await db.user.findUnique({
+    where: { id: order.event.organiserId },
+    select: { plan: true },
+  });
+  // An organiser with no plan assigned still owes the default rate; "no plan,
+  // no fee" would make unassigned organisers free, which is a billing hole
+  // rather than a kindness.
+  const plan = organiser?.plan ?? (await db.plan.findFirst({ where: { isDefault: true } }));
+  if (!plan) return;
+
+  await db.order.update({
+    where: { id: order.id },
+    data: { feeCents: feeForOrder(order.totalCents, plan), feePlanKey: plan.key },
+  });
+}
+
 /**
  * Settlement — the one place a successful payment turns into tickets.
  *
@@ -67,37 +112,7 @@ export async function settleOrder(orderId: string, payment: {
       include: { lines: { include: { tier: true } }, event: true },
     });
 
-    /*
-     * Record the platform's commission NOW, from the plan in force at this
-     * moment, and never recompute it.
-     *
-     * The alternative — deriving the fee from the organiser's current plan
-     * whenever Finance is opened — means moving an organiser to a cheaper
-     * plan retroactively changes what they owed on tickets already sold, and
-     * silently alters payouts that have already been made. Writing it onto
-     * the order makes the figure a fact about the sale rather than a function
-     * of today's configuration.
-     */
-    if (current.event.organiserId) {
-      const organiser = await tx.user.findUnique({
-        where: { id: current.event.organiserId },
-        select: { plan: true },
-      });
-      // An organiser with no plan assigned still owes the default rate;
-      // falling back to "no plan, no fee" would make unassigned organisers
-      // free, which is a billing hole rather than a kindness.
-      const plan =
-        organiser?.plan ?? (await tx.plan.findFirst({ where: { isDefault: true } }));
-      if (plan) {
-        await tx.order.update({
-          where: { id: current.id },
-          data: {
-            feeCents: feeForOrder(current.totalCents, plan),
-            feePlanKey: plan.key,
-          },
-        });
-      }
-    }
+    await recordCommission(tx, current.id);
 
     /*
      * Re-check capacity before issuing, not just at hold time.

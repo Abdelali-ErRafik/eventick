@@ -2,7 +2,7 @@ import { Router, urlencoded } from "express";
 import { prisma } from "../lib/prisma.js";
 import { asyncHandler } from "../lib/http.js";
 import { cmiConfig, isApproved, verifyCallbackHash } from "../lib/cmi.js";
-import { OversoldError, settleOrder } from "../lib/settle.js";
+import { OversoldError, recordCommission, settleOrder } from "../lib/settle.js";
 import { completeResale } from "../lib/resale.js";
 import { logger } from "../lib/logger.js";
 
@@ -123,6 +123,10 @@ webhooksRouter.post(
           return seatIsTheirs;
         }
         try {
+          // Same as the mock path: a resale is a sale, and this branch sets
+          // PAID itself rather than going through settleOrder, so the fee
+          // would otherwise never be recorded.
+          await recordCommission(prisma, order.id);
           // Guarded on status LISTED inside, so a replay cannot transfer the
           // seat twice — and a listing cancelled or sold to someone else while
           // this buyer was paying throws, which must NOT take their money.
@@ -134,10 +138,13 @@ webhooksRouter.post(
             "CMI resale could not be completed — refusing the payment",
           );
           // Undo the PAID flip: nothing was delivered, so the order must not
-          // look paid for a seat the buyer never received.
+          // look paid for a seat the buyer never received. The commission goes
+          // back too — leaving it would bill the organiser for a sale that
+          // never happened, and would also stop recordCommission re-pricing
+          // the order if the buyer retries, since it skips priced orders.
           await prisma.order.updateMany({
             where: { id: order.id, gatewayRef },
-            data: { status: "PENDING", paymentRef: null, gatewayRef: null },
+            data: { status: "PENDING", paymentRef: null, gatewayRef: null, feeCents: null, feePlanKey: null },
           });
           return false;
         }

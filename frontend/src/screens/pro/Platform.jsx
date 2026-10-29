@@ -317,6 +317,7 @@ function PayoutAdminRow({ row, t, onChanged }) {
           <p className="truncate text-sm font-bold">{row.organiserName}</p>
           <p className="truncate text-xs text-muted">
             {row.orders} {t.payoutOrders} · {t.gross} {money(row.grossCents)} − {t.fee} {money(row.feeCents)}
+            {row.subscriptionCents > 0 ? ` − ${t.subscription} ${money(row.subscriptionCents)}` : ""}
             {row.reference ? ` · ${t.payoutRef} ${row.reference}` : ""}
           </p>
         </div>
@@ -359,12 +360,19 @@ function RunPayoutModal({ seller, t, onClose, onDone }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    // Defaults to a wide window on purpose: a run only picks up orders that
-    // are not already in a payout, so "everything outstanding" is both the
-    // common case and safe to repeat.
+    /*
+     * Defaults to the last twelve months, not "all time".
+     *
+     * A run only picks up orders not already in a payout, so a wide window is
+     * safe for the ORDERS — but the plan subscription is billed per calendar
+     * month, and a 2020 start meant offering to bill 120 of them. A year is
+     * wide enough to sweep up anything outstanding in practice, and the dates
+     * are editable for the rare case that is not true.
+     */
     const now = new Date();
+    const from = new Date(Date.UTC(now.getUTCFullYear() - 1, now.getUTCMonth(), 1));
     setTo(new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10));
-    setFrom("2020-01-01");
+    setFrom(from.toISOString().slice(0, 10));
     api.get(`/platform/organisers/${seller.id}/earnings`).then(setEarnings).catch(() => setEarnings(null));
   }, [seller.id]);
 
