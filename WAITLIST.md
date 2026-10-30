@@ -56,10 +56,14 @@ Any of these calls `offerFreedSeats()`:
 | An organiser **cancels an order** | `routes/organiser.ts` |
 | A **checkout hold expires** or is released | `lib/sweeper.ts`, `routes/orders.ts` |
 | A ticket is **cancelled** by its holder | `lib/ticket-admin.ts` |
-| An organiser **raises capacity** | `routes/organiser.ts` |
+| An organiser **adds seats** to a tier | `routes/organiser.ts` |
 
 A *partial* refund does not free a seat — the ticket stays valid, so there is
-nothing to give away.
+nothing to give away. Nor does LOWERING capacity, which frees nothing.
+
+> New seats reach the queue before the public. Adding capacity to a sold-out
+> event used to put the seats straight in the catalogue, so a stranger
+> refreshing the page bought what the queue had been waiting for.
 
 ---
 

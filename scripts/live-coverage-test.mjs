@@ -529,6 +529,41 @@ async function main() {
       `remaining=${freed.data?.remaining?.[tierId]}`,
     );
 
+    /*
+     * Adding seats offers them to the QUEUE before the public.
+     *
+     * Raising a tier's capacity is the clearest case of seats becoming
+     * available, and it was the one path that never told the waitlist: the
+     * seats went straight into the catalogue, so anyone refreshing the page
+     * bought what the queue had been waiting for.
+     */
+    {
+      const { slug: s2, event: e2 } = await makeEvent(tokens.organiser, `grow${Date.now()}`, [tierBody({ capacity: 1 })]);
+      slugs.push(s2);
+      const t2 = e2.tiers[0].id;
+      await buy(tokens.customer, s2, t2, 1, "Complet");
+
+      const email = `grow-${Date.now()}@example.com`;
+      await call("POST", `/api/events/${s2}/waitlist`, { body: { email } });
+
+      const grown = await call("PATCH", `/api/organiser/tiers/${t2}`, {
+        token: tokens.organiser,
+        body: { capacity: 2 },
+      });
+      record("adding a seat to a sold-out tier succeeds", grown.status === 200, `${grown.status}`);
+
+      // offerFreedSeats is fire-and-forget; let it land.
+      await new Promise((r) => setTimeout(r, 1200));
+      const queue = await call("GET", `/api/organiser/events/${s2}/waitlist`, { token: tokens.organiser });
+      const mine = (queue.data?.entries ?? []).find((e) => e.email === email);
+      record("and the new seat is OFFERED to the person waiting", mine?.status === "OFFERED", `${mine?.status}`);
+
+      const grabbed = await call("POST", "/api/orders/hold", {
+        body: { eventSlug: s2, lines: [{ tierId: t2, qty: 1 }], email: `jumper-${Date.now()}@example.com` },
+      });
+      record("while a stranger still cannot buy it", grabbed.status === 409, `${grabbed.status}`);
+    }
+
     await expectStatus("cancel as CUSTOMER → 403", "POST", `/api/organiser/orders/${order.orderId}/cancel`, 403, {
       token: tokens.customer,
     });

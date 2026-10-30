@@ -536,7 +536,18 @@ const up = await call("POST", "/api/uploads/image", { token: tokens.organiser, f
 record("upload a real PNG", up.status === 201 && typeof up.data?.url === "string", `${up.status} ${up.data?.url ?? up.data?.error ?? ""}`);
 
 if (up.data?.url) {
-  const served = await fetch(`${API}${up.data.url}`);
+  /*
+   * The URL may be absolute or relative, and both are correct.
+   *
+   * With BUNNY_CDN_URL set, an upload is pushed to the CDN and the route
+   * returns a full https:// URL; without it the file is served locally and
+   * the URL is a path. This used to prepend the API base unconditionally,
+   * producing "http://localhost:4100https://storeno.b-cdn.net/..." and a
+   * TypeError that stopped the whole suite — a failure that only appeared
+   * once the CDN credentials were present in .env.
+   */
+  const target = /^https?:\/\//.test(up.data.url) ? up.data.url : `${API}${up.data.url}`;
+  const served = await fetch(target);
   record("uploaded file is served back", served.status === 200, `${served.status} ${served.headers.get("content-type")}`);
 }
 

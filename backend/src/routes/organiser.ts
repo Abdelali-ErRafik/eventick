@@ -526,6 +526,67 @@ organiserRouter.get(
   }),
 );
 
+/**
+ * One order, in full — the page an organiser opens when a buyer phones up.
+ *
+ * Deliberately NOT served by filtering /orders/detailed client-side: that
+ * route returns every order on the event, so a support lookup would download
+ * the whole book to read one page. It also cannot carry the audit trail,
+ * which is the half of this answer that says what was already DONE about the
+ * problem (refunded by whom, cancelled when) rather than only the current
+ * state.
+ */
+organiserRouter.get(
+  "/orders/:id",
+  canManageOrders,
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    // Ownership first: the same check every other order route makes, so an
+    // organiser cannot read a neighbour's order by guessing an id.
+    await requireOwnedOrder(req.user, id);
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: {
+        tickets: { include: { tier: { include: { event: true } } } },
+        event: true,
+        promoCode: true,
+      },
+    });
+    if (!order) throw new HttpError(404, "Order not found");
+
+    // The subject id is the order's, so this is every action taken ON this
+    // order. Capped: a pathological row count must not turn a support lookup
+    // into a slow query.
+    const audit = await prisma.auditEvent.findMany({
+      where: { subjectType: "order", subjectId: id },
+      orderBy: { at: "desc" },
+      take: 50,
+    });
+
+    res.json({
+      order: publicOrderWithContext(order),
+      event: {
+        slug: order.event.slug,
+        titleFr: order.event.titleFr,
+        titleAr: order.event.titleAr,
+        startAt: order.event.startAt.toISOString(),
+        venueFr: order.event.venueFr,
+        venueAr: order.event.venueAr,
+      },
+      promo: order.promoCode ? { code: order.promoCode.code, kind: order.promoCode.kind, value: order.promoCode.value } : null,
+      audit: audit.map((row) => ({
+        id: row.id,
+        action: row.action,
+        actorEmail: row.actorEmail,
+        actorRole: row.actorRole,
+        at: row.at.toISOString(),
+        details: row.details,
+      })),
+    });
+  }),
+);
+
 async function requireOwnedOrder(user: Express.Request["user"], orderId: string) {
   const order = await prisma.order.findUnique({ where: { id: orderId }, include: { event: true } });
   if (!order) throw new HttpError(404, "Order not found");
@@ -1043,6 +1104,26 @@ organiserRouter.patch(
       });
     }
 
+    /*
+     * New seats go to the QUEUE before they go on sale.
+     *
+     * Adding capacity to a sold-out event is the clearest case there is of
+     * seats becoming available, and it was the one path that did not tell the
+     * waitlist. The seats simply appeared in the public catalogue, so anyone
+     * refreshing the page bought the seats the people in the queue had been
+     * waiting for — which is the opposite of what a queue is for.
+     *
+     * Only on an INCREASE. A decrease frees nothing, and re-offering on every
+     * save would mail the queue each time an organiser corrected a typo in
+     * the zone name.
+     *
+     * Fire-and-forget, like the other callers: the capacity change has already
+     * been committed and must not fail because an offer email did not send.
+     */
+    if (body.capacity !== undefined && body.capacity > tier.capacity) {
+      void offerFreedSeats(tier.eventId);
+    }
+
     res.json({ tier: updated });
   }),
 );
@@ -1445,7 +1526,7 @@ organiserRouter.get(
         createdAt: true,
         issuedByEmail: true,
         tier: { select: { id: true, nameFr: true, nameAr: true } },
-        ticket: { select: { id: true, ref: true, status: true } },
+        ticket: { select: { id: true, ref: true, status: true, accessToken: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -1460,6 +1541,19 @@ organiserRouter.get(
         tierNameFr: invitation.tier.nameFr,
         tierNameAr: invitation.tier.nameAr,
         ref: invitation.ticket?.ref ?? null,
+        ticketId: invitation.ticket?.id ?? null,
+        /**
+         * The guest's own credential, so the organiser can open EXACTLY the
+         * page the guest was emailed — the question behind "they say the link
+         * doesn't work" is whether it works, which a different view of the
+         * same ticket cannot answer.
+         *
+         * Safe to return here: this route already requires events.manage on
+         * an owned event, and the organiser can read the ticket anyway
+         * through authoriseOrderOrOrganiser. It reveals nothing they could
+         * not already reach, it just saves reaching for it a longer way.
+         */
+        accessToken: invitation.ticket?.accessToken ?? null,
         // "issued, then revoked" is information an organiser wants to see, so
         // a cancelled ticket still shows up here rather than vanishing.
         revoked: invitation.ticket?.status === "CANCELLED",
