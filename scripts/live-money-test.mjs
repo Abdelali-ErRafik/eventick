@@ -310,6 +310,46 @@ async function main() {
     check("the organiser list carries a refund rate to compare on",
       typeof me?.refundRateBp === "number", `${(me?.refundRateBp ?? 0) / 100}%`);
     check("and the refunded total behind it", typeof me?.refundedCents === "number", mad(me?.refundedCents ?? 0));
+
+    /*
+     * Plan requests: the organiser asks, an admin decides.
+     *
+     * They could read what each tier costs and had no way to act on it --
+     * the card said "get in touch" and offered no means. Switching directly
+     * is not an option: the subscription that buys a lower rate is withheld
+     * from payouts, so anyone with no payouts would take 2% for nothing.
+     */
+    await call("DELETE", "/api/organiser/plan-request", { token: orga });
+    const onNow = (await call("GET", "/api/organiser/finance", { token: orga })).data.plan.key;
+    const target = onNow === "business" ? "pro" : "business";
+
+    const same = await call("POST", "/api/organiser/plan-request", { token: orga, body: { planKey: onNow } });
+    check("asking for the plan you are on is refused", same.status === 409, `${same.status}`);
+
+    const asked = await call("POST", "/api/organiser/plan-request", { token: orga, body: { planKey: target } });
+    check("an organiser may ASK for a plan", asked.status === 201, `${asked.status}`);
+    check("asking does not move them", (await call("GET", "/api/organiser/finance", { token: orga })).data.plan.key === onNow);
+    check("a second open request is refused",
+      (await call("POST", "/api/organiser/plan-request", { token: orga, body: { planKey: "starter" } })).status === 409);
+
+    const queue = await call("GET", "/api/platform/plan-requests", { token: admin });
+    const mine = queue.data.requests.find((r) => r.organiser.id === orgaId);
+    check("it reaches the admin queue with its rate", mine?.planKey === target && typeof mine?.rateBps === "number",
+      `${mine?.planLabel} ${(mine?.rateBps ?? 0) / 100}%`);
+    check("an organiser cannot read that queue",
+      (await call("GET", "/api/platform/plan-requests", { token: orga })).status === 403);
+    check("nor decide one",
+      (await call("POST", `/api/platform/plan-requests/${mine.id}/decide`, { token: orga, body: { approve: true } })).status === 403);
+
+    const approved = await call("POST", `/api/platform/plan-requests/${mine.id}/decide`, { token: admin, body: { approve: true } });
+    check("approving moves the organiser", approved.status === 200, `${approved.status}`);
+    check("and their screen shows the new plan",
+      (await call("GET", "/api/organiser/finance", { token: orga })).data.plan.key === target);
+    check("deciding it twice is refused",
+      (await call("POST", `/api/platform/plan-requests/${mine.id}/decide`, { token: admin, body: { approve: true } })).status === 409);
+
+    // Back to where the suite found them, so later checks price as expected.
+    await call("PATCH", `/api/platform/organisers/${orgaId}/plan`, { token: admin, body: { planKey: onNow } });
     check(
       "exactly one is marked as theirs, and it is the one they are on",
       tiers.filter((p) => p.current).length === 1 && tiers.find((p) => p.current)?.key === onPro.data.plan?.key,

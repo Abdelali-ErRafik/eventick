@@ -327,6 +327,142 @@ platformRouter.patch(
   }),
 );
 
+/**
+ * Plan requests waiting for a decision.
+ *
+ * Organisers can read what each tier costs but cannot switch themselves — the
+ * subscription that buys a lower rate is withheld from payouts, so anyone
+ * with no payouts would get 2% for nothing. They ask here instead, and this
+ * is the queue.
+ */
+platformRouter.get(
+  "/plan-requests",
+  requirePermission("users.manage"),
+  asyncHandler(async (req, res) => {
+    const status = typeof req.query.status === "string" ? req.query.status.toUpperCase() : "PENDING";
+    const known = ["PENDING", "APPROVED", "DECLINED", "CANCELLED"];
+    const requests = await prisma.planRequest.findMany({
+      where: known.includes(status) ? { status: status as never } : {},
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        id: true,
+        status: true,
+        planKey: true,
+        fromPlanKey: true,
+        note: true,
+        createdAt: true,
+        reviewedAt: true,
+        decisionNote: true,
+        user: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    // The rates, so a row can be read without a second lookup: "wants Pro"
+    // means nothing without knowing Pro is 3% + 499.
+    const plans = await prisma.plan.findMany({ orderBy: { sortOrder: "asc" } });
+    const byKey = new Map(plans.map((p) => [p.key, p]));
+
+    res.json({
+      requests: requests.map((r) => ({
+        id: r.id,
+        status: r.status,
+        organiser: r.user,
+        planKey: r.planKey,
+        planLabel: byKey.get(r.planKey)?.label ?? r.planKey,
+        rateBps: byKey.get(r.planKey)?.rateBps ?? null,
+        monthlyCents: byKey.get(r.planKey)?.monthlyCents ?? null,
+        fromPlanKey: r.fromPlanKey,
+        fromPlanLabel: r.fromPlanKey ? (byKey.get(r.fromPlanKey)?.label ?? r.fromPlanKey) : null,
+        note: r.note,
+        createdAt: r.createdAt.toISOString(),
+        reviewedAt: r.reviewedAt?.toISOString() ?? null,
+        decisionNote: r.decisionNote,
+      })),
+    });
+  }),
+);
+
+const decidePlanSchema = z.object({
+  approve: z.boolean(),
+  /** Shown to the organiser when declined. */
+  note: z.string().max(500).optional(),
+});
+
+/**
+ * Approve or decline one, and on approval move the organiser.
+ *
+ * Approving does the assignment itself rather than leaving an admin to do it
+ * separately afterwards — a queue that only marks things decided, and relies
+ * on someone remembering the second step, is how an approved request ends up
+ * never taking effect.
+ *
+ * The plan is re-read at decision time, not taken from the request: a tier
+ * retired between asking and deciding must not be assignable.
+ */
+platformRouter.post(
+  "/plan-requests/:id/decide",
+  requirePermission("users.manage"),
+  asyncHandler(async (req, res) => {
+    const id = param(req, "id");
+    const body = decidePlanSchema.parse(req.body ?? {});
+
+    const request = await prisma.planRequest.findUnique({
+      where: { id },
+      select: { id: true, status: true, userId: true, planKey: true, fromPlanKey: true },
+    });
+    if (!request) throw new HttpError(404, "Request not found");
+    if (request.status !== "PENDING") throw new HttpError(409, "This request has already been decided");
+
+    if (!body.approve) {
+      await prisma.planRequest.update({
+        where: { id },
+        data: {
+          status: "DECLINED",
+          reviewedAt: new Date(),
+          reviewedById: req.user!.id,
+          decisionNote: body.note?.trim() || null,
+        },
+      });
+      res.json({ status: "DECLINED" });
+      return;
+    }
+
+    const plan = await prisma.plan.findUnique({ where: { key: request.planKey } });
+    if (!plan) throw new HttpError(400, "That plan no longer exists");
+
+    const [, organiser] = await prisma.$transaction([
+      prisma.planRequest.update({
+        where: { id },
+        data: { status: "APPROVED", reviewedAt: new Date(), reviewedById: req.user!.id },
+      }),
+      prisma.user.update({
+        where: { id: request.userId },
+        data: { planId: plan.key },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    // The same action an outright assignment records, because the outcome is
+    // identical and a journal that split them by route would hide half the
+    // plan changes from anyone reading for "who moved onto Pro".
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.ORGANISER_PLAN_ASSIGNED,
+      subjectType: "user",
+      subjectId: organiser.id,
+      subjectLabel: organiser.name,
+      details: { from: request.fromPlanKey ?? null, to: plan.key, viaRequest: request.id },
+    });
+
+    res.json({
+      status: "APPROVED",
+      plan: plan.key,
+      // Same caveat the direct assignment gives: nothing historical moves.
+      note: "Applies to orders settled from now on; past commission is unchanged.",
+    });
+  }),
+);
+
 /** Every payout across the platform, newest first. */
 platformRouter.get(
   "/payouts",

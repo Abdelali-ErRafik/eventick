@@ -80,6 +80,10 @@ model User {
 
   /// Applications this person submitted to become an organiser.
   organiserApplications OrganiserApplication[] @relation("OrganiserApplicant")
+  /// Plan changes this organiser has asked for.
+  planRequests          PlanRequest[]          @relation("PlanRequester")
+  /// Plan requests this person decided, as an admin.
+  reviewedPlanRequests  PlanRequest[]          @relation("PlanReviewer")
   /// Applications this person decided, as an admin.
   reviewedApplications  OrganiserApplication[] @relation("OrganiserReviewer")
 
@@ -940,4 +944,58 @@ model Invitation {
   @@index([eventId])
   @@index([tierId])
   @@map("invitations")
+}
+
+/// Where a plan request stands.
+enum PlanRequestStatus {
+  /// Waiting for an admin to decide.
+  PENDING
+  /// Granted; the organiser's plan was changed.
+  APPROVED
+  /// Turned down. decisionNote says why.
+  DECLINED
+  /// Withdrawn by the organiser before anyone decided.
+  CANCELLED
+}
+
+/// An organiser asking to move onto a different plan.
+///
+/// Plans are pure pricing — a lower commission for a fixed monthly fee — and
+/// only an admin may assign one, because the alternative is an organiser
+/// setting themselves to 2% and never paying the subscription that buys it
+/// (it is withheld from payouts, so someone with no payouts would pay
+/// nothing). The organiser could see the rates but had no way to act on them:
+/// the card said "get in touch" and offered no means of doing so.
+///
+/// This is that means. It mirrors OrganiserApplication deliberately — same
+/// PENDING/APPROVED/DECLINED shape, same reviewer trail — because an admin
+/// already reviews those and a second, different-looking queue would be a
+/// second thing to learn.
+model PlanRequest {
+  id     String            @id @default(cuid())
+  userId String            @map("user_id")
+  status PlanRequestStatus @default(PENDING)
+
+  /// The plan being asked for. A key, not a relation: a plan that is later
+  /// retired must not take its history with it.
+  planKey     String  @map("plan_key")
+  /// What they were on when they asked, so a decision can be read in context
+  /// months later even if they have moved since.
+  fromPlanKey String? @map("from_plan_key")
+  /// Optional: why they want it, in their words.
+  note        String?
+
+  reviewedAt   DateTime? @map("reviewed_at")
+  reviewedById String?   @map("reviewed_by_id")
+  /// Why it was declined, shown to the organiser.
+  decisionNote String?   @map("decision_note")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user       User  @relation("PlanRequester", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("PlanReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([userId])
+  @@map("plan_requests")
 }

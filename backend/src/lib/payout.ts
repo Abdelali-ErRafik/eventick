@@ -215,6 +215,25 @@ export async function organiserEarnings(organiserId: string | null, period: Peri
    */
   const catalogue = await prisma.plan.findMany({ orderBy: { sortOrder: "asc" } });
 
+  /*
+   * A plan request still waiting for a decision.
+   *
+   * Sent so the card can say "requested, pending" rather than offering the
+   * button again — asking twice is the obvious thing to do when nothing on
+   * screen acknowledges the first attempt.
+   *
+   * Only for a single organiser: platform-wide there is no one person whose
+   * request it would be.
+   */
+  const openRequest =
+    organiserId === null
+      ? null
+      : await prisma.planRequest.findFirst({
+          where: { userId: organiserId, status: "PENDING" },
+          select: { id: true, planKey: true, createdAt: true },
+          orderBy: { createdAt: "desc" },
+        });
+
   // Months already billed, so the UI can say what the subscription has cost
   // rather than leaving the deduction on a payout unexplained.
   const billed = await prisma.subscriptionCharge.aggregate({
@@ -234,6 +253,10 @@ export async function organiserEarnings(organiserId: string | null, period: Peri
           // charged the default; the UI says so rather than implying a choice.
           assigned: Boolean(organiser?.plan),
         }
+      : null,
+    /** A request awaiting a decision, so the card does not offer it twice. */
+    planRequest: openRequest
+      ? { planKey: openRequest.planKey, createdAt: openRequest.createdAt.toISOString() }
       : null,
     /** What every tier costs, so the current one can be compared. */
     plans: catalogue.map((row) => ({

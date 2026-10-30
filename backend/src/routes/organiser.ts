@@ -1123,12 +1123,100 @@ organiserRouter.patch(
 // commission is recorded on each order at settlement, and the plan is set by
 // an admin.
 
+const planRequestSchema = z.object({
+  planKey: z.string().min(1),
+  /** Why they want it. Optional — the request stands on its own. */
+  note: z.string().max(500).optional(),
+});
+
+/**
+ * Ask to move onto a different plan.
+ *
+ * Note what this does NOT do: it does not change the plan. The organiser
+ * could read the rates on their Finance screen and had no way to act on
+ * them — the card said "get in touch" and offered no means of doing so — but
+ * letting them switch directly would let anyone set themselves to 2% without
+ * ever paying the subscription that buys it, since the monthly fee is only
+ * withheld from a payout and someone with no payouts would pay nothing.
+ *
+ * So this records an intent for an admin to decide, exactly as becoming an
+ * organiser already works. `finance.view` rather than a new capability: the
+ * people who may read what the commission costs are the people who may ask
+ * for a different rate.
+ */
+organiserRouter.post(
+  "/plan-request",
+  canViewFinance,
+  asyncHandler(async (req, res) => {
+    const body = planRequestSchema.parse(req.body);
+
+    const plan = await prisma.plan.findUnique({ where: { key: body.planKey } });
+    if (!plan) throw new HttpError(400, "No such plan");
+
+    const me = await prisma.user.findUniqueOrThrow({
+      where: { id: req.user!.id },
+      select: { planId: true },
+    });
+    /*
+     * Compared against the plan they are EFFECTIVELY on.
+     *
+     * `planId` is null for most organisers — nobody has assigned them one, so
+     * they are charged the default. Comparing the raw column let someone on
+     * the default request the default: a request that changes nothing, which
+     * an admin would then have to read and decline.
+     */
+    const effective = me.planId ?? (await prisma.plan.findFirst({ where: { isDefault: true } }))?.key ?? null;
+    if (effective === plan.key) throw new HttpError(409, "You are already on this plan");
+
+    // One open request at a time: a queue of three from the same organiser
+    // is noise, and the admin can only act on the latest anyway.
+    const open = await prisma.planRequest.findFirst({
+      where: { userId: req.user!.id, status: "PENDING" },
+      select: { id: true, planKey: true },
+    });
+    if (open) {
+      throw new HttpError(409, "You already have a plan request waiting for a decision");
+    }
+
+    const request = await prisma.planRequest.create({
+      data: {
+        userId: req.user!.id,
+        planKey: plan.key,
+        // The plan they are effectively on, so a decision read months later
+        // says what it replaced rather than an unexplained null.
+        fromPlanKey: effective,
+        note: body.note?.trim() || null,
+      },
+      select: { id: true, planKey: true, status: true, createdAt: true },
+    });
+
+    res.status(201).json({ request: { ...request, createdAt: request.createdAt.toISOString() } });
+  }),
+);
+
+/** Withdraw a request before anyone has decided it. */
+organiserRouter.delete(
+  "/plan-request",
+  canViewFinance,
+  asyncHandler(async (req, res) => {
+    // Scoped to PENDING and to this user: a decided request is a record, not
+    // a draft, and must not be erasable by the person it was decided about.
+    const updated = await prisma.planRequest.updateMany({
+      where: { userId: req.user!.id, status: "PENDING" },
+      data: { status: "CANCELLED" },
+    });
+    if (updated.count === 0) throw new HttpError(404, "No request is waiting");
+    res.status(204).end();
+  }),
+);
+
 /**
  * What this organiser has earned, what the platform took, and what is owed.
  *
  * Read-only on purpose. The plan comes back with the figures so the UI can
  * explain the fee, but there is no route here to CHANGE it — an organiser
- * picking their own commission rate is the bug this replaces.
+ * picking their own commission rate is the bug this replaces. They may ASK,
+ * via /plan-request above, which an admin decides.
  */
 organiserRouter.get(
   "/finance",

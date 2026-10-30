@@ -41,6 +41,8 @@ export default function Finance() {
    * screen -- the payout card carries them -- so nothing is hidden by this.
    */
   const [period, setPeriod] = useState("month");
+  /** In flight, so the button cannot be pressed twice. */
+  const [planBusy, setPlanBusy] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -108,6 +110,48 @@ export default function Finance() {
    * rather than a trend. Returning undefined then leaves the card with no
    * trend chip at all, which is the honest rendering.
    */
+  /** A request waiting on an admin, or null. */
+  const requested = finance?.planRequest ?? null;
+
+  /*
+   * Ask for a plan, or withdraw the ask.
+   *
+   * Both reload finance rather than patching state locally: the server
+   * decides whether a request was accepted (one open at a time, not the plan
+   * you are already on), so re-reading is the only way the screen is sure to
+   * match it.
+   */
+  const reloadFinance = () =>
+    api.get(`/organiser/finance?period=${period}`).then(setFinance).catch(() => {});
+
+  const requestPlan = async (planKey) => {
+    if (planBusy) return;
+    setPlanBusy(true);
+    try {
+      await api.post("/organiser/plan-request", { planKey });
+      await reloadFinance();
+      toast.success(t.planRequestSent);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setPlanBusy(false);
+    }
+  };
+
+  const withdrawPlan = async () => {
+    if (planBusy) return;
+    setPlanBusy(true);
+    try {
+      await api.del("/organiser/plan-request");
+      await reloadFinance();
+      toast.success(t.planRequestWithdrawn);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setPlanBusy(false);
+    }
+  };
+
   const trendFor = (current, previous) => {
     const pct = deltaPct(current, previous);
     if (pct === null) return undefined;
@@ -256,7 +300,7 @@ export default function Finance() {
                   <li
                     key={row.key}
                     className={cn(
-                      "flex flex-wrap items-baseline justify-between gap-2 rounded-control px-2.5 py-1.5 text-sm",
+                      "flex flex-wrap items-center justify-between gap-2 rounded-control px-2.5 py-1.5 text-sm",
                       row.current ? "bg-brume font-bold text-primary" : "text-muted",
                     )}
                   >
@@ -264,9 +308,40 @@ export default function Finance() {
                       {row.label}
                       {row.current ? ` · ${t.planCurrent}` : ""}
                     </span>
-                    <span className="tabular-nums">
-                      {RATE(row.rateBps)}
-                      {row.monthlyCents > 0 ? ` + ${t.subscriptionMonthly.replace("{amount}", money(row.monthlyCents))}` : ""}
+                    <span className="flex items-center gap-3">
+                      <span className="tabular-nums">
+                        {RATE(row.rateBps)}
+                        {row.monthlyCents > 0
+                          ? ` + ${t.subscriptionMonthly.replace("{amount}", money(row.monthlyCents))}`
+                          : ""}
+                      </span>
+                      {/*
+                        Asking is the only action available: an organiser who
+                        could switch themselves would take 2% and never pay
+                        the subscription that buys it, since the monthly fee
+                        is withheld from payouts and someone with no payouts
+                        pays nothing.
+
+                        Hidden on the current plan, hidden for an admin
+                        viewing someone else's books through the filter
+                        (the request would be recorded against the ADMIN),
+                        and replaced by its own state once asked.
+                      */}
+                      {!row.current && !organiserId ? (
+                        requested?.planKey === row.key ? (
+                          <button
+                            type="button"
+                            onClick={withdrawPlan}
+                            className="shrink-0 text-xs font-bold text-muted underline decoration-dotted underline-offset-4 hover:text-danger"
+                          >
+                            {t.planRequested} · {t.planWithdraw}
+                          </button>
+                        ) : requested ? null : (
+                          <Button variant="ghost" onClick={() => requestPlan(row.key)} disabled={planBusy}>
+                            {t.planRequest}
+                          </Button>
+                        )
+                      ) : null}
                     </span>
                   </li>
                 ))}

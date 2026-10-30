@@ -38,12 +38,20 @@ export default function Platform() {
    * gain at the scale of one platform's organisers.
    */
   const [sortBy, setSortBy] = useState("revenue");
+  /** Organisers asking to move onto a different plan. */
+  const [planRequests, setPlanRequests] = useState([]);
 
   const loadSellers = useCallback(() => {
     api
       .get("/platform/organisers")
       .then((data) => setSellers(data.organisers))
       .catch(() => setSellers([]));
+  }, []);
+  const loadPlanRequests = useCallback(() => {
+    api
+      .get("/platform/plan-requests")
+      .then((data) => setPlanRequests(data.requests))
+      .catch(() => setPlanRequests([]));
   }, []);
   const loadPayouts = useCallback(() => {
     api
@@ -57,7 +65,23 @@ export default function Platform() {
     api.get("/platform/plans").then((data) => setPlans(data.plans)).catch(() => setPlans([]));
     loadSellers();
     loadPayouts();
-  }, [loadSellers, loadPayouts]);
+    loadPlanRequests();
+  }, [loadSellers, loadPayouts, loadPlanRequests]);
+
+  /*
+   * Decide one. Approving assigns the plan server-side, so the seller list is
+   * reloaded too -- its rate column would otherwise still show the old plan.
+   */
+  const decidePlan = async (id, approve) => {
+    try {
+      await api.post(`/platform/plan-requests/${id}/decide`, { approve });
+      toast.success(approve ? t.plPlanSaved : t.plDeclined);
+      loadPlanRequests();
+      loadSellers();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
 
   /** Move an organiser onto a plan. Affects future orders only. */
   const assignPlan = async (sellerId, planKey) => {
@@ -192,6 +216,45 @@ export default function Platform() {
           </div>
         </>
       )}
+
+      {/*
+        Plan requests, above the seller list because they are a to-do rather
+        than a metric — the same reason the pending-applications banner sits
+        where it does. Hidden entirely when the queue is empty: an admin does
+        not need a heading telling them there is nothing to do.
+      */}
+      {planRequests.length > 0 ? (
+        <>
+          <SectionTitle>{t.plPlanRequests}</SectionTitle>
+          <div className="mb-4 grid gap-3">
+            {planRequests.map((row) => (
+              <article
+                key={row.id}
+                className="flex flex-wrap items-center gap-4 rounded-card border border-warn/30 bg-warn-bg/40 p-4"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold">{row.organiser.name}</p>
+                  <p className="truncate text-sm text-muted">
+                    {row.fromPlanLabel ?? "—"} → <span className="font-semibold text-ink">{row.planLabel}</span>
+                    {typeof row.rateBps === "number"
+                      ? ` · ${(row.rateBps / 100).toFixed(0)}%${
+                          row.monthlyCents > 0 ? ` + ${money(row.monthlyCents)} MAD` : ""
+                        }`
+                      : ""}
+                  </p>
+                  {row.note ? <p className="mt-1 text-xs italic text-muted">“{row.note}”</p> : null}
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button variant="ghost" onClick={() => decidePlan(row.id, false)}>
+                    {t.plDecline}
+                  </Button>
+                  <Button onClick={() => decidePlan(row.id, true)}>{t.plApprove}</Button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </>
+      ) : null}
 
       <SectionTitle>{t.plWhoSells}</SectionTitle>
       <p className="-mt-2 mb-3 text-sm text-muted">{t.plWhoSellsSub}</p>
