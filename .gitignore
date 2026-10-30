@@ -13,3 +13,6 @@ dist
 .DS_Store
 .next
 AGENTS.md
+
+# Draft message, not part of the project
+devops-whatsapp*.txt
