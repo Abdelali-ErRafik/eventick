@@ -439,6 +439,52 @@ async function main() {
     // Whoever actions the transfer needs the full RIB; this route is already
     // behind scope.any + finance.view.
     check("an admin sees the RIB to pay from", row?.bank?.rib === "123456789012345678901234", row?.bank?.rib);
+
+    /*
+     * An UNFILTERED admin sees the platform, not their own empty books.
+     *
+     * /organiser/finance and /organiser/payouts fell back to `req.user.id`
+     * when no ?organiserId= was given. An admin owns no events, so the screen
+     * showed 0.00 revenue, 0.00 payable and "No payouts yet" — above a list
+     * of real orders, because /orders/detailed was already platform-wide.
+     * The filter on that page says "All organisers", and these two now mean
+     * it.
+     */
+    const adminFinance = await call("GET", "/api/organiser/finance", { token: admin });
+    check(
+      "an unfiltered admin sees platform revenue, not their own zero",
+      adminFinance.data.lifetime.grossCents > 0,
+      `${mad(adminFinance.data.lifetime.grossCents)}`,
+    );
+    check(
+      "and the payouts already transferred",
+      adminFinance.data.paidOutCents > 0,
+      `${mad(adminFinance.data.paidOutCents)}`,
+    );
+
+    const adminPayouts = await call("GET", "/api/organiser/payouts", { token: admin });
+    check(
+      "an unfiltered admin sees every organiser's payouts",
+      (adminPayouts.data.payouts ?? []).some((p) => p.id === payoutId),
+      `n=${adminPayouts.data.payouts?.length}`,
+    );
+    check(
+      "each row says who was paid, since they are not all the same organiser",
+      adminPayouts.data.payouts?.every((p) => typeof p.organiser?.name === "string"),
+      adminPayouts.data.payouts?.[0]?.organiser?.name,
+    );
+    check(
+      "an organiser's own list does not repeat their name on every row",
+      (own.data.payouts ?? []).every((p) => p.organiser === undefined),
+    );
+
+    // Filtering still narrows it, which is what the picker is for.
+    const filtered = await call("GET", `/api/organiser/payouts?organiserId=${orgaId}`, { token: admin });
+    check(
+      "filtering to one organiser narrows the list",
+      (filtered.data.payouts ?? []).every((p) => p.organiser?.id === orgaId),
+      `n=${filtered.data.payouts?.length}`,
+    );
   }
 
   // ── Cleanup ─────────────────────────────────────────────────────────────

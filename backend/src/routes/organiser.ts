@@ -1133,10 +1133,20 @@ organiserRouter.get(
   "/finance",
   canViewFinance,
   asyncHandler(async (req, res) => {
-    // Honours ?organiserId= only for a caller with scope.any, via the same
-    // helper the list routes use.
+    /*
+     * Honours ?organiserId= only for a caller with scope.any, via the same
+     * helper the list routes use.
+     *
+     * An admin who has NOT filtered gets every organiser, because the picker
+     * above these figures says "All organisers" and this route has to mean
+     * it. It used to fall back to `req.user.id` — the admin's own id — and an
+     * admin owns no events, so the screen showed 0.00 revenue and 0.00
+     * payable above a list of twenty-three real orders. Every other figure on
+     * the page was already platform-wide; only this one disagreed.
+     */
     const scope = await scopeFor(req);
-    const organiserId = scope.organiserId ?? req.user!.id;
+    const mayActAnywhere = await userHasPermission(req.user, "scope.any");
+    const organiserId = scope.organiserId ?? (mayActAnywhere ? null : req.user!.id);
     res.json(await organiserEarnings(organiserId));
   }),
 );
@@ -1146,10 +1156,20 @@ organiserRouter.get(
   "/payouts",
   canViewFinance,
   asyncHandler(async (req, res) => {
+    /*
+     * Same rule as /finance above: an admin who has not filtered sees every
+     * organiser's payouts, not their own.
+     *
+     * Falling back to `req.user.id` showed an admin "No payouts yet" on a
+     * platform that had already transferred money — because an admin owns no
+     * events and therefore no payouts. The figures beside the list were
+     * platform-wide, so the two halves of the screen disagreed.
+     */
     const scope = await scopeFor(req);
-    const organiserId = scope.organiserId ?? req.user!.id;
+    const mayActAnywhere = await userHasPermission(req.user, "scope.any");
+    const organiserId = scope.organiserId ?? (mayActAnywhere ? null : req.user!.id);
     const payouts = await prisma.payout.findMany({
-      where: { organiserId },
+      where: organiserId === null ? {} : { organiserId },
       select: {
         id: true,
         status: true,
@@ -1165,6 +1185,10 @@ organiserRouter.get(
         paidAt: true,
         _count: { select: { orders: true } },
         subscriptions: { select: { month: true, amountCents: true, planKey: true } },
+        // Only meaningful in the unfiltered admin view, where rows from
+        // different organisers sit in one list and "4 132,50 MAD" alone does
+        // not say who received it.
+        organiser: { select: { id: true, name: true, email: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -1190,6 +1214,11 @@ organiserRouter.get(
         orders: p._count.orders,
         createdAt: p.createdAt.toISOString(),
         paidAt: p.paidAt?.toISOString() ?? null,
+        // Only sent to a caller who can see across organisers; an organiser
+        // reading their own list already knows whose payouts these are.
+        organiser: mayActAnywhere
+          ? { id: p.organiser.id, name: p.organiser.name, email: p.organiser.email }
+          : undefined,
       })),
     });
   }),

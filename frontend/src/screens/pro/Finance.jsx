@@ -6,7 +6,7 @@ import { useI18n } from "../../i18n";
 import { useOrganisers } from "./useOrganisers";
 import { Card, EmptyState, PageHead, SectionTitle, StatCard, StatSkeletons } from "./ui";
 import { Button, Field, Input, Select } from "../../ui";
-import { cn, eventText } from "../../utils";
+import { cn, eventText, intlLocaleTag } from "../../utils";
 import { text } from "./copy";
 
 /**
@@ -253,7 +253,9 @@ const STATUS_TONE = {
 
 function PayoutRow({ row, t, locale }) {
   const label = { PENDING: t.payoutPending, PAID: t.payoutPaid, CANCELLED: t.payoutCancelled }[row.status] ?? row.status;
-  const fmt = (iso) => new Date(iso).toLocaleDateString(locale === "ar" ? "ar-MA" : locale === "en" ? "en-GB" : "fr-MA");
+  // Through intlLocaleTag, not a hand-written conditional: every place that
+  // wrote one of those out sent English to a French formatter at least once.
+  const fmt = (iso) => new Date(iso).toLocaleDateString(intlLocaleTag(locale));
 
   return (
     <article className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-line/10 bg-card p-4 shadow-card">
@@ -275,6 +277,11 @@ function PayoutRow({ row, t, locale }) {
           {row.subscriptionMonths?.length ? ` · ${row.subscriptionMonths.map((m) => m.month).join(", ")}` : ""}
           {row.reference ? ` · ${t.payoutRef} ${row.reference}` : ""}
         </p>
+        {/* Only an admin looking at every organiser gets this field, and
+            there "4 132,50 MAD" alone does not say who received it. */}
+        {row.organiser ? (
+          <p className="mt-0.5 text-xs font-semibold text-muted">{row.organiser.name}</p>
+        ) : null}
       </div>
     </article>
   );
@@ -297,6 +304,24 @@ function BankPanel({ t, current, readOnly }) {
   const [error, setError] = useState("");
 
   const onFile = saved ?? current;
+
+  /*
+   * Load what is on file into the form.
+   *
+   * The fields sat empty even with an account saved, so correcting a
+   * misspelled holder name or adding the bank meant retyping everything from
+   * the summary line above — and leaving a field blank would have saved it
+   * blank.
+   *
+   * The RIB is deliberately NOT prefilled: the server returns only its last
+   * four digits, because a screen showing earnings has no reason to hand back
+   * a full payment credential. So it is the one field that must be retyped,
+   * and the hint below says so rather than leaving it looking broken.
+   */
+  useEffect(() => {
+    setHolderName(current?.holderName ?? "");
+    setBank(current?.bank ?? "");
+  }, [current?.holderName, current?.bank]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -346,7 +371,15 @@ function BankPanel({ t, current, readOnly }) {
             <Field label={t.bankName}>
               {(props) => <Input {...props} value={bank} onChange={(e) => setBank(e.target.value)} placeholder="CIH, Attijariwafa…" />}
             </Field>
-            <Field label={t.bankRib} error={error} required className="sm:col-span-2">
+            <Field
+              label={t.bankRib}
+              error={error}
+              required
+              className="sm:col-span-2"
+              // Only when something is already saved: on a first setup there
+              // is nothing to re-enter and the hint would be noise.
+              hint={onFile ? t.bankRibRetype : undefined}
+            >
               {(props) => (
                 <Input
                   {...props}

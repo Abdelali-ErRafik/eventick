@@ -1,4 +1,7 @@
-// Quick-login accounts for the dev-only buttons under the login form.
+// Dev-only fixtures: the quick-login buttons under the login form, and the
+// sample bank details on Finance. Both are rendered only when
+// NODE_ENV !== "production", so none of this reaches a real deployment.
+//
 // Must stay in sync with backend/prisma/seed.ts — these rows only exist
 // after `npx prisma db seed` has run.
 export const DEMO_ACCOUNTS = [

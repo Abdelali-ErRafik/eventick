@@ -213,6 +213,30 @@ async function main() {
     if (rehomed.count > 0) {
       console.log(`Handed ${rehomed.count} event(s) to ${demoOrganiser.email}.`);
     }
+
+    /*
+     * Bank details for the demo organiser.
+     *
+     * Not decoration: runPayout REFUSES an organiser with no account on file,
+     * so without this the whole money half of the dashboard is unreachable on
+     * a fresh database — you cannot prepare a payout, and the Finance screen
+     * shows a red "no RIB" where the demo is supposed to show a working one.
+     *
+     * The RIB is a made-up 24-digit string that satisfies ribOk() and belongs
+     * to no real account. `update` on conflict rather than skip, so a re-seed
+     * restores it if someone has edited it while clicking around.
+     */
+    await prisma.bankAccount.upsert({
+      where: { organiserId: demoOrganiser.id },
+      update: { holderName: "Yasmine Organisatrice", rib: "011519000012345678901234", bank: "Attijariwafa Bank" },
+      create: {
+        organiserId: demoOrganiser.id,
+        holderName: "Yasmine Organisatrice",
+        rib: "011519000012345678901234",
+        bank: "Attijariwafa Bank",
+      },
+    });
+    console.log(`Bank details set for ${demoOrganiser.email}.`);
   }
 
   const promos: { code: string; kind: PromoKind; value: number; eventSlug: string | null; maxUses: number }[] = [

@@ -79,10 +79,30 @@ async function pricingPlanFor(organiserId: string) {
  * run would transfer. The lifetime figures are shown beside it so the number
  * can be explained without digging through orders.
  */
-export async function organiserEarnings(organiserId: string) {
+/**
+ * What one organiser has earned — or, with `null`, the whole platform.
+ *
+ * `null` is for an admin who has not picked an organiser: the screen's filter
+ * says "All organisers", so the figures have to span everyone rather than
+ * reporting the admin's own (always empty) books. Scoping is decided by the
+ * route, which is the only place that knows whether the caller may see across
+ * organisers; this function just honours what it is given.
+ */
+export async function organiserEarnings(organiserId: string | null) {
+  /*
+   * The event filter, written out rather than left to an `undefined`.
+   *
+   * Prisma IGNORES an undefined inside a `where`, so `{ organiserId: scope }`
+   * would widen to every event on its own. That is the behaviour wanted here
+   * — but it is also the behaviour that emptied this database twice when it
+   * happened by accident, so "all organisers" is spelled `{}` where a reader
+   * can see the decision instead of inferring it from a null.
+   */
+  const eventScope = organiserId === null ? {} : { organiserId };
+
   const orders = await prisma.order.findMany({
     where: {
-      event: { organiserId },
+      event: eventScope,
       status: { in: ["PAID", "REFUNDED"] },
       // A comp is PAID with totalCents 0: it moves no money, but counting it
       // as an order would put the guest list in the sales figures, and
@@ -100,7 +120,15 @@ export async function organiserEarnings(organiserId: string) {
     orderBy: { createdAt: "desc" },
   });
 
-  const fallback = await pricingPlanFor(organiserId);
+  /*
+   * Only ever used to price an order whose fee was never recorded.
+   *
+   * Platform-wide there is no single organiser whose plan could apply, so the
+   * platform default stands in. That affects legacy orders alone — anything
+   * settled since commission existed carries its own feeCents, which
+   * summariseRevenue prefers over any fallback.
+   */
+  const fallback = organiserId === null ? await defaultPlan() : await pricingPlanFor(organiserId);
   const toLine = (o: (typeof orders)[number]): RevenueLine => ({
     totalCents: o.totalCents,
     refundedCents: o.refundedCents,
@@ -113,13 +141,18 @@ export async function organiserEarnings(organiserId: string) {
 
   const [paidOut, organiser] = await Promise.all([
     prisma.payout.aggregate({
-      where: { organiserId, status: "PAID" },
+      where: { ...(organiserId === null ? {} : { organiserId }), status: "PAID" },
       _sum: { netCents: true },
     }),
-    prisma.user.findUnique({
-      where: { id: organiserId },
-      select: { plan: true, bankAccount: { select: { holderName: true, rib: true, bank: true } } },
-    }),
+    // Platform-wide there is no single plan or bank account to report, so
+    // neither is looked up: the response carries the DEFAULT plan and a null
+    // account, and the screen renders that honestly.
+    organiserId === null
+      ? null
+      : prisma.user.findUnique({
+          where: { id: organiserId },
+          select: { plan: true, bankAccount: { select: { holderName: true, rib: true, bank: true } } },
+        }),
   ]);
 
   const plan = organiser?.plan ?? (await defaultPlan()) ?? null;
@@ -141,7 +174,7 @@ export async function organiserEarnings(organiserId: string) {
   // Months already billed, so the UI can say what the subscription has cost
   // rather than leaving the deduction on a payout unexplained.
   const billed = await prisma.subscriptionCharge.aggregate({
-    where: { organiserId },
+    where: organiserId === null ? {} : { organiserId },
     _sum: { amountCents: true },
     _count: { _all: true },
   });
