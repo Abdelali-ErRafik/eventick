@@ -5,6 +5,7 @@ import { asyncHandler, HttpError, param } from "../lib/http.js";
 import { authenticate, requirePermission, userHasPermission } from "../middleware/auth.js";
 import { resolveScan } from "../lib/ticket-signature.js";
 import { emitToOrganiser } from "../lib/realtime.js";
+import { AUDIT_ACTIONS, recordAudit } from "../lib/audit.js";
 
 export const gateRouter = Router();
 
@@ -100,6 +101,105 @@ gateRouter.post(
       return;
     }
     res.status(409).json({ result: "moved", ticket: { ref: ticket.ref, holderName: ticket.holderName } });
+  }),
+);
+
+const undoSchema = z.object({ ref: z.string().min(3) });
+
+/**
+ * Undo the check-in that just happened, by reference.
+ *
+ * Wrong scans are routine — the wrong person steps forward, a ticket is
+ * scanned twice at two doors, a group is admitted and one is turned away.
+ * This already existed as `PATCH /organiser/tickets/:id/status`, but that
+ * needs the ticket's id and lives on the Orders desk, and the person holding
+ * the problem is at the door with only a reference. So the capability was
+ * real and unreachable from where it was needed.
+ *
+ * Deliberately NOT accepting a signed scan payload: undoing is a staff
+ * decision about a ticket already in hand, so a bare typed reference is the
+ * right input, and requiring a re-scan of a ticket whose holder has walked
+ * away would make the feature useless.
+ *
+ * Takes `gate.checkin` like the rest of this router: whoever may admit may
+ * un-admit. It is journalled, because re-admitting a spent ticket is the
+ * override most likely to be asked about afterwards.
+ */
+gateRouter.post(
+  "/undo",
+  asyncHandler(async (req, res) => {
+    const body = undoSchema.parse(req.body);
+
+    /*
+     * Accept either form. A typed reference is the expected input, but staff
+     * who re-scan the ticket to find it send the signed QR payload, and
+     * refusing that would read as "no such ticket" for a ticket in hand.
+     * `source: "manual"` because an undo IS a staff override — the signature
+     * is welcome, not required.
+     */
+    const scan = resolveScan(body.ref, "manual");
+    if (!scan.ok) throw new HttpError(400, "Invalid ticket code");
+    const ref = scan.ref;
+
+    // Ownership before the write, for the same reason check-in does it: a
+    // refusal must leave the ticket exactly as it was.
+    const ticket = await prisma.ticket.findUnique({
+      where: { ref },
+      include: { order: { include: { event: true } } },
+    });
+    if (!ticket) throw new HttpError(404, "Ticket not found");
+    if (
+      ticket.order.event.organiserId !== req.user!.id &&
+      !(await userHasPermission(req.user, "scope.any"))
+    ) {
+      throw new HttpError(403, "This ticket is for another organiser's event");
+    }
+
+    /*
+     * Only a USED ticket can be un-used.
+     *
+     * A guarded update rather than read-then-write, matching check-in: two
+     * staff undoing the same scan at once must not both succeed, or the
+     * second would resurrect a ticket the first had already restored. A
+     * CANCELLED or TRANSFERRED ticket is not a wrong scan to undo — it is a
+     * refund or a hand-off, and reviving it here would hand back a seat that
+     * has been paid out or given away.
+     */
+    const restored = await prisma.ticket.updateMany({
+      where: { ref, status: "USED" },
+      data: { status: "VALID", usedAt: null },
+    });
+    if (restored.count !== 1) {
+      throw new HttpError(409, `This ticket is ${ticket.status.toLowerCase()}, not checked in`);
+    }
+
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.TICKET_STATUS_OVERRIDDEN,
+      subjectType: "ticket",
+      subjectId: ticket.id,
+      subjectLabel: ticket.ref,
+      details: {
+        from: "USED",
+        to: "VALID",
+        via: "gate",
+        eventSlug: ticket.order.event.slug,
+        admittedAt: ticket.usedAt?.toISOString() ?? null,
+      },
+    });
+
+    // Move the organiser's entry counter back down, same as check-in moves it up.
+    emitToOrganiser(ticket.order.event.organiserId, {
+      type: "checkin.undone",
+      eventSlug: ticket.order.event.slug,
+      ref: ticket.ref,
+      holderName: ticket.holderName,
+      at: new Date().toISOString(),
+    });
+
+    res.json({
+      result: "undone",
+      ticket: { ref: ticket.ref, holderName: ticket.holderName, status: "VALID" },
+    });
   }),
 );
 

@@ -43,6 +43,28 @@ export const AUDIT_ACTIONS = {
   EVENT_CANCELLED: "event.cancelled",
   COMPS_ISSUED: "event.comps.issued",
   COMP_REVOKED: "invitation.revoked",
+  /*
+   * The three below are overrides an organiser may be asked to justify, which
+   * is the test for belonging here — not "a row changed".
+   *
+   * They were missing, and the omission was not a decision: there was simply
+   * no action name to record them under, so the most disputable things an
+   * organiser can do were the ones with no trail. Re-admitting a spent
+   * ticket, and repricing or resizing a zone that has already sold, are all
+   * answerable-for; creating a draft event or editing a blurb is not, and
+   * stays out.
+   *
+   * There is deliberately no `event.rescheduled`: an event's dates are fixed
+   * at creation and no route accepts a new one, so the action would describe
+   * something that cannot happen. Add it with the route, not before.
+   */
+  TICKET_STATUS_OVERRIDDEN: "ticket.status.overridden",
+  TIER_PRICE_CHANGED: "tier.price.changed",
+  TIER_CAPACITY_CHANGED: "tier.capacity.changed",
+  /* A hard delete: the order row is gone, so this row is the only remaining
+   * evidence it ever existed. Its details carry the figures deliberately,
+   * because there is nothing left to join to. */
+  ORDER_DELETED: "order.deleted",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

@@ -161,6 +161,33 @@ harmless, but `npm run db:seed` will not remove them.
 
 ---
 
+### 8. What the journal does and does not record
+
+The journal answers *"who did this, and can they account for it?"* — so it
+records money, permissions, account removals, and **overrides**. It
+deliberately does not record ordinary editing: a log of every blurb change is
+one nobody reads.
+
+| Recorded | Not recorded |
+|---|---|
+| Refunds, payouts, bank-account changes | Creating or editing an event listing |
+| Role and permission changes | Changing an event's visibility |
+| Account deletion and anonymisation | Renaming a zone |
+| Event cancellation, comps issued and revoked | Deleting an empty zone |
+| **Re-admitting a spent ticket** (door or desk) | |
+| **Changing a zone's price or capacity**, with how many had already sold | |
+| **Cancelling or deleting an order**, with the amount | |
+
+> 🎯 The four in bold were missing, and the omission was not a decision:
+> there was no action name to record them under, so the most disputable things
+> an organiser can do were the ones with no trail. A price change on a zone
+> that had already sold returned a bare `200` with nothing written down.
+
+> 💡 There is deliberately **no** `event.rescheduled`. An event's dates are
+> fixed at creation — no route accepts a new one — so the action would
+> describe something that cannot happen. If postponement is ever added, the
+> journal entry goes in with it.
+
 ## 🧭 Where things are
 
 **Public site** — Explorer · event pages · checkout · your tickets
@@ -470,6 +497,45 @@ organiser scanning another organiser's ticket gets *"This ticket is for
 another organiser's event"* — checked **before** the ticket is spent, so a
 refusal leaves it untouched.
 
+### Step 7 — Undo a wrong scan, at the door
+
+The wrong person steps forward and you scan them. This is the commonest
+mistake at a gate, so the fix is on the gate screen.
+
+8. Admit a ticket, then click **"Annuler cette entrée"** under the verdict.
+9. Confirm the dialog.
+
+**✔️ You must see** the verdict clear, the entry disappear from *"Scans
+récents"*, and the ticket admit again on the next scan.
+
+> 🎯 The capability already existed as `PATCH /organiser/tickets/:id/status`
+> on the Orders desk — but that needs the ticket's internal **id**, and the
+> person holding the problem is at the door with only a printed reference. So
+> it was real and unreachable from where it was needed.
+
+10. Press it again on a ticket that was **not** checked in, via the API:
+
+```bash
+curl -s -w "\n  HTTP %{http_code}\n" -X POST \
+  -H 'content-type: application/json' \
+  -H 'authorization: Bearer ORGANISER_TOKEN' \
+  -d '{"ref":"ET-2027-ABC123"}' \
+  'http://localhost:4100/api/gate/undo'
+```
+
+**✔️ 409** — *"This ticket is valid, not checked in"*. Only a **USED** ticket
+can be un-used: a CANCELLED one is a refund and a TRANSFERRED one is a
+hand-off, and reviving either would hand back a seat that has been paid out
+or given away.
+
+> 💡 The link is hidden while the gate is **offline**. An undo cannot be
+> queued the way a scan can — the server has to agree — and one that silently
+> did nothing would be worse than none.
+
+> ⚠️ Every undo is journalled, with the previous status and the time of the
+> admission it reversed. Re-admitting a spent ticket is the override most
+> likely to be asked about afterwards, so check 10 can find it.
+
 ✅ **Check 5 done.**
 
 ---
@@ -557,7 +623,34 @@ refusal leaves it untouched.
 
 > 🎯 **This is the whole check.** These toggles used to do nothing — the organiser kept reading revenue and issuing refunds regardless.
 
-### Step 4 — The server agrees, not just the screen
+### Step 4 — Figures for ONE event, not the whole account
+
+An organiser running two shows has to be able to tell how each one did.
+
+```bash
+# Everything this organiser sells
+curl -s -H 'authorization: Bearer ORGANISER_TOKEN' \
+  'http://localhost:4100/api/organiser/stats'
+
+# One show only
+curl -s -H 'authorization: Bearer ORGANISER_TOKEN' \
+  'http://localhost:4100/api/organiser/stats?eventSlug=YOUR_SLUG'
+```
+
+**✔️ The filtered figures must be smaller**, and the response says what it
+covers: `"eventSlug"` and `"events"`. Unfiltered, `eventSlug` is `null`.
+
+> 🎯 `inside` is the attendance count, so this is also how you get a
+> per-event scan rate rather than a platform-wide one.
+
+> ⚠️ Now name a slug belonging to a **different** organiser.
+>
+> **✔️ You must see `"events": 0`** and zeroed figures — not a 403, and
+> never their revenue. The filter is applied *inside* the ownership scope, so
+> an unowned slug reads as an event with no sales rather than as a way to
+> read someone else's numbers. An unknown slug behaves identically.
+
+### Step 5 — The server agrees, not just the screen
 
 Hiding a button is not access control. With `finance.refund` **off**, call the
 refund endpoint directly as the organiser:
@@ -1347,6 +1440,9 @@ npm test
 20. **The e-ticket preview date was a hardcoded string.** `"28 JUIL · 21:00"` sat in the markup, so it stayed French in English and Arabic no matter what the formatter did. *(Check 11, step 2.)*
 21. **"Démo organisateur" opened a sign-in form.** The button promised a demo and navigated to a gated route, so a signed-out visitor landed on `/login` with no demo and no way back. `?next=` is now honoured — restricted to same-site paths, because following a URL-supplied redirect blindly is a phishing primitive on a site that takes card payments.
 22. **`POST /tiers` accepted a sales window that never opens.** Creating a zone skipped the inverted-window check that `PATCH` enforced, so a 201 could produce a zone that could never sell. *(Check 19, step 6.)*
+23. **Fourteen of the twenty organiser write routes recorded nothing.** The audit vocabulary covered money, users and permissions and had no action for a price change, a capacity change or a door override — so the three most disputable things an organiser can do were the three with no trail. Re-admitting a spent ticket, repricing a zone that had already sold, and cancelling or deleting an order are now journalled; ordinary editing still is not. *(Section 8, and check 5 step 7.)*
+24. **Undoing a wrong scan was only possible on the Orders desk.** It needed the ticket's internal id, which nobody has at a gate — the reference is what is printed on the ticket. `POST /gate/undo` now takes a reference, refuses anything that is not actually checked in, and records who reversed what. *(Check 5, step 7.)*
+25. **Revenue could only be read for the whole account.** `/organiser/stats` summed every event an organiser owned and offered no way to narrow it, so someone running two shows could not tell how either had done. *(Check 7, step 4.)*
 
 ---
 

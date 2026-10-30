@@ -22,6 +22,9 @@ let io: IOServer | null = null;
 
 export type RealtimeEvent =
   | { type: "checkin"; eventSlug: string; ref: string; holderName: string; at: string }
+  // A check-in taken back at the door. Same shape as "checkin" because the
+  // dashboard's entry counter has to move the other way on the same facts.
+  | { type: "checkin.undone"; eventSlug: string; ref: string; holderName: string; at: string }
   | { type: "order"; eventSlug: string; orderId: string; totalCents: number; tickets: number; at: string };
 
 export function initRealtime(httpServer: HttpServer): void {

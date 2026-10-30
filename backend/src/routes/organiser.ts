@@ -350,6 +350,26 @@ organiserRouter.post(
       prisma.order.update({ where: { id }, data: { status: "CANCELLED" } }),
       prisma.ticket.updateMany({ where: { orderId: id }, data: { status: "CANCELLED" } }),
     ]);
+    /*
+     * `order.cancelled` existed in the vocabulary and nothing recorded it.
+     *
+     * This voids a buyer's tickets without refunding them, so "who cancelled
+     * my order?" is a question support has to be able to answer — and the
+     * amount is noted because an unrefunded cancellation of a paid order is
+     * the case worth finding later.
+     */
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.ORDER_CANCELLED,
+      subjectType: "order",
+      subjectId: id,
+      subjectLabel: cancelled.email,
+      details: {
+        wasStatus: cancelled.status,
+        totalCents: cancelled.totalCents,
+        refundedCents: cancelled.refundedCents,
+      },
+    });
+
     // Those seats are free again — offer them to the waitlist.
     void offerFreedSeats(cancelled.eventId);
     res.json({ ok: true });
@@ -361,7 +381,29 @@ organiserRouter.delete(
   canManageOrders,
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
-    await requireOwnedOrder(req.user, id);
+    const doomed = await requireOwnedOrder(req.user, id);
+
+    /*
+     * Recorded BEFORE the delete, and with the figures inline.
+     *
+     * This is the one write with nothing left to look at afterwards: the row
+     * goes, and its tickets cascade with it. A row that only held the id
+     * would say an order was destroyed without saying whose or for how much,
+     * which is no answer at all when someone asks where their ticket went.
+     */
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.ORDER_DELETED,
+      subjectType: "order",
+      subjectId: id,
+      subjectLabel: doomed.email,
+      details: {
+        wasStatus: doomed.status,
+        totalCents: doomed.totalCents,
+        refundedCents: doomed.refundedCents,
+        eventId: doomed.eventId,
+      },
+    });
+
     await prisma.order.delete({ where: { id } });
     res.status(204).end();
   }),
@@ -387,6 +429,21 @@ organiserRouter.patch(
       where: { id },
       data: { status: body.status, usedAt: body.status === "USED" ? new Date() : null },
     });
+
+    /*
+     * Re-admitting a spent ticket is the override most worth a trail: it makes
+     * a used ticket work again, and "who let this one back in?" has to have an
+     * answer. The previous status is recorded because that is the actual
+     * question — undoing a check-in and confirming one both land here.
+     */
+    recordAudit(req, {
+      action: AUDIT_ACTIONS.TICKET_STATUS_OVERRIDDEN,
+      subjectType: "ticket",
+      subjectId: updated.id,
+      subjectLabel: ticket.ref,
+      details: { from: ticket.status, to: updated.status, eventSlug: ticket.order.event.slug },
+    });
+
     res.json({ ticket: { id: updated.id, status: updated.status } });
   }),
 );
@@ -465,7 +522,22 @@ organiserRouter.get(
   "/stats",
   canViewFinance,
   asyncHandler(async (req, res) => {
-    const events = await prisma.event.findMany({ where: await scopeFor(req), select: { id: true } });
+    /*
+     * `?eventSlug=` narrows the figures to one show.
+     *
+     * The filter is added INSIDE the ownership scope, never instead of it, so
+     * naming someone else's slug returns their event no rows rather than
+     * their revenue. An unknown or unowned slug therefore reads as an empty
+     * event — which is also the honest answer for an event with no sales.
+     *
+     * Without this an organiser running two shows saw one combined total and
+     * could not tell how either had done.
+     */
+    const eventSlug = typeof req.query.eventSlug === "string" ? req.query.eventSlug : null;
+    const events = await prisma.event.findMany({
+      where: { ...(await scopeFor(req)), ...(eventSlug ? { slug: eventSlug } : {}) },
+      select: { id: true },
+    });
     const eventIds = events.map((event) => event.id);
 
     if (eventIds.length === 0) {
@@ -478,6 +550,10 @@ organiserRouter.get(
         orders: 0,
         tickets: 0,
         inside: 0,
+        // Echoed so a caller can tell "this one event sold nothing" from
+        // "the filter matched no event I own".
+        eventSlug,
+        events: 0,
         generatedAt: new Date().toISOString(),
       });
       return;
@@ -548,6 +624,10 @@ organiserRouter.get(
       orders: settled.length,
       tickets,
       inside,
+      // Which events these figures cover: the requested slug when one was
+      // given, and the count, so a total is never mistaken for a single show.
+      eventSlug,
+      events: eventIds.length,
       generatedAt: new Date().toISOString(),
     });
   }),
@@ -696,14 +776,21 @@ organiserRouter.patch(
     }
     const body = tierPatchSchema.parse(req.body);
 
+    /*
+     * How many seats this zone has already committed.
+     *
+     * Needed for the capacity guard below, and recorded in the audit details
+     * for a price change too: repricing a zone nobody has bought is routine,
+     * while repricing one that has already sold is the thing an organiser may
+     * be asked about. The number is what tells those two apart later.
+     */
+    const sold = await soldForTier(id);
+
     // Capacity may grow freely, but shrinking below what's already committed
     // would oversell retroactively — someone holding a valid ticket would
     // have no seat.
-    if (body.capacity !== undefined) {
-      const sold = await soldForTier(id);
-      if (body.capacity < sold) {
-        throw new HttpError(409, `Capacity cannot go below the ${sold} seat(s) already sold or held`);
-      }
+    if (body.capacity !== undefined && body.capacity < sold) {
+      throw new HttpError(409, `Capacity cannot go below the ${sold} seat(s) already sold or held`);
     }
 
     /*
@@ -727,6 +814,35 @@ organiserRouter.patch(
       where: { id },
       data: { ...body, ...merged },
     });
+
+    /*
+     * Price and capacity are journalled; the rest of the patch is not.
+     *
+     * Renaming a zone or rewording its blurb is ordinary editing. Changing
+     * what it costs, or how many seats exist, changes money and obligations
+     * that buyers have already acted on — and both used to return a bare 200
+     * with nothing recorded, so a tier that had sold at one price could be
+     * repriced with no way to see it had happened.
+     */
+    if (body.priceCents !== undefined && body.priceCents !== tier.priceCents) {
+      recordAudit(req, {
+        action: AUDIT_ACTIONS.TIER_PRICE_CHANGED,
+        subjectType: "tier",
+        subjectId: updated.id,
+        subjectLabel: `${tier.event.slug} · ${tier.nameFr}`,
+        details: { fromCents: tier.priceCents, toCents: updated.priceCents, alreadySold: sold },
+      });
+    }
+    if (body.capacity !== undefined && body.capacity !== tier.capacity) {
+      recordAudit(req, {
+        action: AUDIT_ACTIONS.TIER_CAPACITY_CHANGED,
+        subjectType: "tier",
+        subjectId: updated.id,
+        subjectLabel: `${tier.event.slug} · ${tier.nameFr}`,
+        details: { from: tier.capacity, to: updated.capacity, alreadySold: sold },
+      });
+    }
+
     res.json({ tier: updated });
   }),
 );
