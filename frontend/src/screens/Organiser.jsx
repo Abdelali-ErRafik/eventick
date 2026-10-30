@@ -8,6 +8,7 @@ import { api, money, uploadImage } from "../api";
 import { categoryLabel, useI18n } from "../i18n";
 import { CATEGORIES, CITIES } from "../utils";
 import { parseBrief, EXAMPLE_BRIEF } from "../strategy";
+import { useOrganisers } from "./pro/useOrganisers";
 import { Button, Card, CheckOption, Container, DateField, Dropdown, EmptyState, Field, Input, Notice, SalesWindow, salesWindowAt, SectionHeader, Stat, Textarea, TimeField, triggerControlClass } from "../ui";
 
 const COVERS = [
@@ -64,6 +65,17 @@ function uid() {
 function OrganiserInner() {
   const { locale, t } = useI18n();
   const navigate = useNavigate();
+  /*
+   * An admin has to say whose event this is.
+   *
+   * organiserId decides who the payout pays, at which plan rate, into which
+   * bank account -- so the server refuses to guess it for anyone holding
+   * scope.any, and this is the field that answers it. An organiser never sees
+   * the control: they can only ever create their own, and the server infers
+   * that from the token.
+   */
+  const { maySeeAllOrganisers, organisers } = useOrganisers();
+  const [owner, setOwner] = useState("");
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("festivals");
   const [city, setCity] = useState("Casablanca");
@@ -197,6 +209,13 @@ function OrganiserInner() {
       setError(t("salesWindowInverted"));
       return;
     }
+    // The server refuses an unassigned event from an admin with a 400. Saying
+    // so here names the missing field instead of showing a bare error after a
+    // long form has already been filled in.
+    if (maySeeAllOrganisers && !owner) {
+      setError(t("errPickOrganiser"));
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -257,6 +276,10 @@ function OrganiserInner() {
       const endDate = end < start ? start : end;
       const { event } = await api.post("/organiser/events", {
         slug,
+        // Sent only when an admin picked someone. Omitted, the server uses
+        // the caller — which is what an organiser creating their own event
+        // wants, and what it deliberately refuses for an admin.
+        ...(maySeeAllOrganisers && owner ? { organiserId: owner } : {}),
         titleFr: title.trim(),
         titleAr: title.trim(),
         category,
@@ -376,6 +399,30 @@ function OrganiserInner() {
                   renders with OS chrome and ignores the theme, which on this
                   dark form meant a white list with a blue highlight the
                   moment it opened. */}
+              {/* Admins only. An organiser cannot create an event for anyone
+                  else, so showing them a picker with one option in it would
+                  be a question with no answer. */}
+              {maySeeAllOrganisers ? (
+                <Field label={t("owningOrganiser")} hint={t("owningOrganiserHint")}>
+                  {({ id, describedBy, invalid }) => (
+                    <Dropdown
+                      label={t("owningOrganiser")}
+                      value={owner}
+                      onChange={setOwner}
+                      options={[
+                        { value: "", label: t("pickOrganiser") },
+                        ...organisers.map((user) => ({
+                          value: user.id,
+                          label: user.name ? `${user.name} · ${user.email}` : user.email,
+                        })),
+                      ]}
+                      triggerClassName={triggerControlClass({ invalid })}
+                      describedBy={describedBy}
+                      id={id}
+                    />
+                  )}
+                </Field>
+              ) : null}
               <Field label={t("category")}>
                 {({ id, describedBy, invalid }) => (
                   <Dropdown

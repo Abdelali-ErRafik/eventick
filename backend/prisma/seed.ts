@@ -22,10 +22,6 @@ const DEMO_ACCOUNTS = [
   { email: "client@eventick.ma", password: "eventick-client-2026", name: "Karim Client", role: "CUSTOMER" as const },
 ];
 
-/** Events handed to the demo organiser so its Pro dashboard isn't empty and
- * the per-organiser scoping is visible (admin sees all, organiser sees these). */
-const ORGANISER_EVENT_SLUGS = ["oasis-2026", "dakhla-lagoon"];
-
 /** Mirrors src/domain/permissions.ts. Duplicated rather than imported because
  * the seed loads only @prisma/client and frozen JSON — reaching into src/
  * would drag the backend's ESM/tsx build config into the seed's runtime. If
@@ -193,12 +189,30 @@ async function main() {
     );
   }
 
+  /*
+   * Every event ends up owned by the demo ORGANISER, not the admin.
+   *
+   * The admin above is only a placeholder: events are created before the demo
+   * accounts exist, and organiserId is required at that point. Leaving them
+   * there used to make fourteen of the sixteen seeded events admin-owned,
+   * which modelled the platform wrong in a way that mattered — organiserId
+   * decides who a payout pays, at which plan's rate, into which bank
+   * account. An admin owning an event means the platform pays itself.
+   *
+   * An admin now has to NAME an organiser when creating an event (see
+   * resolveOwner in routes/organiser.ts), so a seed that produced events the
+   * API itself would refuse to create was also a seed nobody could trust as
+   * an example.
+   */
   const demoOrganiser = demoUsers.find((user) => user.role === "ORGANISER");
   if (demoOrganiser) {
-    await prisma.event.updateMany({
-      where: { slug: { in: ORGANISER_EVENT_SLUGS }, organiserId: admin.id },
+    const rehomed = await prisma.event.updateMany({
+      where: { organiserId: admin.id },
       data: { organiserId: demoOrganiser.id },
     });
+    if (rehomed.count > 0) {
+      console.log(`Handed ${rehomed.count} event(s) to ${demoOrganiser.email}.`);
+    }
   }
 
   const promos: { code: string; kind: PromoKind; value: number; eventSlug: string | null; maxUses: number }[] = [

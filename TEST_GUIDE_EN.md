@@ -177,6 +177,7 @@ one nobody reads.
 | **Re-admitting a spent ticket** (door or desk) | |
 | **Changing a zone's price or capacity**, with how many had already sold | |
 | **Cancelling or deleting an order**, with the amount | |
+| **Assigning an event to an organiser**, and transferring it later | |
 
 > 🎯 The four in bold were missing, and the omission was not a decision:
 > there was no action name to record them under, so the most disputable things
@@ -549,6 +550,17 @@ or given away.
 
 1. Signed in as **organiser**, click **"Créer un événement"** in the header.
 
+> 👑 **Signed in as an ADMIN?** You will see one extra field the organiser
+> never gets: **"Organisateur propriétaire"**. Pick an organiser — the form
+> will not submit without one.
+>
+> This is not bureaucracy. `organiserId` decides **who gets paid**: the payout
+> recipient, the plan whose rate prices the commission, and the bank account
+> the transfer reaches. Creation used to copy it from whoever was signed in,
+> so an admin setting an event up on an organiser's behalf quietly became its
+> payee — and no field existed to correct it afterwards. Fifteen of the
+> sixteen seeded events were admin-owned for exactly that reason.
+
 **✔️ You must see** the form split into **five** named sections, in this order:
 **L'essentiel**, **Quand et où**, **Billets et tarifs**, **Règles de vente**,
 **Visuel et description**.
@@ -586,6 +598,52 @@ or given away.
 **✔️ You must see** your event in the public catalogue.
 
 🧹 **Clean up:** delete it from **CATALOGUE → Événements** if you like. An event with sales cannot be deleted — hide it instead, which is deliberate.
+
+### Step 5 — Who the event belongs to is a money question
+
+Run these as an **admin**:
+
+```bash
+# No organiser named: refused.
+curl -s -w "\n  HTTP %{http_code}\n" -X POST \
+  -H 'content-type: application/json' -H 'authorization: Bearer ADMIN_TOKEN' \
+  -d '{"slug":"unowned-test", …}' \
+  'http://localhost:4100/api/organiser/events'
+```
+
+**✔️ 400** — *"Choose which organiser this event belongs to"*. An admin may
+create an event for someone, never own one.
+
+| What you try | Result |
+|---|---|
+| Admin creates with `organiserId` of a real organiser | **201**, and that organiser owns it |
+| Admin creates with no `organiserId` | **400** — defaulting to themselves is the bug this prevents |
+| Admin names a **customer** | **400** *"That account is not an organiser"* — nobody could be paid |
+| Admin names **another admin** | **400** — that would reinstate the problem by hand |
+| Admin names an id that does not exist | **404** |
+| An **organiser** creates one, no field | **201**, they own it — unchanged |
+| An **organiser** names someone else | **403** *"You can only create events for yourself"* |
+
+### Step 6 — Handing an event over, and when you cannot
+
+8. As an **admin**, `PATCH /organiser/events/SLUG` with `{"organiserId":"…"}`
+   on an event that has sold **nothing**.
+
+**✔️ 200.** The owner changes, and the transfer is journalled.
+
+9. Sell one ticket on it, then try the same reassignment.
+
+**✔️ 409** — *"Cannot reassign: 1 paid order(s) have already settled to the
+current organiser"*.
+
+> 🎯 The platform fee is recorded **at settlement** against the owner's plan
+> and never recomputed. Moving the event afterwards would leave past payouts
+> describing an owner it no longer has, and credit the new owner for sales
+> they did not make. A genuine mistake has to be fixed before anything sells.
+
+> 💡 An **organiser** gets 403 on this field at any time — they can edit their
+> event's content, never give it away. Re-stating the owner it already has is
+> not treated as a change, so an unrelated content edit never trips the 409.
 
 ✅ **Check 6 done.**
 
@@ -1443,6 +1501,8 @@ npm test
 23. **Fourteen of the twenty organiser write routes recorded nothing.** The audit vocabulary covered money, users and permissions and had no action for a price change, a capacity change or a door override — so the three most disputable things an organiser can do were the three with no trail. Re-admitting a spent ticket, repricing a zone that had already sold, and cancelling or deleting an order are now journalled; ordinary editing still is not. *(Section 8, and check 5 step 7.)*
 24. **Undoing a wrong scan was only possible on the Orders desk.** It needed the ticket's internal id, which nobody has at a gate — the reference is what is printed on the ticket. `POST /gate/undo` now takes a reference, refuses anything that is not actually checked in, and records who reversed what. *(Check 5, step 7.)*
 25. **Revenue could only be read for the whole account.** `/organiser/stats` summed every event an organiser owned and offered no way to narrow it, so someone running two shows could not tell how either had done. *(Check 7, step 4.)*
+26. **An admin creating an event became its payee.** `organiserId` was copied from whoever was signed in, and `organiserId` is what decides who the payout pays, at which plan's rate, into which bank account — so an admin helping an organiser set up a show silently pointed the money at the platform. Neither the create nor the update schema accepted the field, so it could not be corrected afterwards: a `PATCH` carrying `organiserId` returned 200 and changed nothing. Fifteen of the sixteen seeded events were admin-owned, which modelled the mistake as if it were the design. An admin must now name an organiser, the target is checked to be one, and the seed hands every event to a real organiser. *(Check 6, steps 6–7.)*
+27. **Four cross-organiser 403 checks were asserting nothing.** They used a seeded event on the assumption that the demo organiser owned only some of them; once the seed was corrected the "foreign" event was the caller's own, and the suite was quietly comparing 200 against 200. It now creates an event owned by a second organiser. *(`live-api-test`.)*
 
 ---
 

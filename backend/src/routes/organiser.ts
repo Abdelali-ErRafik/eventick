@@ -69,6 +69,57 @@ async function scopeFor(req: Request): Promise<{ organiserId?: string }> {
   return organiserScope(req.user!, mayActAnywhere, requestedOrganiserId(req));
 }
 
+/**
+ * Who an event BELONGS to — which is a money question, not a permissions one.
+ *
+ * `event.organiserId` decides three things that all follow the owner and
+ * nothing else: who the payout pays, which plan's rate prices the commission,
+ * and which bank account the transfer reaches. Creation used to hardcode it to
+ * `req.user.id`, so an admin setting an event up on an organiser's behalf
+ * silently became its payee — with no field to correct it, because neither the
+ * create nor the update schema accepted one. Fifteen of the sixteen seeded
+ * events were owned by the admin for exactly this reason.
+ *
+ * So ownership is now stated, not inferred:
+ *
+ *   - an organiser may only ever own their own events, and omits the field;
+ *   - a caller with `scope.any` MUST name one, because defaulting to
+ *     themselves is the mistake this exists to prevent. Silently owning an
+ *     event is not discovered until someone is owed money.
+ *
+ * The target is checked to be a real ORGANISER. Without that the bug simply
+ * moves: an id naming a customer would create an event whose earnings nobody
+ * can be paid, and an id naming another admin would reinstate the original
+ * problem by hand.
+ */
+async function resolveOwner(req: Request, requested?: string): Promise<string> {
+  const mayActAnywhere = await userHasPermission(req.user, "scope.any");
+
+  if (!mayActAnywhere) {
+    // An organiser naming someone else is refused outright rather than
+    // ignored: quietly creating it under their own name would look like the
+    // request succeeded as asked.
+    if (requested && requested !== req.user!.id) {
+      throw new HttpError(403, "You can only create events for yourself");
+    }
+    return req.user!.id;
+  }
+
+  if (!requested) {
+    throw new HttpError(400, "Choose which organiser this event belongs to");
+  }
+
+  const target = await prisma.user.findUnique({
+    where: { id: requested },
+    select: { id: true, role: true },
+  });
+  if (!target) throw new HttpError(404, "No such organiser");
+  if (target.role !== "ORGANISER") {
+    throw new HttpError(400, "That account is not an organiser");
+  }
+  return target.id;
+}
+
 organiserRouter.get(
   "/events",
   canManageEvents,
@@ -106,6 +157,10 @@ const tierInput = z.object({
 
 const createEventSchema = z.object({
   slug: z.string().min(3),
+  /** Who the event belongs to, and therefore who gets paid for it. Required
+   * of an admin, omitted by an organiser creating their own. See
+   * resolveOwner() for why it is stated rather than inferred. */
+  organiserId: z.string().optional(),
   /** Tickets one buyer may hold for this event, across every order. 0 = no
    * limit. Defaults to the schema's 10 when omitted. */
   maxPerBuyer: z.number().int().min(0).max(100).optional(),
@@ -155,10 +210,14 @@ organiserRouter.post(
     const existing = await prisma.event.findUnique({ where: { slug: body.slug } });
     if (existing) throw new HttpError(409, "An event with this slug already exists");
 
+    // Resolved before the write: an unassignable owner must not leave a
+    // half-created event behind.
+    const organiserId = await resolveOwner(req, body.organiserId);
+
     const event = await prisma.event.create({
       data: {
         slug: body.slug,
-        organiserId: req.user!.id,
+        organiserId,
         status: "PUBLISHED",
         titleFr: body.titleFr,
         titleAr: body.titleAr,
@@ -183,6 +242,24 @@ organiserRouter.post(
       },
       include: { tiers: true, lineup: true },
     });
+
+    /*
+     * Only when an admin assigned it to someone else.
+     *
+     * An organiser creating their own event is ordinary authoring and stays
+     * out of the journal, per the rule in lib/audit.ts. Naming a payee other
+     * than yourself is the part worth being able to account for.
+     */
+    if (organiserId !== req.user!.id) {
+      recordAudit(req, {
+        action: AUDIT_ACTIONS.EVENT_OWNER_ASSIGNED,
+        subjectType: "event",
+        subjectId: event.id,
+        subjectLabel: event.slug,
+        details: { organiserId },
+      });
+    }
+
     res.status(201).json({ event: publicEvent(event, await remainingByTier(event.id)) });
   }),
 );
@@ -242,6 +319,9 @@ const updateEventSchema = z.object({
   city: z.string().optional(),
   image: z.string().optional(),
   cancelCutoffHours: z.number().int().min(0).max(8760).optional(),
+  /** Hand the event to a different organiser. Admin-only, and refused once
+   * the event has settled money — see the route below. */
+  organiserId: z.string().optional(),
 });
 
 /** Content fields only (title/city) — not the tiers, which carry sold
@@ -252,12 +332,61 @@ organiserRouter.patch(
   asyncHandler(async (req, res) => {
     const slug = param(req, "slug");
     const event = await requireOwnedEvent(req.user, slug);
-    const body = updateEventSchema.parse(req.body);
+    const { organiserId: requestedOwner, ...content } = updateEventSchema.parse(req.body);
+
+    /*
+     * Handing the event to a different organiser.
+     *
+     * Separated from the content fields because it is not an edit to the
+     * listing — it changes who is owed the money. Two rules:
+     *
+     *  1. Only a caller with `scope.any`. resolveOwner() enforces that, and
+     *     also that the target is a real ORGANISER rather than a customer
+     *     nobody can pay or another admin.
+     *
+     *  2. Refused once the event has settled orders. The platform fee is
+     *     recorded AT SETTLEMENT against the owner's plan and never
+     *     recomputed, so moving the event afterwards would leave past payouts
+     *     and recorded fees describing an owner the event no longer has —
+     *     and the new owner credited for sales they did not make. A genuine
+     *     mistake has to be fixed before anything sells.
+     */
+    // `from` may be null: organiserId is nullable so an event survives its
+    // organiser's account being deleted (onDelete: SetNull). Re-homing one of
+    // those orphans is the clearest legitimate use of this field.
+    let ownerChange: { from: string | null; to: string } | null = null;
+    if (requestedOwner !== undefined && requestedOwner !== event.organiserId) {
+      const nextOwner = await resolveOwner(req, requestedOwner);
+      if (nextOwner !== event.organiserId) {
+        const settled = await prisma.order.count({
+          where: { eventId: event.id, status: { in: ["PAID", "REFUNDED"] }, NOT: { paymentRef: "COMP" } },
+        });
+        if (settled > 0) {
+          throw new HttpError(
+            409,
+            `Cannot reassign: ${settled} paid order(s) have already settled to the current organiser`,
+          );
+        }
+        ownerChange = { from: event.organiserId, to: nextOwner };
+      }
+    }
+
     const updated = await prisma.event.update({
       where: { id: event.id },
-      data: body,
+      data: ownerChange ? { ...content, organiserId: ownerChange.to } : content,
       include: { tiers: true, lineup: true },
     });
+
+    if (ownerChange) {
+      recordAudit(req, {
+        action: AUDIT_ACTIONS.EVENT_OWNER_CHANGED,
+        subjectType: "event",
+        subjectId: event.id,
+        subjectLabel: event.slug,
+        details: { from: ownerChange.from, to: ownerChange.to },
+      });
+    }
+
     res.json({ event: publicEvent(updated, await remainingByTier(updated.id)) });
   }),
 );

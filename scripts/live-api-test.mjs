@@ -297,7 +297,8 @@ record("typed ref by staff admits (unsigned)", manual.status === 200 && manual.d
 
 const manifest = await expectStatus("GET /gate/:slug/manifest as admin", "GET", `/api/gate/events/${slug}/manifest`, 200, { token: tokens.admin });
 record("manifest excludes already-used tickets", Array.isArray(manifest.data?.refs) && !manifest.data.refs.includes(ticket?.ref), `${manifest.data?.refs?.length ?? 0} valid refs`);
-await expectStatus("manifest for another's event → 403", "GET", `/api/gate/events/${slug}/manifest`, 403, { token: tokens.organiser });
+// The cross-organiser refusal moved to the ORGANISER group below, where a
+// genuinely foreign event exists to test it against.
 
 // ──────────────────────────────────────────────────────────── organiser ──
 setGroup("ORGANISER  /api/organiser  (role boundaries)");
@@ -317,13 +318,53 @@ await expectStatus("GET /organiser/orders/detailed", "GET", "/api/organiser/orde
 await expectStatus("GET /organiser/:slug/waitlist", "GET", `/api/organiser/events/${slug}/waitlist`, 200, { token: tokens.admin });
 await expectStatus("GET /organiser/:slug/audience", "GET", `/api/organiser/events/${slug}/audience`, 200, { token: tokens.admin });
 
-// Cross-organiser isolation: the demo organiser owns oasis-2026, not mawazine.
-await expectStatus("organiser reading another's waitlist → 403", "GET", `/api/organiser/events/${slug}/waitlist`, 403, { token: tokens.organiser });
-await expectStatus("organiser editing another's event → 403", "PATCH", `/api/organiser/events/${slug}`, 403, {
+/*
+ * Cross-organiser isolation needs an event this organiser genuinely does NOT
+ * own, so one is made for the second organiser promoted above.
+ *
+ * It used to use a seeded event, on the assumption that the demo organiser
+ * owned only some of them. That assumption died when event ownership stopped
+ * being inferred from the caller: an admin must now NAME an organiser
+ * (resolveOwner in routes/organiser.ts), the seed hands every event to the
+ * demo organiser, and the "foreign" event was quietly the caller's own — so
+ * four 403 checks were passing a 200 and asserting nothing.
+ *
+ * Creating it explicitly also covers the assignment path: an admin building
+ * an event on someone else's behalf.
+ */
+const foreignSlug = `livetest-foreign-${Date.now()}`;
+const foreignEvent = await call("POST", "/api/organiser/events", {
+  token: tokens.admin,
+  body: {
+    slug: foreignSlug,
+    organiserId: newUserId,
+    maxPerBuyer: 0,
+    titleFr: "Événement d'un autre", titleAr: "حدث منظّم آخر",
+    category: "festivals", city: "Tanger",
+    venueFr: "Salle voisine", venueAr: "قاعة مجاورة", address: "Tanger",
+    start: "2027-09-02T20:00:00", end: "2027-09-02T23:59:00", doors: "2027-09-02T19:00:00",
+    image: "/events/jazz.jpg",
+    blurbFr: "Test", blurbAr: "اختبار", aboutFr: "Test", aboutAr: "اختبار",
+    ageFr: "Tous publics", ageAr: "للجميع",
+    tiers: [
+      { nameFr: "Standard", nameAr: "عادي", blurbFr: "t", blurbAr: "t", priceCents: 12000, capacity: 20, zoneFr: "A", zoneAr: "A", gateFr: "1", gateAr: "1" },
+    ],
+  },
+});
+record("admin creates an event FOR another organiser", foreignEvent.status === 201, `${foreignEvent.status}`);
+if (foreignEvent.status === 201) created.events.push(foreignSlug);
+await expectStatus("admin creating one with no organiser → 400", "POST", "/api/organiser/events", 400, {
+  token: tokens.admin,
+  body: { ...JSON.parse(JSON.stringify(foreignEvent.data?.event ? {} : {})), slug: `${foreignSlug}-unowned`, titleFr: "Sans propriétaire", titleAr: "بدون مالك", category: "festivals", city: "Rabat", venueFr: "v", venueAr: "v", address: "a", start: "2027-09-02T20:00:00", end: "2027-09-02T23:59:00", doors: "2027-09-02T19:00:00", image: "/events/jazz.jpg", blurbFr: "b", blurbAr: "b", aboutFr: "a", aboutAr: "a", ageFr: "x", ageAr: "x", tiers: [{ nameFr: "S", nameAr: "S", blurbFr: "t", blurbAr: "t", priceCents: 1000, capacity: 5, zoneFr: "A", zoneAr: "A", gateFr: "1", gateAr: "1" }] },
+});
+
+await expectStatus("manifest for another's event → 403", "GET", `/api/gate/events/${foreignSlug}/manifest`, 403, { token: tokens.organiser });
+await expectStatus("organiser reading another's waitlist → 403", "GET", `/api/organiser/events/${foreignSlug}/waitlist`, 403, { token: tokens.organiser });
+await expectStatus("organiser editing another's event → 403", "PATCH", `/api/organiser/events/${foreignSlug}`, 403, {
   token: tokens.organiser,
   body: { city: "Hacked" },
 });
-await expectStatus("organiser deleting another's event → 403", "DELETE", `/api/organiser/events/${slug}`, 403, { token: tokens.organiser });
+await expectStatus("organiser deleting another's event → 403", "DELETE", `/api/organiser/events/${foreignSlug}`, 403, { token: tokens.organiser });
 
 // Create / edit / delete an event as the organiser.
 const newSlug = `livetest-event-${Date.now()}`;
@@ -501,8 +542,10 @@ for (const route of ["/", "/explorer", "/billets", "/login", "/pro", "/pro/gate"
 // ───────────────────────────────────────────────────────────── cleanup ──
 setGroup("CLEANUP");
 
+// As admin, not as the organiser: one of these events belongs to the second
+// organiser promoted earlier, and `scope.any` is what reaches all of them.
 for (const slugToDelete of created.events) {
-  const r = await call("DELETE", `/api/organiser/events/${slugToDelete}`, { token: tokens.organiser });
+  const r = await call("DELETE", `/api/organiser/events/${slugToDelete}`, { token: tokens.admin });
   record(`deleted test event ${slugToDelete}`, r.status === 204, `${r.status}`);
 }
 for (const id of created.promos) {

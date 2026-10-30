@@ -65,6 +65,11 @@ export const AUDIT_ACTIONS = {
    * evidence it ever existed. Its details carry the figures deliberately,
    * because there is nothing left to join to. */
   ORDER_DELETED: "order.deleted",
+  /* Who an event belongs to decides who its payout pays, at which plan's
+   * rate, into which bank account. An admin naming that on someone's behalf,
+   * or moving it later, is a decision about money and not about content. */
+  EVENT_OWNER_ASSIGNED: "event.owner.assigned",
+  EVENT_OWNER_CHANGED: "event.owner.changed",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
