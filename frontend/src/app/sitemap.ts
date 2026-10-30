@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { getEvents, siteUrl } from "../lib/catalog-server";
+import { categoryLandings, cityLandings } from "../lib/landing";
 
 /**
  * sitemap.xml — same story as robots.txt: the path returned the SPA's HTML
@@ -12,9 +13,10 @@ import { getEvents, siteUrl } from "../lib/catalog-server";
  *
  * Deliberately NOT listed: the `?cat=` / `?ville=` filter querystrings. They
  * are client-side filters over the same list, so indexing them would create
- * near-duplicate thin pages. Real city and category pages are worth building
- * — with their own copy, and once the catalogue is bigger than sixteen
- * events — and they will be added here when they exist.
+ * near-duplicate thin pages. The real city and category pages at
+ * /billets-ville/* and /billets-categorie/* are listed instead — and only
+ * the ones that qualify, since lib/landing.ts refuses to build a page for a
+ * city or category with too few events to be worth a crawl.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const site = siteUrl();
@@ -44,5 +46,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  return [...staticPages, ...eventPages];
+  // Landing pages, listed only while they qualify. A city that drops below
+  // the threshold leaves the sitemap on the next revalidation rather than
+  // advertising a page that now 404s.
+  const [cities, categories] = await Promise.all([cityLandings(now), categoryLandings(now)]);
+
+  const landingPages: MetadataRoute.Sitemap = [
+    ...cities.map((l) => ({
+      url: `${site}/billets-ville/${l.slug}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    })),
+    ...categories.map((l) => ({
+      url: `${site}/billets-categorie/${l.slug}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    })),
+  ];
+
+  return [...staticPages, ...eventPages, ...landingPages];
 }
