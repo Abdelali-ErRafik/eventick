@@ -24,7 +24,7 @@ import { useCatalog } from "../useCatalog";
 import { useAuth } from "../AuthContext";
 import { Button, Container, Dropdown, ErrorState, LoadingState } from "../ui";
 import { categoryLabel, useI18n } from "../i18n";
-import { addDays, CITIES, cn, dateKey, intlLocaleTag, todayKey } from "../utils";
+import { addDays, CITIES, cn, dateKey, intlLocaleTag, monthBadge, todayKey } from "../utils";
 
 // nightlife used to fill bg-stage (near-black) with text-stage-fg -- fine on
 // the old light-page version of this rail, but once the section sits on the
@@ -107,6 +107,11 @@ export default function Home() {
   }
 
   const seatsAvailable = live.reduce((sum, event) => sum + event.tiers.reduce((n, tier) => n + tier.remaining, 0), 0);
+
+  // The e-ticket preview is a mock-up, but its date still has to speak
+  // the reader's language: it was a hardcoded "28 JUIL" that stayed
+  // French in English and Arabic. A fixed instant, formatted properly.
+  const previewStamp = monthBadge("2027-07-28T21:00:00Z", locale);
 
   return (
     <Shell overlay>
@@ -472,11 +477,18 @@ export default function Home() {
               <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <dt className="text-xs text-muted">{t("dates")}</dt>
-                  <dd className="font-semibold">28 JUIL · 21:00</dd>
+                  {/* Was the literal string "28 JUIL · 21:00", so the whole
+                      preview stayed French after switching to English or
+                      Arabic — a hardcoded month abbreviation cannot be
+                      translated. Formatted from a real date instead, which
+                      is also what every other date on the site does. */}
+                  <dd className="font-semibold">
+                    {previewStamp.day} {previewStamp.month} · 21:00
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted">{t("zoneAccess")}</dt>
-                  <dd className="font-semibold">VIP · PORTE 4</dd>
+                  <dd className="font-semibold">VIP · {t("previewGate")}</dd>
                 </div>
               </dl>
               <div className="mt-3 flex items-center justify-between border-t border-dashed border-line/20 pt-3">
