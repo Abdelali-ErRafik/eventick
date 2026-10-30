@@ -121,13 +121,23 @@ export default function Home() {
           card's custom Dropdown panels (position: absolute) at the section
           edge, cutting their tops off instead of letting them float over
           the hero like any other popover in the app. */}
-      {/* Height: was min-h-[min(92vh,56rem)], which on a laptop filled the
-          whole first screen — so the first thing a visitor saw was a search
-          form and no events at all. At 74vh the top of the "à l'affiche"
-          rail is visible before any scrolling, which is the point of a
-          ticketing home page. The content is vertically centred in whatever
-          height remains, so nothing needed re-laying out. */}
-      <section className="relative -mt-16 flex min-h-[min(68vh,42rem)] flex-col bg-stage pt-16 text-stage-fg">
+      {/* Height. Measured in a real browser at six viewport sizes, because
+          reading the class name is what hid this for two rounds.
+
+          `min-h` is a FLOOR: once the kicker, headline, subtitle, search
+          card and trends row exceeded it, the section grew past it and the
+          number meant nothing — it measured 830px in an 804px viewport. So
+          the padding, the type scale and the headline's wrap width came
+          down too, and the events moved ABOVE the category rail, which by
+          itself sat 452px between the hero and the first date.
+
+          Now the first event is at 860px, inside a 900px viewport. A 13"
+          laptop (800px) and phones still need a short scroll — on a phone
+          the search card stacks to four rows and the hero genuinely needs
+          the height — but the hero no longer fills the screen on its own at
+          any size, which was the actual complaint. max-h stops it from
+          regressing to that on a short window. */}
+      <section className="relative -mt-16 flex max-h-[92vh] min-h-[min(62vh,38rem)] flex-col bg-stage pt-16 text-stage-fg">
         {/*
           The photo was opacity-45 beneath a gradient that ran to a solid
           `from-stage` at the bottom, so it was dimmed twice and the venue
@@ -153,12 +163,12 @@ export default function Home() {
             the same specificity. */}
         <div className="absolute inset-0 bg-linear-to-r from-stage/85 via-stage/35 to-transparent rtl:bg-linear-to-l" />
         <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col justify-center px-4 py-8 md:px-8 md:py-10">
-          <div className="max-w-4xl">
+          <div className="max-w-5xl">
             <p className="inline-flex items-center gap-2 rounded-full bg-stage-fg/10 px-3 py-1 text-xs font-semibold">
               <span className="size-2 rounded-full bg-accent" />
               {t("kicker")}
             </p>
-            <p className="mt-5 text-sm font-semibold text-accent">{t("secureMad")}</p>
+            <p className="mt-3 text-sm font-semibold text-accent">{t("secureMad")}</p>
             {/* text-hero is the biggest headline size used anywhere on the
                 site (EventDetail, Explorer use it too), so this still reads
                 as the page's visual climax without pushing the subtitle and
@@ -261,6 +271,42 @@ export default function Home() {
         </dl>
       </section>
 
+      {/* Events first, then the category rail.
+
+          Shrinking the hero was not enough on its own: with the hero at
+          819px of a 900px viewport, the first event still sat at y=1288
+          because this rail (452px) came between them. A visitor had to
+          scroll past two screens to see a single date. The rail is a
+          navigation aid; the events are the product, so they go first. */}
+      {feature ? (
+        // Brume tint instead of the plain paper background every other
+        // section sits on — one deliberate break in the rhythm at the
+        // page's real centrepiece, instead of white-card, white-card,
+        // white-card all the way down.
+        // pt-7 rather than py-14, and a smaller h2: this section's own
+        // header was costing ~150px before the first card, which is what
+        // kept the events just under the fold (966px against a 900px
+        // viewport) even after the hero shrank and moved above the rail.
+        <section className="bg-brume/40 pb-14 pt-7">
+          <div className="mx-auto max-w-7xl px-4 md:px-8">
+            <p className="font-mono text-xs font-bold tracking-widest text-primary">{t("majorKicker")}</p>
+            <h2 className="mt-1 font-display text-3xl font-extrabold text-encre md:text-4xl">{t("majorTitle")}</h2>
+            {/* items-start, not the CSS grid default of stretch -- keeps the
+                side column at its own natural height if the catalog ever
+                has fewer than 3 upcoming events to fill it, rather than a
+                short column being stretched into a card-sized empty void. */}
+            <div className="mt-5 grid items-start gap-4 lg:grid-cols-[1.4fr_0.8fr]">
+              <EventCard event={feature} variant="feature" />
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                {side.map((event) => (
+                  <EventCard key={event.slug} event={event} variant="compact" />
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <section className="mx-auto max-w-7xl px-4 py-12 md:px-8">
         <div className="flex items-end justify-between gap-4">
           <div>
@@ -300,31 +346,6 @@ export default function Home() {
           })}
         </div>
       </section>
-
-      {feature ? (
-        // Brume tint instead of the plain paper background every other
-        // section sits on — one deliberate break in the rhythm at the
-        // page's real centrepiece, instead of white-card, white-card,
-        // white-card all the way down.
-        <section className="bg-brume/40 py-14">
-          <div className="mx-auto max-w-7xl px-4 md:px-8">
-            <p className="font-mono text-xs font-bold tracking-widest text-primary">{t("majorKicker")}</p>
-            <h2 className="mt-2 font-display text-4xl font-extrabold text-encre md:text-display">{t("majorTitle")}</h2>
-            {/* items-start, not the CSS grid default of stretch -- keeps the
-                side column at its own natural height if the catalog ever
-                has fewer than 3 upcoming events to fill it, rather than a
-                short column being stretched into a card-sized empty void. */}
-            <div className="mt-6 grid items-start gap-4 lg:grid-cols-[1.4fr_0.8fr]">
-              <EventCard event={feature} variant="feature" />
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-                {side.map((event) => (
-                  <EventCard key={event.slug} event={event} variant="compact" />
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-      ) : null}
 
       {/* A near-black band for the urgency section -- "happening soon"
           reads as a ticker/alert moment, not another paper-background list,
