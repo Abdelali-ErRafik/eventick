@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Mail, Plus, Tags, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, money } from "../../api";
@@ -52,12 +52,6 @@ export default function Offers() {
           .then((data) => data.entries.map((entry) => ({ ...entry, slug: event.slug, title: eventText(event, "title", locale) }))),
       ),
     ).then((lists) => setWaitlist(lists.flat()));
-  }, [events, locale]);
-
-  const eventById = useMemo(() => {
-    const map = new Map();
-    for (const event of events ?? []) map.set(event.id, eventText(event, "title", locale));
-    return map;
   }, [events, locale]);
 
   const submit = async (e) => {
@@ -115,7 +109,13 @@ export default function Offers() {
                   <span className="font-mono text-sm font-extrabold">{promo.code}</span>
                   <Badge tone="info">{promo.kind === "PERCENT" ? `${promo.value}%` : `${money(promo.value)} MAD`}</Badge>
                 </div>
-                <p className="truncate text-sm text-muted">{promo.eventId ? (eventById.get(promo.eventId) ?? promo.eventId) : t.allDates}</p>
+                {/* The server sends the event name with the promo now. It
+                    used to be looked up by eventId against a list that
+                    carries only slugs, so the lookup always missed and the
+                    card printed a raw cuid where the name belongs. */}
+                <p className="truncate text-sm text-muted">
+                  {promo.eventId ? eventText(promo, "eventTitle", locale) || promo.eventSlug : t.allDates}
+                </p>
                 <div className="flex items-center justify-between gap-2 border-t border-line/10 pt-3">
                   <Badge tone={exhausted ? "danger" : "neutral"}>
                     {promo.uses}/{promo.maxUses}

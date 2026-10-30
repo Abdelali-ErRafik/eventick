@@ -44,8 +44,30 @@ promoRouter.get(
     const promos = await prisma.promoCode.findMany({
       where: seesEverything ? {} : { OR: [{ event: { organiserId: req.user!.id } }, { eventId: null }] },
       orderBy: { createdAt: "desc" },
+      /*
+       * The event's slug and title, not just its id.
+       *
+       * The dashboard printed a raw cuid where the event name belongs —
+       * "cmvut0no10016x1223irvqwyx" — because it tried to look the name up
+       * by `eventId` against a list of events that carries only `slug`.
+       * publicEvent() deliberately omits `id` (slug is the public
+       * identifier), so that lookup could never match and the fallback was
+       * the id itself.
+       *
+       * Sending the name with the promo removes the lookup rather than
+       * fixing it: a card about a promo should not have to join two lists to
+       * say which event it belongs to.
+       */
+      include: { event: { select: { slug: true, titleFr: true, titleAr: true } } },
     });
-    res.json({ promos });
+    res.json({
+      promos: promos.map(({ event, ...promo }) => ({
+        ...promo,
+        eventSlug: event?.slug ?? null,
+        eventTitleFr: event?.titleFr ?? null,
+        eventTitleAr: event?.titleAr ?? null,
+      })),
+    });
   }),
 );
 
