@@ -49,10 +49,23 @@ export async function cancelEvent(
 ): Promise<CancelResult> {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true, slug: true, titleFr: true, status: true, startAt: true },
+    select: { id: true, slug: true, titleFr: true, status: true, cancelledAt: true, startAt: true },
   });
   if (!event) throw new HttpError(404, "Event not found");
-  if (event.status === "CANCELLED") throw new HttpError(409, "This event is already cancelled");
+  /*
+   * Keyed on `cancelledAt`, not on the status.
+   *
+   * `status === "CANCELLED"` looked equivalent and was not: hiding an
+   * already-cancelled event moves its status to HIDDEN, and this guard then
+   * let it be cancelled a SECOND time — refunding buyers who had already
+   * been refunded once. `cancelledAt` is set once and never cleared, so it
+   * is the fact that actually answers "has this been called off".
+   *
+   * Same mistake as the visibility route, which wrote PUBLISHED over
+   * CANCELLED and put a dead event back on sale. Cancellation is a thing
+   * that happened, not a display state.
+   */
+  if (event.cancelledAt) throw new HttpError(409, "This event is already cancelled");
   if (!reason.trim()) {
     // Required, not optional: "why was my festival cancelled" is the first
     // thing every buyer asks, and a status alone cannot answer it.

@@ -306,6 +306,24 @@ organiserRouter.patch(
     const slug = param(req, "slug");
     const event = await requireOwnedEvent(req.user, slug);
     const hidden = Boolean(req.body?.hidden);
+
+    /*
+     * A cancelled event cannot be put back on sale from here.
+     *
+     * Cancelling sets status CANCELLED, refunds every buyer and voids every
+     * ticket. This route wrote PUBLISHED unconditionally, so the "restore"
+     * eye on the dashboard overwrote that status and the event reappeared in
+     * the public catalogue — with its tickets already refunded and voided,
+     * and sellable again. Verified: cancel, click restore, and a new order
+     * went through end to end.
+     *
+     * Hiding a cancelled event is still allowed: that only takes it further
+     * out of sight, which is never the wrong direction.
+     */
+    if (!hidden && event.cancelledAt) {
+      throw new HttpError(409, "This event was cancelled and cannot be put back on sale");
+    }
+
     const updated = await prisma.event.update({
       where: { id: event.id },
       data: { status: hidden ? "HIDDEN" : "PUBLISHED" },

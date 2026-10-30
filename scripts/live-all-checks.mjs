@@ -569,7 +569,32 @@ ok("the event leaves the public catalogue", c17Public.status === 404, `HTTP ${c1
 const c17Late = await call("POST", "/orders/hold", {
   eventSlug: c17Slug, lines: [{ tierId: c17Tier, qty: 1 }], email: `late-${stamp}@example.test`,
 });
-ok("a cancelled event cannot be bought", c17Late.status >= 400, `HTTP ${c17Late.status}`);
+ok("a cancelled event cannot be bought", c17Late.status === 410, `HTTP ${c17Late.status} — 410 Gone, with the reason`);
+
+/*
+ * And it cannot be put BACK on sale.
+ *
+ * The dashboard's hide/restore eye wrote status PUBLISHED unconditionally,
+ * which overwrote CANCELLED — so cancelling an event, refunding every buyer
+ * and voiding every ticket, then clicking restore, put it back in the public
+ * catalogue and a fresh order went through end to end. Verified before the
+ * fix; asserted here so it cannot come back.
+ *
+ * `status >= 400` above used to pass straight through that bug, because the
+ * refusal came from the status check rather than from cancellation itself.
+ */
+const c17Restore = await call("PATCH", `/organiser/events/${c17Slug}/visibility`, { hidden: false }, org);
+ok("a cancelled event cannot be restored to sale", c17Restore.status === 409, `HTTP ${c17Restore.status}`);
+const c17Status = await prisma.event.findUniqueOrThrow({
+  where: { slug: c17Slug }, select: { status: true, cancelledAt: true },
+});
+ok("and its status is still CANCELLED", c17Status.status === "CANCELLED", c17Status.status);
+ok("hiding it further is still allowed",
+  (await call("PATCH", `/organiser/events/${c17Slug}/visibility`, { hidden: true }, org)).status === 200);
+const c17StillDead = await call("POST", "/orders/hold", {
+  eventSlug: c17Slug, lines: [{ tierId: c17Tier, qty: 1 }], email: `dead-${stamp}@example.test`,
+});
+ok("and it still cannot be bought afterwards", c17StillDead.status >= 400, `HTTP ${c17StillDead.status}`);
 
 // Scoped to THIS event's own tier id, which we already hold. An earlier
 // version re-queried by eventId and picked up a tier from elsewhere.

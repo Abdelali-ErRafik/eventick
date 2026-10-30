@@ -132,25 +132,32 @@ export default function Events() {
 
   const save = async (e) => {
     e.preventDefault();
-    await api.patch(`/organiser/events/${edit.slug}`, {
-      titleFr,
-      titleAr,
-      category: editCategory,
-      city: editCity,
-      venueFr: editVenueFr,
-      venueAr: editVenueAr,
-      address: editAddress,
-      image: editImage,
-      blurbFr: editBlurbFr,
-      blurbAr: editBlurbAr,
-      aboutFr: editAboutFr,
-      aboutAr: editAboutAr,
-      ageFr: editAgeFr,
-      ageAr: editAgeAr,
-    });
-    setEdit(null);
-    load();
-    toast.success(t.saved);
+    try {
+      await api.patch(`/organiser/events/${edit.slug}`, {
+        titleFr,
+        titleAr,
+        category: editCategory,
+        city: editCity,
+        venueFr: editVenueFr,
+        venueAr: editVenueAr,
+        address: editAddress,
+        image: editImage,
+        blurbFr: editBlurbFr,
+        blurbAr: editBlurbAr,
+        aboutFr: editAboutFr,
+        aboutAr: editAboutAr,
+        ageFr: editAgeFr,
+        ageAr: editAgeAr,
+      });
+      setEdit(null);
+      load();
+      toast.success(t.saved);
+    } catch (err) {
+      // The widened form can be refused now -- a venue under two characters,
+      // an address under three. Showing why beats closing the modal and
+      // losing what was typed.
+      toast.error(err.message);
+    }
   };
 
   const openContact = async (event) => {
@@ -181,9 +188,16 @@ export default function Events() {
   };
 
   const toggleHidden = async (slug, hidden) => {
-    await api.patch(`/organiser/events/${slug}/visibility`, { hidden });
-    load();
-    toast.success(t.saved);
+    // Restoring a CANCELLED event is refused with a 409 -- its tickets are
+    // already refunded and voided. The button is hidden for that case, so
+    // this catch is the backstop rather than the message.
+    try {
+      await api.patch(`/organiser/events/${slug}/visibility`, { hidden });
+      load();
+      toast.success(t.saved);
+    } catch (err) {
+      toast.error(err.message);
+    }
   };
 
   const removeEvent = async (event) => {
@@ -195,9 +209,17 @@ export default function Events() {
       cancelLabel: t.cancelBtn,
     });
     if (!ok) return;
-    await api.del(`/organiser/events/${event.slug}`);
-    load();
-    toast.success(t.removed);
+    // An event anyone has ordered against cannot be deleted — the server
+    // answers 409 and says to hide it instead. Uncaught, that rejected and
+    // the success toast fired anyway, so the row stayed on screen under a
+    // message claiming it was gone.
+    try {
+      await api.del(`/organiser/events/${event.slug}`);
+      load();
+      toast.success(t.removed);
+    } catch (err) {
+      toast.error(err.message);
+    }
   };
 
   const openRules = (event) => {
@@ -303,6 +325,19 @@ export default function Events() {
         lines.push([ticket.ref, ticket.holderName, ticket.status, eventText(ticket, "tierName", locale), String(ticket.priceCents / 100)]);
       }
     }
+    /*
+     * Say something either way.
+     *
+     * This downloaded silently: on an event with no sales it produced a file
+     * containing only the header row, which looks identical to a download
+     * that failed. The button carries a people icon and reads "Attendees",
+     * so a silent no-op is the one outcome that cannot be told apart from a
+     * broken button.
+     */
+    if (lines.length === 1) {
+      toast.warning(t.noAttendees);
+      return;
+    }
     const csv = lines.map((line) => line.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
@@ -310,6 +345,7 @@ export default function Events() {
     link.download = `${event.slug}-participants.csv`;
     link.click();
     URL.revokeObjectURL(url);
+    toast.success(t.attendeesExported.replace("{n}", String(lines.length - 1)));
   };
 
   const activeCount = [query, city, visibility].filter(Boolean).length;
@@ -809,9 +845,15 @@ function EventRow({ row, locale, t, onEdit, onDuplicate, onGuests, onContact, on
         <IconBtn label={t.eventSettings} onClick={onRules}>
           <SlidersHorizontal className="size-4" />
         </IconBtn>
-        <IconBtn label={hidden ? t.restore : t.hide} onClick={onToggleHidden}>
-          {hidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
-        </IconBtn>
+        {/* A cancelled event can be hidden further but never restored — the
+            server refuses it with a 409, because every ticket has already
+            been refunded and voided. Offering an eye that only errors would
+            be a button that lies. */}
+        {!cancelled ? (
+          <IconBtn label={hidden ? t.restore : t.hide} onClick={onToggleHidden}>
+            {hidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+          </IconBtn>
+        ) : null}
         {!hidden ? (
           <Link
             to={`/evenements/${event.slug}`}

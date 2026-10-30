@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
-import { optionalAuth, authenticate } from "../middleware/auth.js";
+import { optionalAuth, authenticate, refuseStaffPurchase } from "../middleware/auth.js";
 import { checkBuyerLimit, checkQuantity, holdExpiry, salesState, tierRemaining } from "../domain/inventory.js";
 import { quotePromo, type PromoCandidate } from "../domain/pricing.js";
 import { phoneOk, makePaymentRef } from "../lib/payment-sim.js";
@@ -44,12 +44,34 @@ const holdSchema = z.object({
 ordersRouter.post(
   "/hold",
   optionalAuth,
+  // Refused at the reservation step, not only at payment: holding seats is
+  // already the harm -- a staff account could otherwise park the last row of
+  // a sold-out tier indefinitely without ever reaching /pay.
+  refuseStaffPurchase,
   asyncHandler(async (req, res) => {
     const body = holdSchema.parse(req.body);
     if (body.phone && !phoneOk(body.phone)) throw new HttpError(400, "Invalid phone number");
 
     const event = await prisma.event.findUnique({ where: { slug: body.eventSlug } });
-    if (!event || event.status !== "PUBLISHED") throw new HttpError(404, "Event not found");
+    if (!event) throw new HttpError(404, "Event not found");
+
+    /*
+     * Cancelled is checked on its own, and BEFORE the status.
+     *
+     * Cancelling sets status CANCELLED, so the status check below happened to
+     * refuse these too — which meant nothing actually depended on
+     * `cancelledAt`, and a single mistaken write of PUBLISHED anywhere else
+     * put a dead event back on sale. That is exactly what the dashboard's
+     * "restore" button did: cancel an event, click the eye, and a buyer could
+     * pay for a ticket to a show whose tickets had all been refunded and
+     * voided.
+     *
+     * Checked first so the buyer is told what actually happened. 410 Gone
+     * rather than 404: the event is real and they are probably holding a link
+     * to it, so "this was cancelled" is the answer that helps.
+     */
+    if (event.cancelledAt) throw new HttpError(410, "This event has been cancelled");
+    if (event.status !== "PUBLISHED") throw new HttpError(404, "Event not found");
 
     // A waitlist offer reserves one seat of one tier for this person. It is
     // excluded from the committed count below, so they can take the seat the
@@ -297,6 +319,10 @@ const paySchema = z.object({
 ordersRouter.post(
   "/:id/pay",
   optionalAuth,
+  // Also here, not just on /hold: a customer can hold seats, be approved as
+  // an organiser, and come back to pay -- the role must be re-checked at the
+  // step that actually takes money.
+  refuseStaffPurchase,
   asyncHandler(async (req, res) => {
     const id = param(req, "id");
     const body = paySchema.parse(req.body ?? {});

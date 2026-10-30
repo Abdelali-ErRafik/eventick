@@ -1242,7 +1242,17 @@ If any refund failed, **✔️ a second orange warning** says how many need doin
 |---|---|
 | The event's card in **Événements** | A red **"Annulé"** badge, and the 🚫 icon **gone** — there is nothing left to cancel |
 | The event on the public site | **404.** It is off sale, not merely hidden |
-| Trying to buy it anyway, via the API | **Refused.** A cancelled event cannot be held or paid |
+| Trying to buy it anyway, via the API | **410 Gone** — *"This event has been cancelled"* |
+| Clicking the **restore** eye on the dashboard | **409.** It cannot be put back on sale |
+| Cancelling it a second time | **409**, even after hiding it |
+
+> 🎯 The last two were real bugs, and the same one twice: cancellation was
+> inferred from the event's STATUS instead of from `cancelledAt`. Restore
+> wrote `PUBLISHED` over `CANCELLED`, so an event whose tickets had all been
+> refunded and voided went back into the catalogue and sold again — verified
+> end to end. Hiding a cancelled event then moved its status to `HIDDEN`,
+> which let it be cancelled a second time and refund everyone twice.
+> Cancellation is something that happened, not a display state.
 | **Réservations** | The order reads **REFUNDED**, full amount returned |
 | The buyer's ticket page | The ticket is **CANCELLED** — it will not scan |
 | Pro → **OPÉRATIONS** → **Porte**, scanning that ref | Refused |
@@ -1502,7 +1512,8 @@ npm test
 24. **Undoing a wrong scan was only possible on the Orders desk.** It needed the ticket's internal id, which nobody has at a gate — the reference is what is printed on the ticket. `POST /gate/undo` now takes a reference, refuses anything that is not actually checked in, and records who reversed what. *(Check 5, step 7.)*
 25. **Revenue could only be read for the whole account.** `/organiser/stats` summed every event an organiser owned and offered no way to narrow it, so someone running two shows could not tell how either had done. *(Check 7, step 4.)*
 26. **An admin creating an event became its payee.** `organiserId` was copied from whoever was signed in, and `organiserId` is what decides who the payout pays, at which plan's rate, into which bank account — so an admin helping an organiser set up a show silently pointed the money at the platform. Neither the create nor the update schema accepted the field, so it could not be corrected afterwards: a `PATCH` carrying `organiserId` returned 200 and changed nothing. Fifteen of the sixteen seeded events were admin-owned, which modelled the mistake as if it were the design. An admin must now name an organiser, the target is checked to be one, and the seed hands every event to a real organiser. *(Check 6, steps 6–7.)*
-27. **Four cross-organiser 403 checks were asserting nothing.** They used a seeded event on the assumption that the demo organiser owned only some of them; once the seed was corrected the "foreign" event was the caller's own, and the suite was quietly comparing 200 against 200. It now creates an event owned by a second organiser. *(`live-api-test`.)*
+27. **A cancelled event could be put back on sale, and refunded twice.** The dashboard's hide/restore eye wrote `status: PUBLISHED` unconditionally, overwriting `CANCELLED` — so cancelling an event, refunding every buyer and voiding every ticket, then clicking restore, returned it to the public catalogue and a fresh order went through end to end. Checkout never looked at `cancelledAt`; it refused these only by accident, via the status check. The double-cancel guard had the same flaw: hiding a cancelled event moved its status to `HIDDEN`, after which it could be cancelled again and refund buyers who had already been refunded. *(Check 17.)*
+28. **Four cross-organiser 403 checks were asserting nothing.** They used a seeded event on the assumption that the demo organiser owned only some of them; once the seed was corrected the "foreign" event was the caller's own, and the suite was quietly comparing 200 against 200. It now creates an event owned by a second organiser. *(`live-api-test`.)*
 
 ---
 
