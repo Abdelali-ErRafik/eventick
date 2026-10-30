@@ -169,7 +169,7 @@ resaleRouter.post(
         holderName: order.holderName,
         phone: order.phone,
         locale: body.locale,
-        ...cmiUrls(order.id, order.accessToken),
+        ...cmiUrls(order.id, order.accessToken, body.locale),
       },
       config,
     );

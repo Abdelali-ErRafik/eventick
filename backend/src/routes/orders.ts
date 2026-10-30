@@ -341,7 +341,9 @@ ordersRouter.post(
     if (body.claimEntryId) await markClaimed(body.claimEntryId);
 
     const config = cmiConfig()!;
-    const urls = cmiUrls(order.id, order.accessToken);
+    // The locale travels with the return URLs so a buyer who paid in
+    // Arabic comes back to the Arabic confirmation page.
+    const urls = cmiUrls(order.id, order.accessToken, body.locale);
 
     /*
      * Each trip to the gateway is its own CMI transaction.

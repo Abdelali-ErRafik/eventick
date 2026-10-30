@@ -231,15 +231,43 @@ export function isApproved(body: Record<string, unknown>): boolean {
  * localhost callback never arrives. Use a tunnel (CMI_CALLBACK_URL) to test
  * the callback locally.
  */
-export function cmiUrls(orderId: string, accessToken?: string | null) {
+export function cmiUrls(orderId: string, accessToken?: string | null, locale?: string | null) {
   const app = (process.env.PUBLIC_APP_URL ?? "http://localhost:3100").replace(/\/+$/, "");
   const api = (process.env.PUBLIC_API_URL ?? "http://localhost:4100").replace(/\/+$/, "");
   // The access token rides along so a guest buyer lands on a confirmation
   // page they are authorised to read, exactly as the emailed link does.
   const key = accessToken ? `?k=${encodeURIComponent(accessToken)}` : "";
+
+  /*
+   * The locale prefix the buyer should come BACK to.
+   *
+   * These two URLs are the only ones in the app built entirely server-side,
+   * so nothing on the frontend can prefix them — a react-router `basename`
+   * never sees them. Without this, a buyer who paid in Arabic would return
+   * from the gateway onto the French page, mid-transaction, which is the
+   * worst possible moment to switch someone's language.
+   *
+   * Empty until locale-prefixed routes exist, so today's behaviour is
+   * byte-for-byte unchanged: an unknown or absent locale yields no prefix.
+   * The validation is deliberately a allowlist rather than a passthrough —
+   * this value reaches CMI and comes back as a redirect target, so it must
+   * never carry anything the caller chose freely.
+   */
+  const prefix = LOCALE_PREFIXES.has(locale ?? "") ? `/${locale}` : "";
+
   return {
     callbackUrl: process.env.CMI_CALLBACK_URL ?? `${api}/api/webhooks/cmi`,
-    okUrl: `${app}/confirmation/${orderId}${key}`,
-    failUrl: `${app}/paiement?echec=1&commande=${encodeURIComponent(orderId)}`,
+    okUrl: `${app}${prefix}/confirmation/${orderId}${key}`,
+    failUrl: `${app}${prefix}/paiement?echec=1&commande=${encodeURIComponent(orderId)}`,
   };
 }
+
+/**
+ * Locales that have their own URL prefix on the frontend.
+ *
+ * EMPTY on purpose. The frontend serves every language from one unprefixed
+ * set of URLs today, so adding a prefix here before those routes exist
+ * would send paying buyers to a 404. Add "fr" and "ar" in the same change
+ * that ships `app/[locale]/`, and only then.
+ */
+const LOCALE_PREFIXES = new Set<string>();

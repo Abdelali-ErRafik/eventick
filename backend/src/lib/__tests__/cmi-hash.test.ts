@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { buildHash, buildOid, buildPaymentRequest, isApproved, orderIdFromOid, verifyCallbackHash } from "../cmi.js";
+import { buildHash, buildOid, buildPaymentRequest, cmiUrls, isApproved, orderIdFromOid, verifyCallbackHash } from "../cmi.js";
 
 /**
  * CMI's "ver3" hash.
@@ -225,5 +225,40 @@ describe("oid round-trip", () => {
 
   it("leaves a leading-hyphen value alone rather than returning empty", () => {
     expect(orderIdFromOid("-1")).toBe("-1");
+  });
+});
+
+/**
+ * Where CMI sends the buyer back.
+ *
+ * These are the only URLs in the app built purely server-side, so nothing on
+ * the frontend can correct them — and they are a redirect target handed to a
+ * third party. Both facts make them worth pinning down.
+ */
+describe("cmiUrls", () => {
+  it("adds no locale prefix today, because no locale-prefixed route exists", () => {
+    // LOCALE_PREFIXES is deliberately empty until app/[locale]/ ships.
+    // Prefixing before that would redirect a paying buyer to a 404.
+    const { okUrl, failUrl } = cmiUrls("order1", null, "fr");
+    expect(okUrl).toBe("http://localhost:3100/confirmation/order1");
+    expect(failUrl).toContain("/paiement?echec=1&commande=order1");
+  });
+
+  it("ignores a locale it does not recognise", () => {
+    // The value reaches CMI and returns as a redirect, so an unknown locale
+    // must never reach the path. An allowlist, not a passthrough.
+    const { okUrl } = cmiUrls("order1", null, "../../evil");
+    expect(okUrl).toBe("http://localhost:3100/confirmation/order1");
+    expect(okUrl).not.toContain("evil");
+  });
+
+  it("carries the guest access token so the buyer may read their own order", () => {
+    const { okUrl } = cmiUrls("order1", "tok en/+");
+    // Encoded, or a token with a slash would change the path.
+    expect(okUrl).toBe("http://localhost:3100/confirmation/order1?k=tok%20en%2F%2B");
+  });
+
+  it("omits the token entirely for a signed-in buyer", () => {
+    expect(cmiUrls("order1", null).okUrl).not.toContain("?k=");
   });
 });
