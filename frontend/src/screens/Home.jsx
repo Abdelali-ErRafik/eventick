@@ -24,7 +24,7 @@ import { useCatalog } from "../useCatalog";
 import { useAuth } from "../AuthContext";
 import { Button, Container, Dropdown, ErrorState, LoadingState } from "../ui";
 import { categoryLabel, useI18n } from "../i18n";
-import { CITIES, addDays, cn, dateKey, todayKey } from "../utils";
+import { addDays, CITIES, cn, dateKey, intlLocaleTag, todayKey } from "../utils";
 
 // nightlife used to fill bg-stage (near-black) with text-stage-fg -- fine on
 // the old light-page version of this rail, but once the section sits on the
@@ -265,7 +265,7 @@ export default function Home() {
           <HeroStat icon={<MapPin className="size-5" />} value={cityCount} label={t("activeCities")} />
           <HeroStat
             icon={<Ticket className="size-5" />}
-            value={seatsAvailable.toLocaleString(locale === "ar" ? "ar-MA" : "fr-MA")}
+            value={seatsAvailable.toLocaleString(intlLocaleTag(locale))}
             label={t("seatsAvailable")}
           />
         </dl>
@@ -439,8 +439,17 @@ export default function Home() {
               <Button size="lg" onClick={() => navigate(canUsePro ? "/organiser" : "/devenir-organisateur")}>
                 {t("createFree")}
               </Button>
-              <Button variant="inverse" size="lg" onClick={() => navigate("/pro")}>
-                {t("demoOrg")}
+              {/* The label follows the destination. This said "Démo
+                  organisateur" and sent everyone to /pro, which is gated —
+                  so a signed-out visitor landed on /login with no return
+                  path and no demo. Promising a demo and delivering a sign-in
+                  form is worse than asking for the sign-in up front. */}
+              <Button
+                variant="inverse"
+                size="lg"
+                onClick={() => navigate(canUsePro ? "/pro" : `/login?next=${encodeURIComponent("/pro")}`)}
+              >
+                {canUsePro ? t("openDashboard") : t("signInToPro")}
               </Button>
             </div>
           </div>

@@ -3,6 +3,7 @@ import { QrMark } from "./QrMark";
 import { money } from "../api";
 import { useI18n } from "../i18n";
 import { Badge } from "../ui";
+import { intlLocaleTag } from "../utils";
 
 export function seatLabel(ticket, locale) {
   if (!ticket.seatRow || !ticket.seatNumber) return null;
@@ -50,7 +51,7 @@ export function TicketPass({ ticket, event, tier, priceCents, qrPayload }) {
           </div>
 
           <p className="mt-5 text-sm font-semibold text-primary">
-            {new Date(event.start).toLocaleDateString(locale === "ar" ? "ar-MA" : "fr-MA", {
+            {new Date(event.start).toLocaleDateString(intlLocaleTag(locale), {
               weekday: "long",
               day: "numeric",
               month: "long",

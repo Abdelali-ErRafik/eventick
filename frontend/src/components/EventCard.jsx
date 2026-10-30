@@ -3,7 +3,7 @@ import { CalendarDays, MapPin } from "lucide-react";
 import { money } from "../api";
 import { categoryLabel, useI18n } from "../i18n";
 import { Badge } from "../ui";
-import { cn, fillRatio, groupNumber, minPriceCents, monthBadge, totalRemaining } from "../utils";
+import { cn, fillRatio, groupNumber, intlLocaleTag, minPriceCents, monthBadge, totalRemaining } from "../utils";
 
 /**
  * An event in a list.
@@ -143,7 +143,7 @@ export function EventCard({ event, variant = "grid" }) {
           {feature ? (
             <p className="flex items-center gap-1.5 text-sm text-muted">
               <CalendarDays className="size-4 shrink-0" aria-hidden />
-              {new Date(event.start).toLocaleDateString(locale === "ar" ? "ar-MA" : "fr-MA", {
+              {new Date(event.start).toLocaleDateString(intlLocaleTag(locale), {
                 weekday: "long",
                 day: "numeric",
                 month: "long",

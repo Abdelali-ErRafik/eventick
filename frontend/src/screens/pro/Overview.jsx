@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { QrCode, RefreshCw, Ticket, Wallet } from "lucide-react";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
-import { longDate, todayKey } from "../../utils";
+import { intlLocaleTag, longDate, todayKey } from "../../utils";
 import { useRealtime } from "./useRealtime";
 import { Badge, Card, EmptyState, PageHead, SectionTitle, StatCard, StatSkeletons } from "./ui";
 import { cn } from "../../utils";
@@ -61,7 +61,7 @@ export default function Overview() {
                 <RefreshCw className={cn("size-3.5", pulse && "animate-spin text-primary")} aria-hidden />
                 {t.updatedAt.replace(
                   "{t}",
-                  new Date(stats.generatedAt).toLocaleTimeString(locale === "ar" ? "ar-MA" : "fr-FR", {
+                  new Date(stats.generatedAt).toLocaleTimeString(intlLocaleTag(locale), {
                     hour: "2-digit",
                     minute: "2-digit",
                   }),

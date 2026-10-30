@@ -9,7 +9,7 @@ import { api, downloadFile, money, rememberTicketKey, tokenForTicket } from "../
 import { useI18n } from "../i18n";
 import { useAuth } from "../AuthContext";
 import { Badge, Button, Card, Container, ErrorState, Field, IconButton, Input, Modal } from "../ui";
-import { cn } from "../utils";
+import { cn, intlLocaleTag } from "../utils";
 
 const STATUS_TONE = { VALID: "success", USED: "neutral", CANCELLED: "danger", TRANSFERRED: "warn" };
 
@@ -254,7 +254,7 @@ export default function TicketDetail() {
           <div className="grid lg:grid-cols-[1fr_17rem]">
             <div className="min-w-0 p-5 md:p-6">
               <p className="text-sm font-semibold text-primary">
-                {new Date(event.start).toLocaleDateString(locale === "ar" ? "ar-MA" : "fr-MA", {
+                {new Date(event.start).toLocaleDateString(intlLocaleTag(locale), {
                   weekday: "long",
                   day: "numeric",
                   month: "long",

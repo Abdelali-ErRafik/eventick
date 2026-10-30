@@ -8,6 +8,7 @@ import { useConfirm } from "./ConfirmContext";
 import { Badge, Btn, EmptyState, IconBtn, Modal, PageHead, SectionTitle } from "./ui";
 import { text } from "./copy";
 import { Dropdown, Field, Input, triggerControlClass } from "../../ui";
+import { intlLocaleTag } from "../../utils";
 
 const WAITLIST_TONE = { WAITING: "neutral", OFFERED: "warn", CLAIMED: "success", EXPIRED: "danger" };
 
@@ -156,7 +157,7 @@ export default function Offers() {
               </div>
               {item.status === "OFFERED" && item.claimExpiresAt ? (
                 <span className="text-[11px] text-muted">
-                  {t.wlExpires} {new Date(item.claimExpiresAt).toLocaleTimeString(locale === "ar" ? "ar-MA" : "fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                  {t.wlExpires} {new Date(item.claimExpiresAt).toLocaleTimeString(intlLocaleTag(locale), { hour: "2-digit", minute: "2-digit" })}
                 </span>
               ) : null}
             </article>

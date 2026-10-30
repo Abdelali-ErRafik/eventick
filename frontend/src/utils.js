@@ -1,3 +1,25 @@
+/**
+ * The app locale -> a BCP 47 tag Intl understands.
+ *
+ * This exists because `locale === "ar" ? "ar-MA" : "fr-FR"` was written out
+ * by hand in eight places, and every one of them sent ENGLISH to a French
+ * formatter. Two separate bugs came out of that:
+ *
+ *  - seat counts printed "139.939" to an English reader, where the dot is a
+ *    decimal point — so the site appeared to offer a fraction of a seat;
+ *  - the e-ticket preview kept showing "28 JUIL" after switching to
+ *    English or Arabic, because JUIL is a French month abbreviation.
+ *
+ * en-GB rather than en-US: day-before-month and 24-hour time, which is what
+ * the rest of the site uses and what a Moroccan audience reading English
+ * expects.
+ */
+export function intlLocaleTag(locale) {
+  if (locale === "ar") return "ar-MA";
+  if (locale === "en") return "en-GB";
+  return "fr-FR";
+}
+
 export function cn(...parts) {
   return parts.filter(Boolean).join(" ");
 }
@@ -22,16 +44,28 @@ export function fillRatio(event) {
 
 export function monthBadge(isoDate, locale) {
   const date = new Date(isoDate);
-  const month = new Intl.DateTimeFormat(locale === "ar" ? "ar-MA" : "fr-FR", { month: "short" })
+  // Goes through intlLocaleTag so English gets English month names. This is
+  // the badge on the e-ticket preview that kept reading "28 JUIL" after the
+  // language switch.
+  const tag = intlLocaleTag(locale);
+  const month = new Intl.DateTimeFormat(tag, { month: "short" })
     .format(date)
     .replace(".", "")
     .toUpperCase();
-  const day = new Intl.DateTimeFormat(locale === "ar" ? "ar-MA" : "fr-FR", { day: "2-digit" }).format(date);
+  const day = new Intl.DateTimeFormat(tag, { day: "2-digit" }).format(date);
   return { month, day };
 }
 
-export function groupNumber(n) {
-  return new Intl.NumberFormat("fr-FR").format(n);
+/**
+ * A whole number with the active locale's thousands separator.
+ *
+ * `locale` is optional only because older call sites did not pass one; it
+ * defaults to French, which is what they already produced. Pass it wherever
+ * the number is shown to a reader — fr-FR groups with a DOT, so "139.939"
+ * read as a fraction of a seat in English.
+ */
+export function groupNumber(n, locale) {
+  return new Intl.NumberFormat(intlLocaleTag(locale)).format(n);
 }
 
 export const CITIES = ["Casablanca", "Rabat", "Marrakech", "Tanger", "Agadir", "Essaouira", "Fès", "Dakhla"];
@@ -73,10 +107,10 @@ export function overlaps(start, end, from, to) {
 export const CATEGORIES = ["festivals", "humour", "sport", "nightlife", "culture", "salons"];
 
 /** Single or multi-day human-readable range, e.g. "Jeudi 19 juin 2027" or
- * "19 – 27 juin 2027". Built on Intl so the FR/AR month names are correct
+ * "19 – 27 juin 2027". Built on Intl so the FR/AR/EN month names are correct
  * without hand-transcribing a 24-entry lookup table. */
 export function dateRange(startIso, endIso, locale) {
-  const intlLocale = locale === "ar" ? "ar-MA" : "fr-FR";
+  const intlLocale = intlLocaleTag(locale);
   const start = new Date(startIso);
   const end = new Date(endIso);
   if (dateKey(startIso) === dateKey(endIso)) {

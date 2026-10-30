@@ -6,6 +6,7 @@ import { TicketPass, toTicketPassProps } from "../components/TicketPass";
 import { api, money, rememberOrderKey, rememberTicketOrder } from "../api";
 import { useI18n } from "../i18n";
 import { Container, ErrorState } from "../ui";
+import { intlLocaleTag } from "../utils";
 
 export default function Confirmation() {
   const { orderId } = useParams();
@@ -97,7 +98,7 @@ export default function Confirmation() {
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-sm">
               <span className="inline-flex items-center gap-2 rounded-full bg-stage-fg/10 px-3.5 py-2">
                 <Calendar className="size-4 text-accent" />
-                {new Date(event.start).toLocaleDateString(locale === "ar" ? "ar-MA" : "fr-MA", {
+                {new Date(event.start).toLocaleDateString(intlLocaleTag(locale), {
                   weekday: "long",
                   day: "numeric",
                   month: "long",

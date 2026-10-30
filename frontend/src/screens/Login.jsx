@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "../components/Shell";
@@ -35,9 +35,27 @@ export default function Login() {
     setError(null);
   };
 
+  /*
+   * Where to go after signing in.
+   *
+   * `?next=` exists because the only thing that sends people here — the
+   * Protected guard on /pro — redirected with no way back, so someone who
+   * clicked "sign in to the dashboard" signed in and landed on the homepage
+   * wondering what happened.
+   *
+   * Only a same-site PATH is honoured. The value comes from the URL, so
+   * following it blindly would make this an open redirect, which is a
+   * phishing primitive on a site that takes card payments. Rejecting "//"
+   * matters as much as requiring "/": "//evil.test" is protocol-relative
+   * and would leave the site.
+   */
+  const [params] = useSearchParams();
+  const requested = params.get("next") ?? "";
+  const afterLogin = requested.startsWith("/") && !requested.startsWith("//") ? requested : "/";
+
   useEffect(() => {
-    if (!loading && user) navigate("/");
-  }, [loading, user, navigate]);
+    if (!loading && user) navigate(afterLogin, { replace: true });
+  }, [loading, user, navigate, afterLogin]);
 
   function authErrorMessage(err) {
     if (err?.status === 401) return t("loginFail");
@@ -72,7 +90,7 @@ export default function Login() {
         await login(cleanEmail, password);
         toast.success(t("welcomeBack"));
       }
-      navigate("/");
+      navigate(afterLogin, { replace: true });
     } catch (err) {
       setError(authErrorMessage(err));
     } finally {
@@ -87,7 +105,7 @@ export default function Login() {
     try {
       await login(account.email, account.password);
       toast.success(t("welcomeBack"));
-      navigate("/");
+      navigate(afterLogin, { replace: true });
     } catch (err) {
       setError(authErrorMessage(err));
     } finally {
