@@ -25,6 +25,7 @@
     "test:live:orders": "tsx ../scripts/live-orders-payments-test.mjs",
     "test:live:audit": "tsx ../scripts/live-audit-test.mjs",
     "test:live:ticketing": "tsx ../scripts/live-ticketing-test.mjs",
+    "test:live:checks": "tsx ../scripts/live-all-checks.mjs",
     "test:live:sweeper": "tsx ../scripts/live-sweeper-test.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

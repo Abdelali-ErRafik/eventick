@@ -11,6 +11,15 @@ the part worth most attention.
 
 > 📅 30/10/2026 · Written by walking the running app at **http://localhost:3100**. The interface ships in **French**; every label in quotes below is the text actually on screen. Switch to English from the account menu if you prefer — the checks work the same.
 
+> 🤖 **All nineteen now run automatically.** Walking them by hand takes about
+> forty-five minutes, which meant nobody did it often enough to catch a
+> regression. `npm run test:live:checks` (from `backend/`, in mock payment
+> mode) asserts the same things through the same API the browser uses — 112
+> assertions, self-cleaning. Run it before you start: if it is red, fix that
+> first, because the manual pass will only find the same thing more slowly.
+> It does **not** replace the manual pass — a human still has to look at the
+> screens, which is what checks 11 and 12 are entirely about.
+
 ---
 
 ## 🚀 Before you start (5 minutes)
@@ -238,14 +247,18 @@ harmless, but `npm run db:seed` will not remove them.
 
 2. Open a **second private window** and paste the URL.
 
-**✔️ You must see** — hmm. Check what happens.
+**✔️ You must see "Commande introuvable"** if you copied the URL *without*
+its `?k=…`, and the order *with* it. Both are correct — the question is only
+whether the token came along.
 
-| What you see | Why |
+| What you pasted | What you must see |
 |---|---|
-| The order, with tickets | Your browser kept the token from the purchase |
-| **"Commande introuvable"** | Correct — this window never had the token |
+| The path alone, `…/confirmation/cmv…` | **"Commande introuvable"** — this window never had the token |
+| The full URL including `?k=…` | The order and its tickets |
 
-> 💡 To test properly, copy the URL **with** its `?k=…` if present. Without the token, a stranger gets nothing.
+> 💡 The first case is the point: **the link without the token is worthless.**
+> The order id is not a credential, which is exactly the bug this check
+> exists to keep fixed.
 
 ### Step 3 — Try to act on the ticket without the token
 
@@ -270,6 +283,23 @@ curl -s -w "\n  HTTP %{http_code}\n" \
 
 > ⚠️ If you get **404**, the id is wrong — a ticket that does not exist is a genuine 404, and that is not the check. Copy the id from the address bar of a real ticket page.
 
+### Step 5 — The whole boundary, in one table
+
+Every row below was verified against the API with a real guest token — the
+`?k=…` value from the confirmation URL, sent as the `x-order-token` header.
+
+| What the holder of a link tries | Result |
+|---|---|
+| `GET /api/tickets/:id` with **no** token | **403** — a link is required |
+| `GET /api/tickets/:id` **with** the token | **200** — they can see their ticket |
+| `PATCH /api/tickets/:id/holder` with the token | **200** — they may fix a misspelled name |
+| `POST /api/tickets/:id/cancel` with the token | **403** *"Create an account to manage this ticket"* |
+| `POST /api/tickets/:id/transfer` with the token | **401/403** — giving the seat away needs an account |
+
+> 🎯 Read that bottom half again. The token is enough to **use** a ticket and
+> to **correct a typo**. It is deliberately not enough to move money or hand
+> the seat to someone else, because links get forwarded and screenshotted.
+
 ✅ **Check 2 done.**
 
 ---
@@ -279,9 +309,13 @@ curl -s -w "\n  HTTP %{http_code}\n" \
 
 > **The task:** "create an account" must not be a dead end. Registering alone does not attach the tickets you already bought — claiming does.
 
+> ℹ️ **Starting here?** This check needs a guest order. Either keep the one
+> from check 1, or make a fresh one: buy a ticket in a private window without
+> signing in, and keep the confirmation URL *including* its `?k=…`.
+
 ### Step 1 — Register with the buyer's email
 
-1. Still on the ticket page from check 2, click the button in the claim box.
+1. On the ticket page, click the button in the claim box.
 2. If you are signed out, you land on **"Se connecter"**. Create an account — use **any** email.
 
 ### Step 2 — Claim
@@ -315,9 +349,13 @@ curl -s -w "\n  HTTP %{http_code}\n" \
 
 > **The task:** sharing hands the seat to someone else safely. Nothing moves until they claim it, and until then you can pull it back. The recipient gets a **new** ticket; yours stops working.
 
+> ℹ️ **Starting here?** You need a ticket you **own** — a claimed order, not
+> a guest link. Check 3 produces one; or buy as a guest, register, and claim.
+> A link-only holder cannot share, which is check 2.
+
 ### Step 1 — Create the link
 
-1. Signed in (from check 3), open a ticket → **"Gérer ce billet"** → **"Offrir ce billet"**.
+1. Signed in, open a ticket → **"Gérer ce billet"** → **"Offrir ce billet"**.
 2. Optionally type a message.
 3. Click the create button.
 
@@ -339,7 +377,17 @@ curl -s -w "\n  HTTP %{http_code}\n" \
 
 **✔️ You must see** the ticket is no longer valid — its QR will not admit anyone.
 
-> 🎯 **This is the point.** Emailing a PDF leaves two working QRs for one seat. This leaves exactly one.
+> 🎯 **This is the point.** Emailing a PDF leaves two working QRs for one
+> seat. This leaves exactly one.
+
+> 💡 Its status is **`TRANSFERRED`**, not `CANCELLED`. The distinction is
+> deliberate and verified: a holder who looks at an old ticket can be told
+> "you gave this away" rather than the ambiguous "this was cancelled", which
+> is also what support needs to answer *"where did my ticket go?"*.
+
+7. Open the share link a **second** time.
+
+**✔️ You must see it refused.** One link, one seat, one claim.
 
 ### Step 4 — Revoking (do this on a fresh ticket)
 
@@ -383,6 +431,45 @@ curl -s -w "\n  HTTP %{http_code}\n" \
 
 **✔️ You must see** a clear "no such ticket" result, not a crash.
 
+### Step 5 — Typing a reference and photographing one are not the same thing
+
+This is the part most worth understanding, and it is invisible from the screen.
+
+A **typed** reference is a deliberate staff override — it works, because a
+phone screen sometimes will not scan. A **camera** scan must carry the
+ticket's own signature. So the same string behaves differently depending on
+where it came from:
+
+```bash
+# Typed by staff: accepted.
+curl -s -X POST 'http://localhost:4100/api/gate/check-in' \
+  -H 'content-type: application/json' \
+  -H 'authorization: Bearer ORGANISER_TOKEN' \
+  -d '{"ref":"ET-2027-ABC123","source":"manual"}'
+
+# The SAME reference presented as a camera scan: refused.
+curl -s -X POST 'http://localhost:4100/api/gate/check-in' \
+  -H 'content-type: application/json' \
+  -H 'authorization: Bearer ORGANISER_TOKEN' \
+  -d '{"ref":"ET-2027-ABC123","source":"camera"}'
+```
+
+**✔️ The second must fail with 400** and *"Unsigned QR code — scan the
+ticket's own code, or enter the reference manually"*.
+
+> 🎯 **Why it matters:** a photograph of a reference, or a reference read out
+> over the phone, is not a ticket. `source` defaults to the strict `camera`
+> case, so an older client cannot weaken the rule by omitting it.
+
+### Step 6 — The gate belongs to its own event
+
+7. Signed in as a **customer**, try the same check-in through the API.
+
+**✔️ You must see 403.** `gate.checkin` is a real capability, and an
+organiser scanning another organiser's ticket gets *"This ticket is for
+another organiser's event"* — checked **before** the ticket is spent, so a
+refusal leaves it untouched.
+
 ✅ **Check 5 done.**
 
 ---
@@ -396,7 +483,12 @@ curl -s -w "\n  HTTP %{http_code}\n" \
 
 1. Signed in as **organiser**, click **"Créer un événement"** in the header.
 
-**✔️ You must see** the form split into four named sections: **L'essentiel**, **Quand et où**, **Billets et tarifs**, **Visuel et description**.
+**✔️ You must see** the form split into **five** named sections, in this order:
+**L'essentiel**, **Quand et où**, **Billets et tarifs**, **Règles de vente**,
+**Visuel et description**.
+
+> 💡 **Règles de vente** is the newest one — the per-buyer cap, the resale
+> switch and the sales windows. Check 16 covers what it does.
 
 ### Step 2 — Use the shortcut (optional)
 
@@ -464,6 +556,20 @@ curl -s -w "\n  HTTP %{http_code}\n" \
 **✔️ You must see** **Finance** disappear from the organiser's sidebar entirely.
 
 > 🎯 **This is the whole check.** These toggles used to do nothing — the organiser kept reading revenue and issuing refunds regardless.
+
+### Step 4 — The server agrees, not just the screen
+
+Hiding a button is not access control. With `finance.refund` **off**, call the
+refund endpoint directly as the organiser:
+
+```bash
+curl -s -w "\n  HTTP %{http_code}\n" -X POST \
+  -H 'authorization: Bearer ORGANISER_TOKEN' \
+  'http://localhost:4100/api/organiser/orders/ORDER_ID/refund'
+```
+
+**✔️ You must see HTTP 403.** A customer's token gets 403 too, with the
+permission on or off.
 
 🧹 **Clean up:** switch both permissions back on.
 
@@ -539,7 +645,25 @@ curl -s -w "\n  HTTP %{http_code}\n" \
 
 **✔️ You must see** you are redirected away — not a screen full of failed requests.
 
-### Step 3 — Flip a capability live
+### Step 3 — The server refuses, not just the sidebar
+
+Signed in as the **organiser**, call the admin-only endpoints directly:
+
+```bash
+for p in platform/stats platform/audit platform/users; do
+  curl -s -o /dev/null -w "$p -> %{http_code}\n" \
+    -H 'authorization: Bearer ORGANISER_TOKEN' \
+    "http://localhost:4100/api/$p"
+done
+```
+
+**✔️ All three must answer 403.**
+
+> 🎯 A hidden nav item is a convenience; the 403 is the actual boundary. If
+> the sidebar ever hides something the server still allows, that is the bug
+> this step exists to find.
+
+### Step 4 — Flip a capability live
 
 4. As **admin** → **Permissions**, switch **`promo.manage`** **off** for Organisateur.
 5. Reload the organiser's window.
@@ -618,7 +742,29 @@ curl -s -o /dev/null -w "%{http_code}\n" 'http://localhost:4100/api/platform/sta
 
 **✔️ You must see** Arabic **and** the layout mirrored: sidebar on the right, text right-aligned, arrows pointing the other way.
 
-### Step 2 — The public site too
+### Step 2 — Numbers and dates follow the language too
+
+This is where localisation usually breaks, because it looks finished.
+
+3. With the language on **English**, read the **"Places disponibles"** figure
+   in the hero.
+
+**✔️ It must group with a comma** — `139,927` — not a dot. In French it is
+`139 927` (a space), in Arabic `139.927`.
+
+> 🎯 It read `139.939` in all three languages, because English fell through
+> to a French formatter. To an English reader a dot is a decimal point, so
+> the site appeared to sell a fraction of a seat.
+
+4. Still in English, look at the **e-ticket preview** card.
+
+**✔️ The month must read `JUL`**, not `JUIL`. Arabic shows `يوليوز`.
+
+> 🎯 That date was a hardcoded string in the markup, so no amount of fixing
+> the formatter could translate it. Both of these regress silently — nothing
+> errors, the text is just quietly wrong — which is why they are steps now.
+
+### Step 3 — The public site too
 
 4. Go to the public site and switch language there.
 
@@ -877,11 +1023,23 @@ Reopen it. **✔️ Both values are still there.**
 
 > 💡 This was the real gap: the rules could be set at creation and then never changed again.
 
-### Step 4 — The cap actually bites
+### Step 4 — The cap actually bites, and it spans ORDERS
 
-Open your event on the public site and try to buy **3** tickets when the cap is `1`.
+Set the cap to **2**, then:
 
-**✔️ You must see** the purchase refused, naming the limit. The cap counts every ticket that buyer already holds for the event — so buying one, then coming back for another, is refused too.
+5. Try to buy **3** at once.
+
+**✔️ Refused** (HTTP 409), naming the limit.
+
+6. Buy exactly **2**. **✔️ Allowed.**
+7. Come back as the **same buyer** and try to buy **1** more.
+
+**✔️ Refused** — and this is the whole point of the field.
+
+> 🎯 A per-ORDER limit is nearly useless: one email could buy 8, three times
+> over, and take 24 seats of a high-demand show. This counts every ticket
+> that buyer already holds for the event, across every order they have
+> placed. Verified end to end: 3 → 409, then 2 → allowed, then +1 → 409.
 
 ---
 
@@ -933,6 +1091,7 @@ If any refund failed, **✔️ a second orange warning** says how many need doin
 |---|---|
 | The event's card in **Événements** | A red **"Annulé"** badge, and the 🚫 icon **gone** — there is nothing left to cancel |
 | The event on the public site | **404.** It is off sale, not merely hidden |
+| Trying to buy it anyway, via the API | **Refused.** A cancelled event cannot be held or paid |
 | **Réservations** | The order reads **REFUNDED**, full amount returned |
 | The buyer's ticket page | The ticket is **CANCELLED** — it will not scan |
 | Pro → **OPÉRATIONS** → **Porte**, scanning that ref | Refused |
@@ -991,7 +1150,23 @@ Press the **🗑 icon** on a guest's row → confirm.
 
 **✔️ Back in Placements, the seat has returned** to the pool.
 
-### Step 6 — It is all in the journal
+### Step 6 — Giving seats away is a capability
+
+Signed in as a **customer**, call the invitations endpoint directly:
+
+```bash
+curl -s -w "\n  HTTP %{http_code}\n" -X POST \
+  -H 'content-type: application/json' \
+  -H 'authorization: Bearer CUSTOMER_TOKEN' \
+  -d '{"tierId":"TIER_ID","guests":[{"guestName":"Pas Permis"}]}' \
+  'http://localhost:4100/api/organiser/events/SLUG/invitations'
+```
+
+**✔️ You must see 403.** Free seats cost the organiser real capacity, so
+issuing them needs `events.manage` — the screen being hidden is not the
+protection.
+
+### Step 7 — It is all in the journal
 
 Pro → **ADMINISTRATION** → **Journal** (as admin).
 
@@ -1036,11 +1211,32 @@ Set a closing date **before** the opening date and save.
 
 Now the subtler one: leave the closing date alone and move only the **opening** to after it. **✔️ Still refused** — the server checks the window you would *end up with*, not just the field you touched, so you cannot invert a window one field at a time.
 
-### Step 5 — The buyer sees it too
+### Step 5 — The buyer is refused by the SERVER, not by the drawing
 
-Open the event on the public site while a zone is outside its window.
+Open the event on the public site while a zone is outside its window, and try
+to buy it.
 
-**✔️ That zone cannot be bought.** The sales window is enforced on the server at checkout, not merely drawn in the dashboard.
+**✔️ The hold is refused with HTTP 409** and a message naming the date:
+
+```
+{"error":"Sales for this zone open on 2027-12-01T09:00:00.000Z"}
+```
+
+> 🎯 The dashboard badge is a courtesy for the organiser. **This** is the
+> rule. A window that only existed in the dashboard would let anyone buy by
+> calling the API directly, which is the failure this step rules out.
+
+### Step 6 — A window cannot be inverted one field at a time
+
+6. On a zone that already has a **closing** date, set the **opening** date to
+   after it and save.
+
+**✔️ Refused** with *"La clôture doit être après l'ouverture."*
+
+> 💡 The server checks the window you would **end up with**, not just the
+> field you touched. Without that, an organiser could invert a live window in
+> two saves and take the zone off sale without ever seeing an error — and
+> find out from an empty sales report.
 
 ---
 
@@ -1079,6 +1275,7 @@ a seeded database.
 
 | Suite | Command | What it proves | Result |
 |---|---|---|---|
+| **`live-all-checks`** | **`npm run test:live:checks`** | **all nineteen checks in this guide, end to end** | **112 / 112** |
 | `vitest` | `npm test` | commission, pricing, inventory, ticket refs, the CMI hash | **123 / 123** |
 | `live-api-test` | `npm run test:live` | the API surface end to end | **123 / 123** |
 | `live-authz-test` | `npm run test:live:authz` | who may reach what, across roles | **54 / 54** |
@@ -1106,7 +1303,8 @@ npm run test:live            && npm run test:live:authz \
   && npm run test:live:coverage  && npm run test:live:share \
   && npm run test:live:sweeper   && npm run test:live:refund \
   && npm run test:live:money     && npm run test:live:orders \
-  && npm run test:live:audit     && npm run test:live:ticketing
+  && npm run test:live:audit     && npm run test:live:ticketing \
+  && npm run test:live:checks
 
 # And from frontend/:
 npm test
@@ -1145,6 +1343,10 @@ npm test
 16. **A zone could be created with a sales window that never opens.** `POST /tiers` accepted a window closing before it opened — a 201 and a zone that could never sell — while `PATCH` on the same field correctly refused it. *(Check 19, step 4.)*
 17. **The sales-rules modal showed `undefined` as its labels.** The four copy keys went into the buyer-side dictionary instead of the dashboard one. A missing key is not a build error, so it rendered the word "undefined" in all three languages. *(Check 16, step 3.)*
 18. **Escape closed the modal underneath a confirm dialog.** Cancelling an event is the only place that raises a confirmation from inside an open modal; both listened for Escape, and the modal answered first — leaving the confirmation floating over nothing. Escape could never *perform* the cancellation. *(Check 17, step 3.)*
+19. **English numbers used a French separator.** The seat total read `139.939` in every language; to an English reader the dot is a decimal point, so the site appeared to sell a fraction of a seat. `locale === "ar" ? "ar-MA" : "fr-FR"` had been written out by hand in **eleven** places, every one routing English to a French formatter. *(Check 11, step 2.)*
+20. **The e-ticket preview date was a hardcoded string.** `"28 JUIL · 21:00"` sat in the markup, so it stayed French in English and Arabic no matter what the formatter did. *(Check 11, step 2.)*
+21. **"Démo organisateur" opened a sign-in form.** The button promised a demo and navigated to a gated route, so a signed-out visitor landed on `/login` with no demo and no way back. `?next=` is now honoured — restricted to same-site paths, because following a URL-supplied redirect blindly is a phishing primitive on a site that takes card payments.
+22. **`POST /tiers` accepted a sales window that never opens.** Creating a zone skipped the inverted-window check that `PATCH` enforced, so a 201 could produce a zone that could never sell. *(Check 19, step 6.)*
 
 ---
 
@@ -1173,6 +1375,9 @@ npm test
 | A removed account still appears in the **Journal** | Correct, and the reason the journal exists — the record outlives the account |
 | Removing an account says **"anonymised"**, not deleted | It has orders. They must survive, so the row stays with its personal data stripped |
 | **429** instead of 400/403 while running the test suites | A rate limiter, not a defect. See the warning under *What the automated testing covers* |
+| `test:live:checks` says *"Payments are in cmi mode, not mock"* | Correct, and it refuses to run rather than fail eight checks confusingly. `.\payment-mode.ps1 mock`, then **restart the backend** |
+| `test:live:checks` says *"the seeded catalogue is intact — 0 events"* | Something deleted the catalogue. Run `npm run db:seed`. That assertion exists because a stray query once emptied it silently |
+| A typed ticket reference works at the gate but the same string fails from a scanner | Correct. A typed ref is a staff override (`source: manual`); a camera scan must carry the ticket's signature. See check 5, step 5 |
 | A zone shows **"Ouvre le …"** or **"Ventes closes"** | Its sales window is holding it back. The badge only appears when a window actually constrains the zone |
 | A zone with no sales window shows **no badge at all** | Correct. Marking every unconstrained zone "En vente" would be noise — the useful signal is the one *not* selling |
 | The time picker beside a sales date is **greyed out** | Pick the date first. A time with no date would be a bound that is silently never sent |
