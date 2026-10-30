@@ -45,6 +45,22 @@ export function CatalogProvider({ children }) {
       ...state,
       reload: () => fetchCatalog(),
       bySlug: (slug) => state.events.find((event) => event.slug === slug),
+      /*
+       * Is this catalogue demo data?
+       *
+       * `seoIndexable` is set per event by whoever confirms it is a real,
+       * bookable date — it is what gates schema.org markup. If NOT ONE event
+       * in the catalogue claims to be real, this is a demo install, and the
+       * site should say so rather than let someone believe these dates and
+       * prices are genuine. The terms page already admits the events are
+       * "fictifs ou indicatifs"; this puts that where it is actually read.
+       *
+       * Derived rather than configured: there is no separate flag to forget
+       * to flip, and the moment one real event is published the notice goes
+       * away by itself. An empty catalogue is not "demo" — it is empty, and
+       * has its own empty state.
+       */
+      demoCatalogue: state.events.length > 0 && state.events.every((event) => !event.seoIndexable),
     }),
     [state, fetchCatalog],
   );
