@@ -5,6 +5,7 @@ import { Router } from "express";
 import multer from "multer";
 import { asyncHandler, HttpError } from "../lib/http.js";
 import { authenticate, requirePermission } from "../middleware/auth.js";
+import { bunnyConfigured, uploadToBunny } from "../lib/bunny.js";
 
 export const uploadsRouter = Router();
 
@@ -13,7 +14,9 @@ export const uploadsRouter = Router();
  * production. */
 export const UPLOAD_DIR = path.resolve(process.env.UPLOAD_DIR ?? "./storage/uploads");
 
-const MAX_BYTES = 5 * 1024 * 1024;
+// Configurable so the ceiling can be raised without a deploy; the default
+// matches what the form hint promises the organiser.
+const MAX_BYTES = Number(process.env.UPLOAD_MAX_BYTES ?? 5 * 1024 * 1024);
 
 // Allowlist by MIME type AND extension: a browser-declared type alone is
 // attacker-controlled, and an extension alone says nothing about content.
@@ -63,9 +66,19 @@ uploadsRouter.post(
     // Random name: never trust the client's filename — it carries path
     // traversal and collision risk for nothing in return.
     const name = `${Date.now()}-${randomBytes(8).toString("hex")}${actual}`;
+
+    // Bunny when configured, local disk otherwise. The fallback is not a
+    // nicety: it keeps the upload flow exercisable offline and in tests, and
+    // it is why losing the CDN credentials degrades the app rather than
+    // breaking event creation outright.
+    if (bunnyConfigured()) {
+      const url = await uploadToBunny(name, file.buffer, file.mimetype);
+      res.status(201).json({ url });
+      return;
+    }
+
     await mkdir(UPLOAD_DIR, { recursive: true });
     await writeFile(path.join(UPLOAD_DIR, name), file.buffer);
-
     res.status(201).json({ url: `/uploads/${name}` });
   }),
 );
