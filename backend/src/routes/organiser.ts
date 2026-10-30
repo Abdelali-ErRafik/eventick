@@ -126,11 +126,37 @@ organiserRouter.get(
   asyncHandler(async (req, res) => {
     const events = await prisma.event.findMany({
       where: await scopeFor(req),
-      include: { tiers: true, lineup: true },
+      include: { tiers: true, lineup: true, organiser: { select: { id: true, name: true, email: true } } },
       orderBy: { createdAt: "desc" },
     });
+
+    /*
+     * Who each event belongs to — for a caller who can see across organisers.
+     *
+     * Attached HERE rather than in publicEvent(), which also serves the public
+     * catalogue: an organiser's name and email are not something an anonymous
+     * visitor should be handed with every listing.
+     *
+     * Gated on `scope.any` because that is exactly the caller whose list can
+     * contain more than one organiser's events, and therefore the only one for
+     * whom the column means anything. An organiser's own list is all theirs,
+     * so repeating their name on every card would be noise.
+     */
+    const mayActAnywhere = await userHasPermission(req.user, "scope.any");
     const shaped = await Promise.all(
-      events.map(async (event) => publicEvent(event, await remainingByTier(event.id))),
+      events.map(async (event) => ({
+        ...publicEvent(event, await remainingByTier(event.id)),
+        ...(mayActAnywhere
+          ? {
+              organiser: event.organiser
+                ? { id: event.organiser.id, name: event.organiser.name, email: event.organiser.email }
+                : // organiserId is nullable: the owner's account was deleted.
+                  // Sent as null rather than omitted, so the UI can say so
+                  // instead of silently showing nothing.
+                  null,
+            }
+          : {}),
+      })),
     );
     res.json({ events: shaped });
   }),

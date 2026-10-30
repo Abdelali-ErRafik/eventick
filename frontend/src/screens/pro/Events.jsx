@@ -611,6 +611,19 @@ function EventRow({ row, locale, t, onEdit, onDuplicate, onGuests, onContact, on
           <p className="mt-0.5 truncate text-xs text-muted">
             {event.city} · {longDate(event.start, locale)}
           </p>
+          {/* Only an admin's list can hold more than one organiser's events,
+              and the server sends this field only to them — so its presence
+              is the condition, not a role check repeated here. `null` means
+              the owning account was deleted, which is worth saying out loud
+              rather than leaving the card looking ownerless by accident. */}
+          {event.organiser !== undefined ? (
+            <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted">
+              <Users className="size-3 shrink-0" aria-hidden />
+              <span className="truncate">
+                {event.organiser ? event.organiser.name || event.organiser.email : t.ownerGone}
+              </span>
+            </p>
+          ) : null}
         </div>
         {/* Cancelled outranks hidden/public: the event being off sale for
             good is the fact that matters, and cancelEvent hides it too, so

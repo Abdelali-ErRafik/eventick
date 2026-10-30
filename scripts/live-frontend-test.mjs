@@ -144,6 +144,41 @@ async function main() {
   // Every SPA route is served by one catch-all. A 404 here means the route
   // is unreachable in a fresh tab or on reload, even though in-app
   // navigation would work.
+  /*
+   * The one piece of pure frontend logic worth asserting here.
+   *
+   * strategy.js has no React imports, so it loads directly. It earns its
+   * place in an HTTP suite because it threw a runtime TypeError on the
+   * organiser form: EXAMPLE_BRIEF had `fr` and `ar` but not `en`, so in
+   * English the button handed `undefined` to parseBrief and the page crashed.
+   * Nothing API-shaped would ever have caught that.
+   */
+  setGroup("BRIEF PARSER  strategy.js, behind the organiser form's button");
+  {
+    const { parseBrief, exampleBrief, EXAMPLE_BRIEF } = await import(
+      new URL("../frontend/src/strategy.js", import.meta.url)
+    );
+    for (const loc of ["fr", "en", "ar"]) {
+      record(`an example brief exists for ${loc}`, typeof EXAMPLE_BRIEF[loc] === "string" && EXAMPLE_BRIEF[loc].length > 20);
+      const brief = parseBrief(exampleBrief(loc), loc);
+      record(
+        `the ${loc} example parses to the same fields`,
+        brief.city === "Casablanca" && brief.capacity === 500 && brief.tiers.length === 2 && brief.discountPct === 15,
+        `city=${brief.city} cap=${brief.capacity} tiers=${brief.tiers.length} pct=${brief.discountPct}`,
+      );
+    }
+    // The crash itself: a locale with no example must not reach .trim().
+    let threw = null;
+    try {
+      parseBrief(exampleBrief("de"), "de");
+      parseBrief(undefined, "en");
+      parseBrief("", "en");
+    } catch (err) {
+      threw = err.message;
+    }
+    record("a missing example or empty brief never throws", threw === null, threw ?? "no throw");
+  }
+
   setGroup("SPA ROUTES  served by the Next.js host");
   for (const route of [
     "/",
@@ -781,6 +816,33 @@ async function main() {
       "each row carries both titles the edit form now loads",
       events.data.events.every((e) => typeof e.titleFr === "string" && typeof e.titleAr === "string"),
       `${events.data.events.length} event(s)`,
+    );
+
+    /*
+     * The owning organiser is shown on each card for an admin, and only for
+     * an admin: their list is the only one that can hold more than one
+     * organiser's events. The field is absent for an organiser rather than
+     * null, because the card keys the row off its presence.
+     */
+    record(
+      "an organiser's own rows carry no organiser field",
+      events.data.events.every((e) => e.organiser === undefined),
+      "their list is all theirs",
+    );
+    const adminEvents = await check("GET /organiser/events as admin", "GET", "/organiser/events", 200, {
+      token: tokens.admin,
+      shape: (d) => Array.isArray(d?.events),
+    });
+    record(
+      "an admin's rows name the owning organiser",
+      adminEvents.data.events.every((e) => e.organiser === null || typeof e.organiser?.email === "string"),
+      adminEvents.data.events[0]?.organiser?.name ?? adminEvents.data.events[0]?.organiser?.email ?? "?",
+    );
+    const publicCatalogue = await api("GET", "/events");
+    record(
+      "the public catalogue still exposes no organiser",
+      (publicCatalogue.data?.events ?? []).every((e) => e.organiser === undefined),
+      "an organiser's email is not public data",
     );
     // Orders.jsx
     await check("GET /organiser/orders fills Orders", "GET", "/organiser/orders", 200, {

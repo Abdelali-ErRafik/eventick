@@ -7,7 +7,7 @@ import { Protected } from "../components/Protected";
 import { api, money, uploadImage } from "../api";
 import { categoryLabel, useI18n } from "../i18n";
 import { CATEGORIES, CITIES } from "../utils";
-import { parseBrief, EXAMPLE_BRIEF } from "../strategy";
+import { parseBrief, exampleBrief } from "../strategy";
 import { useOrganisers } from "./pro/useOrganisers";
 import { useAuth } from "../AuthContext";
 import { Button, Card, CheckOption, Container, DateField, Dropdown, EmptyState, Field, Input, Notice, SalesWindow, salesWindowAt, SectionHeader, Stat, Textarea, TimeField, triggerControlClass } from "../ui";
@@ -163,7 +163,7 @@ function OrganiserInner() {
   }, []);
 
   const applyInstruction = () => {
-    const brief = parseBrief(instruction || EXAMPLE_BRIEF[locale], locale);
+    const brief = parseBrief(instruction || exampleBrief(locale), locale);
     if (brief.title) setTitle(brief.title);
     if (brief.city && CITIES.includes(brief.city)) setCity(brief.city);
     if (brief.date) {
@@ -183,7 +183,7 @@ function OrganiserInner() {
     }
     setEarlyPct(brief.discountPct ?? 0);
     setEarlyCount(brief.discountFirst ?? 0);
-    if (!instruction) setInstruction(EXAMPLE_BRIEF[locale]);
+    if (!instruction) setInstruction(exampleBrief(locale));
   };
 
   const uploadCover = async (e) => {

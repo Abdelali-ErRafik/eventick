@@ -35,7 +35,11 @@ function fold(value) {
 }
 
 export function parseBrief(raw, locale) {
-  const text = raw.trim();
+  // Defensive: this is fed from a text box OR from a per-locale example, and
+  // a missing example used to reach here as undefined and throw. A brief that
+  // says nothing should yield no fields, not a runtime error on a form the
+  // organiser has already half filled in.
+  const text = typeof raw === "string" ? raw.trim() : "";
   const flat = fold(text);
   const city = CITY_KEYS.find((item) => item.keys.some((key) => flat.includes(fold(key))))?.id ?? "";
 
@@ -61,7 +65,10 @@ export function parseBrief(raw, locale) {
   const capacity = capMatch ? Number(capMatch[1].replace(/\s/g, "")) : null;
 
   const tiers = [];
-  const tierRe = /(VIP|Standard|Gold|Premium|Early|Fosse|Pelouse|Tribune|Normal|ستاندارد|عادي)\s*(?:بسعر|à|a|@|:|=)?\s*(\d[\d\s]{1,6})/gi;
+  // `at` for English, alongside `à`/`a` (French) and `بسعر` (Arabic). Without
+  // it an English brief parsed no tiers at all, which is the whole point of
+  // the box.
+  const tierRe = /(VIP|Standard|Gold|Premium|Early|Fosse|Pelouse|Tribune|Normal|ستاندارد|عادي)\s*(?:بسعر|at|à|a|@|:|=)?\s*(\d[\d\s]{1,6})/gi;
   for (const match of text.matchAll(tierRe)) {
     const price = Number(match[2].replace(/\s/g, ""));
     if (price > 0 && price < 20000) tiers.push({ name: match[1], price });
@@ -69,8 +76,8 @@ export function parseBrief(raw, locale) {
 
   const discountPct = Number(text.match(/(\d{1,2})\s*%/)?.[1] ?? "") || null;
   const firstMatch =
-    text.match(/(?:أول|الاول|premiers?|premières?)\s*(\d[\d\s]{0,5})/i) ??
-    text.match(/(\d[\d\s]{0,5})\s*(?:premiers billets|premières places|تذكرة)/i);
+    text.match(/(?:أول|الاول|premiers?|premières?|first)\s*(\d[\d\s]{0,5})/i) ??
+    text.match(/(\d[\d\s]{0,5})\s*(?:premiers billets|premières places|first tickets|تذكرة)/i);
   const discountFirst = firstMatch ? Number(firstMatch[1].replace(/\s/g, "")) : null;
 
   const kind = /مهرجان|festival/.test(flat)
@@ -100,7 +107,27 @@ export function parseBrief(raw, locale) {
 // a second copy of those rates here would guarantee they eventually disagreed
 // with the figure actually charged.
 
+/*
+ * One example per locale — all three of them.
+ *
+ * `en` was missing while the site has shipped French, English and Arabic, so
+ * `EXAMPLE_BRIEF[locale]` was undefined in English and the button threw
+ * "Cannot read properties of undefined (reading 'trim')" on the first click.
+ * The parser itself already understood English (MONTHS carries january…
+ * december, CITY_KEYS carries marrakesh/tangier/fez) — only the sample
+ * sentence was absent, so the feature looked unbuilt when it was one string
+ * short.
+ *
+ * Read through exampleBrief() below rather than indexed directly: a fourth
+ * locale added here one day must not be able to crash the form.
+ */
 export const EXAMPLE_BRIEF = {
   ar: "أنشئ حفلاً موسيقياً بالدار البيضاء يوم 20 دجنبر، بسعة 500 شخص. أريد VIP بسعر 400 درهم وStandard بسعر 150 درهماً، مع خصم 15% لأول 100 تذكرة.",
   fr: "Crée un concert à Casablanca le 20 décembre, jauge 500. VIP à 400 MAD et Standard à 150 MAD, avec 15% sur les 100 premiers billets.",
+  en: "Create a concert in Casablanca on 20 december, capacity 500. VIP at 400 MAD and Standard at 150 MAD, with 15% off the first 100 tickets.",
 };
+
+/** The example for a locale, falling back to French rather than to nothing. */
+export function exampleBrief(locale) {
+  return EXAMPLE_BRIEF[locale] ?? EXAMPLE_BRIEF.fr;
+}
