@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Headphones, Mail, QrCode, ShieldCheck } from "lucide-react";
 import { categoryLabel, useI18n } from "../../i18n";
-import { Button } from "../../ui";
+import { Button, Input } from "../../ui";
 import { CITIES, cn } from "../../utils";
 
 const CATEGORIES = ["festivals", "humour", "sport", "nightlife", "culture", "salons"];
@@ -82,12 +82,13 @@ export function SiteFooter() {
               a confirmation for something that did not happen. */}
           <label className="mt-4 flex items-center gap-2 rounded-full border border-stage-fg/10 bg-stage-fg/5 ps-3.5 pe-1 opacity-70">
             <Mail className="size-4 shrink-0 text-stage-muted" aria-hidden />
-            <input
+            <Input
+              tone="stage"
               type="email"
               disabled
               placeholder={t("emailPh")}
               aria-label={t("emailPh")}
-              className="h-11 w-full min-w-0 bg-transparent text-sm text-stage-fg outline-none placeholder:text-stage-muted"
+              className="w-full min-w-0 border-none bg-transparent px-0 text-sm"
             />
           </label>
           <Button variant="inverse" full className="mt-3" disabled>

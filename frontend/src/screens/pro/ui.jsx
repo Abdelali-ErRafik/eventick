@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, Info, Search, X } from "lucide-react";
 import { cn } from "../../utils";
-import { Badge, Button, Card, EmptyState, IconButton, Modal, Skeleton } from "../../ui";
+import { Badge, Button, Card, Dropdown, EmptyState, IconButton, Modal, Skeleton, triggerControlClass } from "../../ui";
 
 export { Badge, Card, EmptyState, Modal, Skeleton };
 /** Alias: the pro screens call it Btn. */
@@ -167,22 +167,36 @@ export function FilterBar({ search, controls = [], activeCount = 0, onReset, res
     <div className="mb-4 rounded-card border border-line/10 bg-card p-4 shadow-card">
       <div className="flex flex-wrap items-end gap-2.5">
         {search ? <SearchInput {...search} /> : null}
+        {/* Dropdown, not a native <select>: the browser's own popup ignores
+            the app's theme completely -- it opened as a plain light list with
+            OS highlight colours over this dark dashboard, which is the one
+            place a filter bar is read at a glance. Callers still pass an
+            event-shaped onChange, so the adapter below keeps every existing
+            `(e) => setX(e.target.value)` working unchanged. */}
         {controls.map((control) => (
-          <label key={control.key} className="flex flex-col gap-1.5">
-            <span className="ps-0.5 text-[11px] font-bold uppercase tracking-wide text-muted">{control.label}</span>
-            <select
-              value={control.value}
-              onChange={control.onChange}
-              style={control.style}
-              className="h-11 rounded-control border border-line/20 bg-card px-3 text-sm outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/15"
+          <div key={control.key} className="flex flex-col gap-1.5">
+            {/* A <label> can no longer wrap this -- the trigger is a button,
+                not a form control, so the implicit association is gone.
+                aria-labelledby points at the visible text instead, which
+                keeps the announced name and the name on screen the SAME
+                string rather than two copies that can drift apart. */}
+            <span
+              id={`filter-${control.key}`}
+              className="ps-0.5 text-[11px] font-bold uppercase tracking-wide text-muted"
             >
-              {control.options.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
+              {control.label}
+            </span>
+            <div style={control.style}>
+              <Dropdown
+                value={control.value}
+                onChange={(value) => control.onChange({ target: { value } })}
+                options={control.options}
+                labelledBy={`filter-${control.key}`}
+                placeholder={control.label}
+                triggerClassName={triggerControlClass({ className: "h-11" })}
+              />
+            </div>
+          </div>
         ))}
         {activeCount > 0 && onReset ? (
           <button
@@ -330,20 +344,18 @@ export function Pager({ page, pages, onPage, limit, onLimit, labels }) {
   return (
     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
       {onLimit ? (
-        <label className="flex items-center gap-2 text-xs text-muted">
-          {labels.rows}
-          <select
-            value={limit}
-            onChange={(e) => onLimit(Number(e.target.value))}
-            className="h-9 rounded-control border border-line/20 bg-card px-2 text-sm outline-none focus:border-primary"
-          >
-            {[10, 20, 50, 100].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex items-center gap-2 text-xs text-muted">
+          <span id="pager-rows">{labels.rows}</span>
+          <span className="inline-block w-20">
+            <Dropdown
+              value={String(limit)}
+              onChange={(value) => onLimit(Number(value))}
+              options={[10, 20, 50, 100].map((n) => ({ value: String(n), label: String(n) }))}
+              labelledBy="pager-rows"
+              triggerClassName={triggerControlClass({ className: "h-9 px-2 text-sm" })}
+            />
+          </span>
+        </div>
       ) : (
         <span />
       )}

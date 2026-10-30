@@ -351,33 +351,30 @@ export default function Users() {
 
                 <div className="flex shrink-0 items-center gap-2">
                   <Badge tone={roleTone(u.role)}>{roleLabel(u.role)}</Badge>
-                  <label className="sr-only" htmlFor={`role-${u.id}`}>
-                    {t.changeRole}
-                  </label>
-                  <select
-                    id={`role-${u.id}`}
-                    value={u.role}
-                    disabled={isSelf || busyId === u.id}
-                    onChange={(e) => changeRole(u, e.target.value)}
-                    title={isSelf ? t.cannotChangeOwnRole : t.changeRole}
-                    className="h-10 rounded-control border border-line/20 bg-card px-2.5 text-sm outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {/* An existing ADMIN still needs its own option present,
-                        or the select would render blank against a value it
-                        cannot show. It is disabled, so this row reads
-                        correctly and can be demoted, while nobody can be
-                        promoted INTO admin from here. */}
-                    {u.role === "ADMIN" ? (
-                      <option value="ADMIN" disabled>
-                        {roleLabel("ADMIN")}
-                      </option>
-                    ) : null}
-                    {ASSIGNABLE_ROLES.map((value) => (
-                      <option key={value} value={value}>
-                        {roleLabel(value)}
-                      </option>
-                    ))}
-                  </select>
+                  <span className="inline-block w-36" title={isSelf ? t.cannotChangeOwnRole : t.changeRole}>
+                    <Dropdown
+                      value={u.role}
+                      disabled={isSelf || busyId === u.id}
+                      onChange={(value) => changeRole(u, value)}
+                      // Named per row: in a list, a bare "change role" on
+                      // every trigger gives a screen reader no way to tell
+                      // which person is about to be changed.
+                      label={`${t.changeRole} — ${u.name ?? u.email}`}
+                      options={[
+                        // An existing ADMIN still needs its own option
+                        // present, or the trigger would render blank against
+                        // a value it cannot show. Disabled, so the row reads
+                        // correctly and can be demoted, while nobody can be
+                        // promoted INTO admin from here.
+                        ...(u.role === "ADMIN" ? [{ value: "ADMIN", label: roleLabel("ADMIN"), disabled: true }] : []),
+                        ...ASSIGNABLE_ROLES.map((value) => ({ value, label: roleLabel(value) })),
+                      ]}
+                      triggerClassName={triggerControlClass({
+                        disabled: isSelf || busyId === u.id,
+                        className: "h-10 px-2.5 text-sm",
+                      })}
+                    />
+                  </span>
                   {isSelf ? <InfoTip text={t.cannotChangeOwnRole} /> : null}
 
                   {/* Hidden for yourself and for another admin, matching the
