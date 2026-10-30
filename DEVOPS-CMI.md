@@ -8,11 +8,36 @@ configuration plus one redeploy.
 
 ## TL;DR
 
-1. **Redeploy the backend from `origin/main` (`d3e8062`).** The running build
+> ⚠️ **Order matters. Set the variables FIRST, then redeploy.**
+> This build **refuses to start** in production without `CMI_CLIENT_ID` and
+> `CMI_STORE_KEY` (see *Why the order matters* below). Deploying before the
+> variables are in place takes the API down.
+
+1. **Set the environment variables** on the backend (listed below).
+2. **Redeploy the backend from `origin/main` (`d3e8062`).** The running build
    is older and is missing the payment callback endpoint entirely.
-2. **Set five environment variables** on the backend (listed below).
 3. **Confirm `POST /api/webhooks/cmi` answers `200`, not `404`.** That single
    check is the whole acceptance test.
+
+### Why the order matters
+
+`backend/src/server.ts` calls `assertPaymentConfig()` at boot, which does this:
+
+```ts
+if (process.env.NODE_ENV === "production" && isMockPayments()) {
+  throw new Error(
+    "CMI_CLIENT_ID and CMI_STORE_KEY are required in production — refusing to start in mock payment mode",
+  );
+}
+```
+
+That guard is deliberate: a production host running mock payments would issue
+tickets without taking money, which is worse than being down. But it means a
+deploy of this build with the variables missing **fails to start**, rather than
+starting in a degraded mode.
+
+An earlier revision of this document listed these steps the other way round.
+That was wrong, and it is what took the API down. Apologies.
 
 ---
 
@@ -68,10 +93,13 @@ repository, and `backend/.env` is gitignored by design.
 
 ### Behaviour when unset
 
-With `CMI_CLIENT_ID` absent the app runs in **mock mode**: checkout settles
+**With `NODE_ENV=production`, the process refuses to start.** This is the guard
+described above, and it is why these variables must be in place *before* the
+deploy.
+
+With `NODE_ENV` anything else, the app runs in **mock mode**: checkout settles
 instantly without a gateway. Useful for testing everything *except* payment,
-and it is what the automated suites rely on. A production deploy must not run
-in mock mode — it would issue tickets without taking money.
+and it is what the automated suites rely on.
 
 The callback endpoint is safe either way. An unconfigured server answers a
 callback with `FAILURE` rather than settling, so a mock build facing the
