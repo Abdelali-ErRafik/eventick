@@ -250,6 +250,30 @@ async function main() {
     );
 
     await call("PATCH", `/api/platform/organisers/${orgaId}/plan`, { token: admin, body: { planKey: "pro" } });
+
+    /*
+     * The organiser can see what the OTHER plans cost.
+     *
+     * They were shown their own rate and nothing else, so someone on
+     * Starter's 5% had no way to learn Pro charges 3% — every organiser sat
+     * on the default, and no moment existed at which they would find out.
+     * Switching plan stays an admin action; this is what makes it worth
+     * asking about. Rates only: no revenue, no organiser counts.
+     */
+    const onPro = await call("GET", "/api/organiser/finance", { token: orga });
+    const tiers = onPro.data.plans ?? [];
+    check("finance lists every plan", tiers.length >= 3, `${tiers.length} plan(s)`);
+    check(
+      "exactly one is marked as theirs, and it is the one they are on",
+      tiers.filter((p) => p.current).length === 1 && tiers.find((p) => p.current)?.key === onPro.data.plan?.key,
+      `current=${tiers.find((p) => p.current)?.key} plan=${onPro.data.plan?.key}`,
+    );
+    check(
+      "each carries only a rate and a price",
+      tiers.every((p) =>
+        Object.keys(p).every((k) => ["key", "label", "rateBps", "monthlyCents", "isDefault", "current"].includes(k))),
+      Object.keys(tiers[0] ?? {}).join(", "),
+    );
   }
 
   // ── Refunds take their commission with them ─────────────────────────────
@@ -312,6 +336,23 @@ async function main() {
   {
     const earnings = await call("GET", `/api/platform/organisers/${orgaId}/earnings`, { token: admin });
     const owed = earnings.data.pending.payableCents;
+
+    /*
+     * The admin's organiser list must agree with this, to the cent.
+     *
+     * That page lists everyone who sells, and until now it showed lifetime
+     * revenue and nothing about what was OWED — so "who do I pay today" meant
+     * opening each organiser in turn. The figure is computed through the same
+     * summariseRevenue() against the same filter (settled, not a comp, not
+     * already in a payout), and this check is what keeps the two from drifting
+     * into merely resembling each other.
+     */
+    const listed = await call("GET", "/api/platform/organisers", { token: admin });
+    const row = (listed.data.organisers ?? []).find((o) => o.id === orgaId);
+    check("the organiser list says what is owed", row?.owedCents === owed,
+      `list ${mad(row?.owedCents ?? -1)} vs earnings ${mad(owed)}`);
+    check("and whether a transfer is even possible", row?.hasBankAccount === true,
+      `hasBankAccount=${row?.hasBankAccount}`);
 
     const run = await call("POST", `/api/platform/organisers/${orgaId}/payouts`, {
       token: admin,

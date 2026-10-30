@@ -4,6 +4,7 @@ import { ArrowDownRight, ArrowUpRight, CalendarDays, Landmark, Minus, ReceiptTex
 import { toast } from "sonner";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
+import { cn } from "../../utils";
 import { Badge, Button, Field, Input, Modal, Select } from "../../ui";
 import { EmptyState, PageHead, SectionTitle, StatCard, StatSkeletons } from "./ui";
 import { text } from "./copy";
@@ -223,7 +224,40 @@ export default function Platform() {
                 </span>
               </p>
 
-              <Button variant="ghost" onClick={() => setRunning(seller)} className="shrink-0">
+              {/* Owed right now — the figure this page exists to show.
+                  Without it an admin had to open every organiser in turn to
+                  find out who was waiting on money. Dimmed at zero so the
+                  rows that need paying are the ones that stand out. */}
+              <p className="shrink-0 text-end">
+                <span
+                  className={cn(
+                    "block font-display text-subhead font-bold tabular-nums",
+                    seller.owedCents > 0 ? "text-success" : "text-muted",
+                  )}
+                >
+                  {money(seller.owedCents ?? 0)}
+                </span>
+                <span className="block text-[11px] font-semibold text-muted">
+                  {t.plOwed}
+                  {seller.owedOrders > 0 ? ` · ${seller.owedOrders}` : ""}
+                </span>
+              </p>
+
+              {/* A payout with no bank details is refused by the server, so
+                  the row says to chase rather than offering a button that
+                  can only fail. */}
+              {seller.owedCents > 0 && !seller.hasBankAccount ? (
+                <Badge tone="warn" className="shrink-0">
+                  {t.plNoBank}
+                </Badge>
+              ) : null}
+
+              <Button
+                variant="ghost"
+                onClick={() => setRunning(seller)}
+                className="shrink-0"
+                disabled={!seller.owedCents}
+              >
                 {t.plRunPayout}
               </Button>
             </article>

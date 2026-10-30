@@ -166,6 +166,41 @@ export default function Finance() {
             <Info className="mt-px size-3.5 shrink-0" aria-hidden />
             {t.planNote}
           </p>
+
+          {/*
+            What the other tiers cost.
+            An organiser was shown their own rate and nothing else, so someone
+            on Starter's 5% had no way to learn that Pro charges 3% — the
+            cheaper plans existed, nobody was on one, and there was no moment
+            at which anyone would find out. Changing plan stays an admin
+            action; this is only what makes it worth asking about.
+          */}
+          {(finance.plans ?? []).length > 1 ? (
+            <div className="mt-4 border-t border-line/10 pt-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted">{t.planCompare}</p>
+              <ul className="mt-2 grid gap-1.5">
+                {finance.plans.map((row) => (
+                  <li
+                    key={row.key}
+                    className={cn(
+                      "flex flex-wrap items-baseline justify-between gap-2 rounded-control px-2.5 py-1.5 text-sm",
+                      row.current ? "bg-brume font-bold text-primary" : "text-muted",
+                    )}
+                  >
+                    <span>
+                      {row.label}
+                      {row.current ? ` · ${t.planCurrent}` : ""}
+                    </span>
+                    <span className="tabular-nums">
+                      {RATE(row.rateBps)}
+                      {row.monthlyCents > 0 ? ` + ${t.subscriptionMonthly.replace("{amount}", money(row.monthlyCents))}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs leading-relaxed text-muted">{t.planCompareNote}</p>
+            </div>
+          ) : null}
         </Card>
       ) : null}
 

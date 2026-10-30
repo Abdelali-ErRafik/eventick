@@ -124,6 +124,20 @@ export async function organiserEarnings(organiserId: string) {
 
   const plan = organiser?.plan ?? (await defaultPlan()) ?? null;
 
+  /*
+   * Every plan, so an organiser can see what else exists.
+   *
+   * They were shown their own rate and nothing else, which meant someone on
+   * Starter's 5% had no way to learn that Pro charges 3% — the cheaper tiers
+   * existed, nobody was on one, and there was no moment at which anyone would
+   * find out. Changing plan stays an admin action (planNote says so, and the
+   * fee is recorded at settlement so a switch must not rewrite past orders);
+   * this is the part that lets an organiser know to ask.
+   *
+   * Rates only. No organiser counts, no revenue — just what each tier costs.
+   */
+  const catalogue = await prisma.plan.findMany({ orderBy: { sortOrder: "asc" } });
+
   // Months already billed, so the UI can say what the subscription has cost
   // rather than leaving the deduction on a payout unexplained.
   const billed = await prisma.subscriptionCharge.aggregate({
@@ -144,6 +158,15 @@ export async function organiserEarnings(organiserId: string) {
           assigned: Boolean(organiser?.plan),
         }
       : null,
+    /** What every tier costs, so the current one can be compared. */
+    plans: catalogue.map((row) => ({
+      key: row.key,
+      label: row.label,
+      rateBps: row.rateBps,
+      monthlyCents: row.monthlyCents,
+      isDefault: row.isDefault,
+      current: row.key === plan?.key,
+    })),
     lifetime,
     /** Earned but not yet included in any payout. */
     pending,

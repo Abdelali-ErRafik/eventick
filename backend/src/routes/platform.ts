@@ -156,6 +156,10 @@ platformRouter.get(
         createdAt: true,
         events: { select: { id: true } },
         plan: { select: { key: true, label: true, rateBps: true, monthlyCents: true } },
+        // Whether a transfer is even possible. runPayout refuses without it,
+        // so a row showing money owed and no account is the one an admin has
+        // to chase rather than pay.
+        bankAccount: { select: { id: true } },
       },
     });
 
@@ -171,12 +175,37 @@ platformRouter.get(
             ? []
             : await prisma.order.findMany({
                 where: { eventId: { in: eventIds }, status: { in: ["PAID", "REFUNDED"] } },
-                select: { totalCents: true, refundedCents: true, feeCents: true },
+                select: {
+                  totalCents: true,
+                  refundedCents: true,
+                  feeCents: true,
+                  // Comps are PAID at 0 cents and must not count as money owed.
+                  paymentRef: true,
+                  // Null when the order has never been swept into a payout —
+                  // which is exactly what "still owed" means.
+                  payoutOrder: { select: { payoutId: true } },
+                },
               });
         // An unrecorded fee is priced at THIS organiser's plan, not the
         // platform default: charging a Pro organiser at Starter's rate was
         // the bug, and the row already knows which plan they are on.
         const totals = summariseRevenue(orders, organiser.plan ?? defaultPlan ?? undefined);
+
+        /*
+         * What a payout run would transfer right now.
+         *
+         * An admin had no way to see who was owed anything without opening
+         * each organiser in turn, so the page that lists everyone could not
+         * answer the question it exists for. Computed through the same
+         * summariseRevenue() the payout uses, against the same filter —
+         * settled, not a comp, not already in a payout — so this figure and
+         * the one on the run match rather than merely resembling each other.
+         *
+         * It excludes the plan's monthly subscription, which is charged per
+         * calendar month at run time and cannot be known from orders alone.
+         */
+        const owedOrders = orders.filter((o) => !o.payoutOrder && o.paymentRef !== "COMP");
+        const owed = summariseRevenue(owedOrders, organiser.plan ?? defaultPlan ?? undefined);
 
         return {
           id: organiser.id,
@@ -193,6 +222,11 @@ platformRouter.get(
           feeCents: totals.feeCents,
           plan: organiser.plan?.key ?? null,
           planLabel: organiser.plan?.label ?? null,
+          /** Owed right now: what a payout run would transfer today. */
+          owedCents: owed.payableCents,
+          owedOrders: owedOrders.length,
+          /** False means a payout would be refused — chase, do not pay. */
+          hasBankAccount: Boolean(organiser.bankAccount),
         };
       }),
     );
