@@ -127,7 +127,7 @@ export default function Home() {
           rail is visible before any scrolling, which is the point of a
           ticketing home page. The content is vertically centred in whatever
           height remains, so nothing needed re-laying out. */}
-      <section className="relative -mt-16 flex min-h-[min(74vh,46rem)] flex-col bg-stage pt-16 text-stage-fg">
+      <section className="relative -mt-16 flex min-h-[min(68vh,42rem)] flex-col bg-stage pt-16 text-stage-fg">
         {/*
           The photo was opacity-45 beneath a gradient that ran to a solid
           `from-stage` at the bottom, so it was dimmed twice and the venue
@@ -152,7 +152,7 @@ export default function Home() {
             here because it adds a selector rather than a second utility on
             the same specificity. */}
         <div className="absolute inset-0 bg-linear-to-r from-stage/85 via-stage/35 to-transparent rtl:bg-linear-to-l" />
-        <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col justify-center px-4 py-14 md:px-8">
+        <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col justify-center px-4 py-8 md:px-8 md:py-10">
           <div className="max-w-4xl">
             <p className="inline-flex items-center gap-2 rounded-full bg-stage-fg/10 px-3 py-1 text-xs font-semibold">
               <span className="size-2 rounded-full bg-accent" />
@@ -163,13 +163,13 @@ export default function Home() {
                 site (EventDetail, Explorer use it too), so this still reads
                 as the page's visual climax without pushing the subtitle and
                 search card below the fold the way a larger size did. */}
-            <h1 className="mt-4 font-display text-4xl font-extrabold leading-none tracking-tight sm:text-5xl lg:text-hero">
+            <h1 className="mt-3 font-display text-4xl font-extrabold leading-none tracking-tight sm:text-5xl lg:text-6xl">
               {t("heroA")} <span className="text-accent">{t("heroB")}</span> {t("heroC")}
             </h1>
-            <p className="mt-6 max-w-xl text-base text-stage-muted lg:text-xl">{t("heroSub")}</p>
+            <p className="mt-4 max-w-xl text-base text-stage-muted lg:text-lg">{t("heroSub")}</p>
           </div>
 
-          <form className="mt-10 w-full" onSubmit={submitSearch}>
+          <form className="mt-7 w-full" onSubmit={submitSearch}>
             {/* The search card used to be a plain white rectangle of three
                 bare <select> elements -- functional, but it looked like any
                 admin form, not the one thing on the page meant to invite a
