@@ -138,7 +138,11 @@ model RolePermission {
 model Event {
   id          String      @id @default(cuid())
   slug        String      @unique
-  organiserId String?     @map("organiser_id") // null for seeded/platform events
+  // Nullable only so an event survives its organiser's account being
+  // removed (onDelete: SetNull below). It is NOT a "is this a demo event"
+  // flag — the seed gives every event an organiser, so null means "the
+  // owner's account is gone", nothing more. See seoIndexable for that.
+  organiserId String?     @map("organiser_id")
   status      EventStatus @default(PUBLISHED)
 
   titleFr  String @map("title_fr")
@@ -192,6 +196,23 @@ model Event {
   /// organiser wants it, but making every event a reseller venue by default
   /// is a decision the organiser should take, not the platform.
   allowResale Boolean @default(false) @map("allow_resale")
+
+  /// Is this a real, bookable event — or demo/seed data?
+  ///
+  /// Only ever used to decide whether the public page may carry schema.org
+  /// Event markup. Google's structured-data policy treats markup describing
+  /// events that cannot actually be booked as spam, and the penalty lands on
+  /// the whole domain rather than the one page.
+  ///
+  /// It has to be its own column. `organiserId` cannot stand in for it, even
+  /// though the comment above still reads "null for seeded/platform events":
+  /// the seed assigns every event an organiser, so that field marks all 16
+  /// demo rows as genuine. Gating on it would publish fabricated prices as
+  /// real inventory — the exact thing the policy forbids.
+  ///
+  /// Defaults to FALSE, so a new event is never marked up until someone says
+  /// it is real. Failing closed is the only safe default here.
+  seoIndexable Boolean @default(false) @map("seo_indexable")
 
   createdAt DateTime @default(now()) @map("created_at")
 

@@ -49,6 +49,8 @@ export interface CatalogEvent {
   aboutAr: string;
   cancelledAt: string | null;
   cancelReason: string | null;
+  /** May this event carry schema.org Event markup? False for demo data. */
+  seoIndexable: boolean;
   maxPerBuyer: number;
   allowResale: boolean;
   tiers: CatalogTier[];

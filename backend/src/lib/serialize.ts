@@ -38,6 +38,10 @@ export function publicEvent(event: EventWithTiers, remainingByTier: Record<strin
     cancelCutoffHours: event.cancelCutoffHours,
     cancelledAt: event.cancelledAt?.toISOString() ?? null,
     cancelReason: event.cancelReason,
+    // Whether the public page may carry schema.org Event markup. Sent so the
+    // frontend can decide without a second round trip; false for anything
+    // seeded, so demo data is never advertised to Google as bookable.
+    seoIndexable: event.seoIndexable,
     tiers: event.tiers.map((tier) => ({
       id: tier.id,
       nameFr: tier.nameFr,

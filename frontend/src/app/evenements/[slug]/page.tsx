@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import SpaMount from "../../[[...slug]]/SpaMount";
 import { getEvent, type CatalogEvent } from "../../../lib/catalog-server";
+import { eventJsonLd } from "../../../lib/jsonld";
 
 /**
  * An event page — the same SPA screen as before, with a real head.
@@ -76,6 +77,36 @@ export async function generateMetadata({
   };
 }
 
-export default function EventPage() {
-  return <SpaMount />;
+/**
+ * The body: the SPA, plus the event's schema.org markup when it is allowed.
+ *
+ * `EventJsonLd` is a separate SYNCHRONOUS component on purpose. SpaMount
+ * loads ClientApp with `ssr: false`, which bails its Suspense boundary out
+ * to client rendering, and an ASYNC sibling's output is discarded when that
+ * happens — a <script> returned from an async page component reached the
+ * browser zero times. The catch-all route renders the same sibling shape
+ * synchronously and its markup survives, which is the pattern copied here:
+ * the async work (the fetch) happens inside the child, not in the page.
+ */
+export default async function EventPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const event = await getEvent(slug);
+  // Null for demo data and for a cancelled event, so nothing is emitted
+  // unless the event is genuinely bookable.
+  //
+  // Note for anyone debugging why markup does not appear after flipping
+  // seoIndexable in the database: generateMetadata and this component each
+  // hold their OWN cached copy of the fetch (revalidate 300), so the head
+  // can update while the body still reads the old value. Restart the dev
+  // server, or wait out the window.
+  const jsonLd = event ? eventJsonLd(event) : null;
+
+  return (
+    <>
+      {jsonLd ? (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      ) : null}
+      <SpaMount />
+    </>
+  );
 }
