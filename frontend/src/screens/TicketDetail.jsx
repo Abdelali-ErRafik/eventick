@@ -79,8 +79,15 @@ export default function TicketDetail() {
     }
   };
 
-  const changeZone = async (tierId) => {
+  const changeZone = async (tierId, forfeitCents = 0) => {
     if (busy) return;
+    // A downgrade is irreversible and refunds nothing, so the amount being
+    // given up has to be stated and agreed BEFORE it happens -- the list
+    // previously said only "no extra charge", which is true and reads as
+    // "free" to someone about to lose the difference.
+    if (forfeitCents > 0 && !window.confirm(t("zoneForfeitConfirm").replace("{n}", money(forfeitCents)))) {
+      return;
+    }
     setBusy(true);
     try {
       await api.post(`/tickets/${ticketId}/exchange`, { tierId });
@@ -398,14 +405,23 @@ export default function TicketDetail() {
                     >
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold">{eventText(z, "name", locale)}</span>
-                        <span className="block text-xs text-muted">
-                          {z.dueCents > 0 ? t("zoneExtra").replace("{n}", money(z.dueCents)) : t("zoneIncluded")}
+                        <span
+                          className={cn(
+                            "block text-xs",
+                            z.forfeitCents > 0 ? "font-semibold text-warn" : "text-muted",
+                          )}
+                        >
+                          {z.dueCents > 0
+                            ? t("zoneExtra").replace("{n}", money(z.dueCents))
+                            : z.forfeitCents > 0
+                              ? t("zoneForfeit").replace("{n}", money(z.forfeitCents))
+                              : t("zoneSame")}
                         </span>
                       </span>
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => changeZone(z.tierId)}
+                        onClick={() => changeZone(z.tierId, z.forfeitCents ?? 0)}
                         // An upgrade owes money, which this page cannot yet
                         // collect — the server refuses it, so don't offer it.
                         disabled={busy || z.soldOut || z.dueCents > 0}

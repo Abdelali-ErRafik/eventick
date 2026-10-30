@@ -125,6 +125,14 @@ export async function exchangeTicket(
   const ticket = await loadTicket(ticketId);
   assertAlterable(ticket);
 
+  // A comp is a seat an organiser CHOSE to give this guest. Letting the guest
+  // move it makes them the one deciding what was given away -- and because a
+  // comp was never a sale, there is no price paid to measure the change
+  // against. Moving it is the organiser's call, through the invitation list.
+  if (ticket.kind === "COMP") {
+    throw new HttpError(403, "An invitation cannot be moved to another zone. Ask the organiser.");
+  }
+
   if (targetTierId === ticket.tierId) throw new HttpError(400, "The ticket is already in that zone");
 
   return prisma.$transaction(async (tx) => {

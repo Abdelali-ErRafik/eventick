@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
-import { optionalAuth } from "../middleware/auth.js";
+import { optionalAuth, refuseStaffPurchase } from "../middleware/auth.js";
 import { phoneOk, makePaymentRef } from "../lib/payment-sim.js";
 import { recordCommission } from "../lib/settle.js";
 import { buildPaymentRequest, cmiConfig, cmiUrls, isMockPayments } from "../lib/cmi.js";
@@ -117,6 +117,10 @@ const buySchema = z.object({
 resaleRouter.post(
   "/:token/buy",
   optionalAuth,
+  // Buying a resold seat is still buying -- the same conflict of interest as
+  // /orders/hold, just through a different door. Listing a ticket (above) is
+  // not guarded: that is selling, and a staff account has no ticket to sell.
+  refuseStaffPurchase,
   asyncHandler(async (req, res) => {
     const body = buySchema.parse(req.body);
     if (!phoneOk(body.phone)) throw new HttpError(400, "Invalid phone number");
