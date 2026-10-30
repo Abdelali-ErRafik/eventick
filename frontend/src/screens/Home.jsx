@@ -121,10 +121,38 @@ export default function Home() {
           card's custom Dropdown panels (position: absolute) at the section
           edge, cutting their tops off instead of letting them float over
           the hero like any other popover in the app. */}
-      <section className="relative -mt-16 flex min-h-[min(92vh,56rem)] flex-col bg-stage pt-16 text-stage-fg">
-        <img src="/events/mawazine.jpg" alt="" className="absolute inset-0 h-full w-full object-cover opacity-45" />
-        <div className="absolute inset-0 bg-gradient-to-t from-stage via-stage/75 to-stage/35" />
-        <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col justify-center px-4 py-16 md:px-8">
+      {/* Height: was min-h-[min(92vh,56rem)], which on a laptop filled the
+          whole first screen — so the first thing a visitor saw was a search
+          form and no events at all. At 74vh the top of the "à l'affiche"
+          rail is visible before any scrolling, which is the point of a
+          ticketing home page. The content is vertically centred in whatever
+          height remains, so nothing needed re-laying out. */}
+      <section className="relative -mt-16 flex min-h-[min(74vh,46rem)] flex-col bg-stage pt-16 text-stage-fg">
+        {/*
+          The photo was opacity-45 beneath a gradient that ran to a solid
+          `from-stage` at the bottom, so it was dimmed twice and the venue
+          was barely readable.
+
+          Now it carries its own brightness/saturate instead of being faded
+          into the background colour, and the scrim is directional: strong
+          down the leading edge where the headline and search card sit,
+          clearing toward the opposite top corner so the crowd and the stage
+          actually read. Two layers rather than one, because the text needs a
+          guaranteed contrast floor that a single diagonal cannot give.
+        */}
+        <img
+          src="/events/mawazine.jpg"
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover object-center opacity-75 brightness-[0.78] saturate-[1.15]"
+        />
+        <div className="absolute inset-0 bg-linear-to-t from-stage via-stage/45 to-transparent" />
+        {/* Mirrored explicitly for Arabic. Tailwind has no logical gradient
+            direction — it only emits `to right`/`to left` and friends, so
+            `bg-linear-to-e` compiles to nothing at all — and `rtl:` wins
+            here because it adds a selector rather than a second utility on
+            the same specificity. */}
+        <div className="absolute inset-0 bg-linear-to-r from-stage/85 via-stage/35 to-transparent rtl:bg-linear-to-l" />
+        <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col justify-center px-4 py-14 md:px-8">
           <div className="max-w-4xl">
             <p className="inline-flex items-center gap-2 rounded-full bg-stage-fg/10 px-3 py-1 text-xs font-semibold">
               <span className="size-2 rounded-full bg-accent" />
