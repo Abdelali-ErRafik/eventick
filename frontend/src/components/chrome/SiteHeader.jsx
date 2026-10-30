@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, LayoutDashboard, LogOut, MapPin, Menu, Moon, Search, Sun, Ticket, User, X } from "lucide-react";
+import { Check, ChevronDown, LayoutDashboard, LogOut, MapPin, Menu, Moon, Search, Sun, Ticket, User, X } from "lucide-react";
 import { useAuth } from "../../AuthContext";
 import { useCart } from "../../CartContext";
 import { useCatalog } from "../../useCatalog";
@@ -113,6 +113,25 @@ export function SiteHeader({ overlay = false }) {
 
   const cartCount = cart?.lines?.reduce((sum, line) => sum + line.qty, 0) ?? 0;
 
+  /**
+   * The city this header should SAY it is showing.
+   *
+   * It is read back out of the URL rather than held in state, because the URL
+   * is where the filter actually lives: `goCity` navigates to
+   * `/explorer?ville=…`, and the Explorer screen reads the same parameter. A
+   * separate piece of header state would be a second copy of one fact, and
+   * would go stale the moment someone arrives on a filtered link, uses the
+   * back button, or changes the city from the Explorer page itself.
+   *
+   * Before this, the trigger was hardcoded to t("allMorocco") — so picking
+   * Marrakech filtered the catalogue correctly while the control went on
+   * claiming "Tout le Maroc", which reads as the click having been ignored.
+   */
+  const activeCity = (() => {
+    const value = new URLSearchParams(search).get("ville");
+    return value && CITIES.includes(value) ? value : null;
+  })();
+
   const goCity = (city, close) => {
     close?.();
     setMenuOpen(false);
@@ -169,7 +188,7 @@ export function SiteHeader({ overlay = false }) {
           </Link>
 
           <Popover
-            label={t("allMorocco")}
+            label={activeCity ?? t("allMorocco")}
             className="hidden md:block"
             width="w-56"
             trigger={({ open }) => (
@@ -180,17 +199,24 @@ export function SiteHeader({ overlay = false }) {
                 )}
               >
                 <MapPin className={cn("size-4", onImage ? "text-accent" : "text-primary")} aria-hidden />
-                {t("allMorocco")}
+                {activeCity ?? t("allMorocco")}
                 <ChevronDown className={cn("size-4 transition", open && "rotate-180")} aria-hidden />
               </span>
             )}
           >
             {({ close }) => (
               <div className="scroll-thin max-h-80 overflow-y-auto py-1.5">
-                <PopoverItem onClick={() => goCity("", close)}>{t("allMorocco")}</PopoverItem>
+                {/* The current choice is ticked, the same way the Dropdown
+                    primitive marks its own — without it the open list gives
+                    no clue which city you are already filtered to. */}
+                <PopoverItem onClick={() => goCity("", close)} className="justify-between">
+                  {t("allMorocco")}
+                  {!activeCity ? <Check className="size-4 shrink-0 text-primary" aria-hidden /> : null}
+                </PopoverItem>
                 {CITIES.map((city) => (
-                  <PopoverItem key={city} onClick={() => goCity(city, close)}>
+                  <PopoverItem key={city} onClick={() => goCity(city, close)} className="justify-between">
                     {city}
+                    {activeCity === city ? <Check className="size-4 shrink-0 text-primary" aria-hidden /> : null}
                   </PopoverItem>
                 ))}
               </div>
