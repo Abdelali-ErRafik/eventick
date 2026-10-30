@@ -9,6 +9,7 @@ import { categoryLabel, useI18n } from "../i18n";
 import { CATEGORIES, CITIES } from "../utils";
 import { parseBrief, EXAMPLE_BRIEF } from "../strategy";
 import { useOrganisers } from "./pro/useOrganisers";
+import { useAuth } from "../AuthContext";
 import { Button, Card, CheckOption, Container, DateField, Dropdown, EmptyState, Field, Input, Notice, SalesWindow, salesWindowAt, SectionHeader, Stat, Textarea, TimeField, triggerControlClass } from "../ui";
 
 const COVERS = [
@@ -65,11 +66,12 @@ function uid() {
 function OrganiserInner() {
   const { locale, t } = useI18n();
   const navigate = useNavigate();
+  const { user } = useAuth();
   /*
    * An admin has to say whose event this is.
    *
    * organiserId decides who the payout pays, at which plan rate, into which
-   * bank account -- so the server refuses to guess it for anyone holding
+   * bank account — so the server refuses to guess it for anyone holding
    * scope.any, and this is the field that answers it. An organiser never sees
    * the control: they can only ever create their own, and the server infers
    * that from the token.
@@ -118,10 +120,27 @@ function OrganiserInner() {
   const [myEvents, setMyEvents] = useState(null);
   const [myOrders, setMyOrders] = useState(null);
 
+  /*
+   * Scoped to the signed-in account, because this column says "Vos
+   * événements" and shows a revenue figure beside it.
+   *
+   * Unscoped, these two routes return every organiser's rows to anyone with
+   * `scope.any` — so an admin saw the whole platform's events and takings
+   * labelled as their own. Harmless while an admin owned most of the
+   * catalogue; actively misleading now that an admin owns none and creates
+   * events for other people. `?organiserId=` is ignored for a caller without
+   * `scope.any`, so sending it unconditionally is right for both roles.
+   *
+   * An admin therefore sees an empty column here, which is the honest answer:
+   * they have no events of their own. The platform-wide view is /pro, where
+   * the organiser filter makes the scope explicit.
+   */
   useEffect(() => {
-    api.get("/organiser/events").then((data) => setMyEvents(data.events));
-    api.get("/organiser/orders").then((data) => setMyOrders(data.orders));
-  }, []);
+    if (!user?.id) return;
+    const mine = `?organiserId=${encodeURIComponent(user.id)}`;
+    api.get(`/organiser/events${mine}`).then((data) => setMyEvents(data.events));
+    api.get(`/organiser/orders${mine}`).then((data) => setMyOrders(data.orders));
+  }, [user?.id]);
 
   // Pro/Events' "Dupliquer" hands the source event off this way (no separate
   // duplicate endpoint — this form is the one real place an event is built).
@@ -777,7 +796,16 @@ function OrganiserInner() {
             ) : null}
 
             {myEvents && myEvents.length === 0 ? (
-              <EmptyState icon={<CalendarPlus className="size-6" />} title={t("orgNoneTitle")} body={t("orgNoneBody")} />
+              /* An admin owns no events by design — what they publish here is
+                 assigned to an organiser and shows up under that organiser,
+                 not in this column. "Publish your first date and it will
+                 appear here" would be a promise this page cannot keep for
+                 them, so they are pointed at /pro instead. */
+              <EmptyState
+                icon={<CalendarPlus className="size-6" />}
+                title={maySeeAllOrganisers ? t("orgNoneAdminTitle") : t("orgNoneTitle")}
+                body={maySeeAllOrganisers ? t("orgNoneAdminBody") : t("orgNoneBody")}
+              />
             ) : (
               <div className="space-y-2.5">
                 {(myEvents ?? []).slice(0, SIDEBAR_LIMIT).map((event) => {

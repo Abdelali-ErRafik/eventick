@@ -214,6 +214,44 @@ if (otherToken) {
 // ────────────────────────────────────────── admin cross-scope ──
 setGroup("ADMIN SCOPE  admin may act outside their own rows");
 
+/*
+ * An event owned by SOMEONE ELSE is what makes the admin's wider scope
+ * observable, so one is created rather than assumed.
+ *
+ * This used to compare the two counts straight off the seeded catalogue,
+ * which worked only because fourteen of the sixteen events were owned by the
+ * admin — the very bug that event ownership was later fixed to prevent (an
+ * admin cannot own an event at all now). With every seeded event belonging to
+ * the demo organiser, both sides returned 16 and the check proved nothing.
+ */
+const scopeOwner = await call("POST", "/api/auth/register", {
+  body: { name: "Scope Organiser", email: `authz-scope-${Date.now()}@example.test`, password: "authz-scope-2027" },
+});
+const scopeOwnerId = scopeOwner.data?.user?.id;
+// Removed in CLEANUP below: leaked ORGANISER accounts accumulate in the
+// admin directory and in every organiser picker that reads it.
+if (scopeOwnerId) cleanup.users.push(scopeOwnerId);
+await call("PATCH", `/api/auth/users/${scopeOwnerId}/role`, { token: tokens.admin, body: { role: "ORGANISER" } });
+
+const scopeSlug = `authz-scope-${Date.now()}`;
+const scopeEvent = await call("POST", "/api/organiser/events", {
+  token: tokens.admin,
+  body: {
+    slug: scopeSlug,
+    organiserId: scopeOwnerId,
+    titleFr: "Événement hors périmètre", titleAr: "حدث خارج النطاق",
+    category: "festivals", city: "Oujda",
+    venueFr: "Salle", venueAr: "قاعة", address: "Oujda",
+    start: "2027-11-05T21:00:00", end: "2027-11-05T23:59:00", doors: "2027-11-05T20:00:00",
+    image: "/events/jazz.jpg",
+    blurbFr: "Hors périmètre", blurbAr: "خارج النطاق",
+    aboutFr: "Hors périmètre", aboutAr: "خارج النطاق",
+    ageFr: "Tous publics", ageAr: "للجميع",
+    tiers: [{ nameFr: "S", nameAr: "ع", blurbFr: "t", blurbAr: "t", priceCents: 9000, capacity: 5, zoneFr: "A", zoneAr: "A", gateFr: "1", gateAr: "1" }],
+  },
+});
+record("admin creates an event owned by a third organiser", scopeEvent.status === 201, `${scopeEvent.status}`);
+
 const adminEvents = await call("GET", "/api/organiser/events", { token: tokens.admin });
 const organiserEvents = await call("GET", "/api/organiser/events", { token: tokens.organiser });
 record(
@@ -221,6 +259,14 @@ record(
   (adminEvents.data?.events?.length ?? 0) > (organiserEvents.data?.events?.length ?? 0),
   `admin=${adminEvents.data?.events?.length ?? "?"} organiser=${organiserEvents.data?.events?.length ?? "?"}`,
 );
+record(
+  "and the organiser cannot see that event at all",
+  !(organiserEvents.data?.events ?? []).some((event) => event.slug === scopeSlug),
+  scopeSlug,
+);
+
+// Deleted as admin: scope.any is what reaches another organiser's event.
+await call("DELETE", `/api/organiser/events/${scopeSlug}`, { token: tokens.admin });
 
 const me = await call("GET", "/api/auth/me", { token: tokens.organiser });
 const organiserId = me.data?.user?.id;

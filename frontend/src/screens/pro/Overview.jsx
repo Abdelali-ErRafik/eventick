@@ -6,12 +6,15 @@ import { useI18n } from "../../i18n";
 import { intlLocaleTag, longDate, todayKey } from "../../utils";
 import { useRealtime } from "./useRealtime";
 import { Badge, Card, EmptyState, PageHead, SectionTitle, StatCard, StatSkeletons } from "./ui";
+import { useAuth } from "../../AuthContext";
 import { cn } from "../../utils";
 import { text } from "./copy";
 
 export default function Overview() {
   const { locale } = useI18n();
   const t = text[locale];
+  const { can } = useAuth();
+  const canSeeEverything = can("scope.any");
   const [events, setEvents] = useState(null);
   const [orders, setOrders] = useState(null);
   const [stats, setStats] = useState(null);
@@ -53,7 +56,11 @@ export default function Overview() {
     <div>
       <PageHead
         title={t.overview}
-        sub={t.overviewSub}
+        /* "Your activity" is true for an organiser and false for an admin,
+           whose figures span every organiser on the platform. Keyed on
+           scope.any rather than the ADMIN role, matching what the server
+           actually widens the query on. */
+        sub={canSeeEverything ? t.overviewSubAll : t.overviewSub}
         actions={
           <>
             {stats ? (
