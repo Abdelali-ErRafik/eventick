@@ -285,6 +285,37 @@ export default function Finance() {
           </p>
 
           {/*
+            The nudge, and only when their own figures justify it.
+
+            Nobody is asked to choose a plan at signup — the tiers differ by
+            break-even volume and a new organiser cannot know which side they
+            are on. This is the same question asked once the answer is in
+            their own books, measured over the last CLOSED month so a
+            part-month's sales are never weighed against a whole month's fee.
+
+            It works downwards too: an organiser whose volume fell is told
+            they have outgrown a plan in the other direction.
+          */}
+          {finance.planAdvice && !organiserId ? (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-control border border-success/30 bg-success-bg/40 px-3 py-2.5">
+              <p className="text-xs leading-relaxed">
+                {t.planAdvice
+                  .replace("{plan}", finance.planAdvice.planLabel)
+                  .replace("{saves}", money(finance.planAdvice.savesCents))
+                  .replace("{volume}", money(finance.planAdvice.basedOnCents))}
+              </p>
+              <Button
+                variant="ghost"
+                onClick={() => requestPlan(finance.planAdvice.planKey)}
+                disabled={planBusy}
+                className="shrink-0"
+              >
+                {t.planRequest}
+              </Button>
+            </div>
+          ) : null}
+
+          {/*
             What the other tiers cost.
             An organiser was shown their own rate and nothing else, so someone
             on Starter's 5% had no way to learn that Pro charges 3% — the

@@ -146,3 +146,62 @@ export function ribOk(value: string): boolean {
 export function normaliseRib(value: string): string {
   return value.replace(/[\s-]/g, "");
 }
+
+/**
+ * What a month's volume would have cost on each plan.
+ *
+ * Plans differ only by break-even volume — Pro's lower rate pays for its
+ * monthly fee somewhere around 25 000 MAD a month — and a new organiser has
+ * no way to know which side of that line they are on. Nobody should be asked
+ * to pick a plan before their first sale; they should be told once their own
+ * figures answer it.
+ *
+ * `grossCents` is ONE month's sales. Comparing on a partial month would
+ * promise a saving that has not happened yet: the monthly fee is charged in
+ * full whether a month is half over or not, so eight days of volume measured
+ * against a whole month's fee makes every plan look worse than it is.
+ */
+export function monthlyCostOn(grossCents: number, plan: PlanTerms): number {
+  if (grossCents <= 0) return plan.monthlyCents;
+  return feeForOrder(grossCents, plan) + plan.monthlyCents;
+}
+
+/**
+ * The cheapest plan at this volume, if it is not the current one.
+ *
+ * Returns null when the organiser is already on the best plan for what they
+ * sell, which is the common case and must not produce a nudge. Also null
+ * below a minimum volume: a saving of four dirhams is noise, and prompting on
+ * it would train someone to ignore the prompt that matters.
+ */
+export function betterPlanAt(
+  grossCents: number,
+  current: PlanTerms,
+  candidates: PlanTerms[],
+  minimumSavingCents = 10_000,
+): { plan: PlanTerms; savesCents: number } | null {
+  /*
+   * A month with no sales advises nothing.
+   *
+   * Arithmetically, an organiser on Business who sold nothing "saves" the
+   * whole 1 999 by dropping to Starter — true, and a terrible thing to tell
+   * someone who has just signed up and not yet launched. It would fire for
+   * every new organiser on a paid plan, in the month they are still setting
+   * up, which is precisely when the advice is least welcome and least
+   * informative.
+   *
+   * Advice needs evidence. No volume, no evidence.
+   */
+  if (grossCents <= 0) return null;
+
+  const currentCost = monthlyCostOn(grossCents, current);
+
+  let best: { plan: PlanTerms; savesCents: number } | null = null;
+  for (const plan of candidates) {
+    if (plan.key === current.key) continue;
+    const saving = currentCost - monthlyCostOn(grossCents, plan);
+    if (saving < minimumSavingCents) continue;
+    if (!best || saving > best.savesCents) best = { plan, savesCents: saving };
+  }
+  return best;
+}

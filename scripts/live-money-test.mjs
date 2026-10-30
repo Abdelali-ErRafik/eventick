@@ -348,6 +348,23 @@ async function main() {
     check("deciding it twice is refused",
       (await call("POST", `/api/platform/plan-requests/${mine.id}/decide`, { token: admin, body: { approve: true } })).status === 409);
 
+    /*
+     * The nudge that replaces asking at signup.
+     *
+     * Nobody should pick a plan before their first sale -- the tiers differ
+     * by break-even volume and a new organiser cannot know which side they
+     * are on. The advice arrives once their own books answer it, read over
+     * the last CLOSED month so a part-month is never weighed against a whole
+     * month's fee.
+     */
+    const withAdvice = await call("GET", "/api/organiser/finance", { token: orga });
+    check("advice is absent while a request is pending or volume is low",
+      withAdvice.data.planAdvice === null || typeof withAdvice.data.planAdvice?.savesCents === "number",
+      JSON.stringify(withAdvice.data.planAdvice));
+    check("and it never recommends the plan already held",
+      withAdvice.data.planAdvice === null || withAdvice.data.planAdvice.planKey !== withAdvice.data.plan.key,
+      `${withAdvice.data.planAdvice?.planKey} vs ${withAdvice.data.plan.key}`);
+
     // Back to where the suite found them, so later checks price as expected.
     await call("PATCH", `/api/platform/organisers/${orgaId}/plan`, { token: admin, body: { planKey: onNow } });
     check(

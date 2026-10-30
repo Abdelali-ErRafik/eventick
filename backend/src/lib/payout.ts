@@ -1,6 +1,13 @@
 import { prisma } from "./prisma.js";
 import { HttpError } from "./http.js";
-import { feeAfterRefund, monthStart, monthsInPeriod, summariseRevenue, type RevenueLine } from "../domain/commission.js";
+import {
+  betterPlanAt,
+  feeAfterRefund,
+  monthStart,
+  monthsInPeriod,
+  summariseRevenue,
+  type RevenueLine,
+} from "../domain/commission.js";
 import { logger } from "./logger.js";
 import { bucketsFor, previousWindow, windowFor, type PeriodKey } from "../domain/period.js";
 
@@ -234,6 +241,49 @@ export async function organiserEarnings(organiserId: string | null, period: Peri
           orderBy: { createdAt: "desc" },
         });
 
+  /*
+   * Would a different plan have cost less last month?
+   *
+   * Nobody should be asked to pick a plan before their first sale — the
+   * tiers differ only by break-even volume, and a new organiser has no way
+   * to know which side of it they are on. So Starter stays the default and
+   * this is the prompt that arrives once their own figures answer it.
+   *
+   * The LAST CLOSED month, not this one: the monthly fee is charged whole
+   * whatever the date, so a part-month's sales measured against it would
+   * understate every paid plan and the advice would change as the month
+   * filled up.
+   */
+  const lastMonth = windowFor("lastMonth", now);
+  const lastMonthGross = orders
+    .filter((o) => inWindow(o.createdAt, lastMonth))
+    .reduce((sum, o) => sum + o.totalCents - o.refundedCents, 0);
+
+  const currentTerms = plan
+    ? { key: plan.key, rateBps: plan.rateBps, monthlyCents: plan.monthlyCents }
+    : null;
+  const better =
+    // Silent platform-wide, and silent while a request is already in flight:
+    // the answer to "you should move to Pro" is "we asked, it is pending".
+    organiserId === null || !currentTerms || openRequest
+      ? null
+      : betterPlanAt(
+          lastMonthGross,
+          currentTerms,
+          catalogue.map((row) => ({ key: row.key, rateBps: row.rateBps, monthlyCents: row.monthlyCents })),
+        );
+
+  const advice = better
+    ? {
+        planKey: better.plan.key,
+        planLabel: catalogue.find((row) => row.key === better.plan.key)?.label ?? better.plan.key,
+        savesCents: better.savesCents,
+        /** The volume the advice is based on, so the figure can be shown. */
+        basedOnCents: lastMonthGross,
+        basedOnMonth: lastMonth.start?.toISOString() ?? null,
+      }
+    : null;
+
   // Months already billed, so the UI can say what the subscription has cost
   // rather than leaving the deduction on a payout unexplained.
   const billed = await prisma.subscriptionCharge.aggregate({
@@ -255,6 +305,23 @@ export async function organiserEarnings(organiserId: string | null, period: Peri
         }
       : null,
     /** A request awaiting a decision, so the card does not offer it twice. */
+    /**
+     * A cheaper plan at this organiser's actual volume, or null.
+     *
+     * Measured over the last CLOSED month, never the current one: the
+     * monthly fee is charged in full whether a month is half over or not, so
+     * eight days of sales weighed against a whole month's fee would make
+     * every paid plan look worse than it is — and the advice would flip as
+     * the month filled up.
+     *
+     * Works downwards too. An organiser whose volume fell should be told
+     * they are paying for a plan they have outgrown in the other direction;
+     * advice that only ever sells upgrades is marketing, not advice.
+     *
+     * Null platform-wide (no single plan to compare) and null while a
+     * request is already pending, since the answer is "we are on it".
+     */
+    planAdvice: advice,
     planRequest: openRequest
       ? { planKey: openRequest.planKey, createdAt: openRequest.createdAt.toISOString() }
       : null,
