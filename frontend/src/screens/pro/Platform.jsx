@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowDownRight, ArrowUpRight, CalendarDays, Landmark, Minus, ReceiptText, Users as UsersIcon, Wallet } from "lucide-react";
 import { toast } from "sonner";
@@ -28,6 +28,16 @@ export default function Platform() {
   const [payouts, setPayouts] = useState(null);
   /** The organiser a payout is being prepared for, or null. */
   const [running, setRunning] = useState(null);
+  /*
+   * How to rank the sellers.
+   *
+   * The list arrived sorted by lifetime revenue and could not be reordered,
+   * so "who is waiting on money" and "who is refunding the most" were both
+   * unanswerable without reading every row. Sorted in the browser: the rows
+   * are already loaded, and a round trip per click would be slower for no
+   * gain at the scale of one platform's organisers.
+   */
+  const [sortBy, setSortBy] = useState("revenue");
 
   const loadSellers = useCallback(() => {
     api
@@ -59,6 +69,25 @@ export default function Platform() {
       toast.error(err.message);
     }
   };
+
+  /*
+   * Ranked by whichever question is being asked.
+   *
+   * Every comparison falls back to revenue, so rows that tie on the chosen
+   * measure — and with "owed", most of them will be zero — keep a stable,
+   * meaningful order instead of shuffling.
+   */
+  const sortedSellers = useMemo(() => {
+    const rows = [...(sellers ?? [])];
+    const byRevenue = (a, b) => b.grossCents - a.grossCents;
+    const compare = {
+      revenue: byRevenue,
+      owed: (a, b) => (b.owedCents ?? 0) - (a.owedCents ?? 0) || byRevenue(a, b),
+      refunds: (a, b) => (b.refundRateBp ?? 0) - (a.refundRateBp ?? 0) || byRevenue(a, b),
+      events: (a, b) => b.events - a.events || byRevenue(a, b),
+    }[sortBy];
+    return rows.sort(compare ?? byRevenue);
+  }, [sellers, sortBy]);
 
   const revenue = stats?.revenue;
   // Percentage change week on week. Guarded because the first week has no
@@ -167,11 +196,36 @@ export default function Platform() {
       <SectionTitle>{t.plWhoSells}</SectionTitle>
       <p className="-mt-2 mb-3 text-sm text-muted">{t.plWhoSellsSub}</p>
 
+      {/* Ranking, so the list answers more than one question. Owed first in
+          the options because "who do I pay today" is the one this page is
+          opened for. */}
+      <div className="mb-3 inline-flex flex-wrap items-center gap-1 rounded-full bg-paper p-1 text-xs font-bold">
+        {[
+          ["revenue", t.plSortRevenue],
+          ["owed", t.plSortOwed],
+          ["refunds", t.plSortRefunds],
+          ["events", t.plSortEvents],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setSortBy(key)}
+            aria-pressed={sortBy === key}
+            className={cn(
+              "rounded-full px-3 py-1.5 transition",
+              sortBy === key ? "bg-card text-encre shadow-card" : "text-muted hover:text-encre",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {sellers && sellers.length === 0 ? (
         <EmptyState icon={<UsersIcon className="size-6" />} title={t.plNoSales} />
       ) : (
         <div className="grid gap-3">
-          {(sellers ?? []).map((seller) => (
+          {sortedSellers.map((seller) => (
             <article
               key={seller.id}
               className="flex flex-wrap items-center gap-4 rounded-card border border-line/10 bg-card p-4 shadow-card"
@@ -221,6 +275,12 @@ export default function Platform() {
                 </span>
                 <span className="block text-[11px] font-semibold text-muted">
                   MAD · {t.fee} {money(seller.feeCents ?? 0)}
+                  {/* The figure that separates "sells a lot" from "sells a lot
+                      and keeps it". Hidden at zero, so a clean record shows as
+                      nothing rather than a 0.0% nobody needs to read. */}
+                  {seller.refundRateBp > 0
+                    ? ` · ${t.plRefundRate} ${(seller.refundRateBp / 100).toFixed(1)}%`
+                    : ""}
                 </span>
               </p>
 

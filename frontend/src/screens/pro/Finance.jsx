@@ -5,7 +5,7 @@ import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
 import { useOrganisers } from "./useOrganisers";
 import { Card, EmptyState, PageHead, SectionTitle, StatCard, StatSkeletons } from "./ui";
-import { Button, Field, Input, Select } from "../../ui";
+import { Button, Field, Input, PeriodPicker, RevenueBars, Select, deltaPct } from "../../ui";
 import { cn, eventText, intlLocaleTag } from "../../utils";
 import { text } from "./copy";
 
@@ -33,15 +33,27 @@ export default function Finance() {
   const [finance, setFinance] = useState(null);
   const [payouts, setPayouts] = useState(null);
   const [organiserId, setOrganiserId] = useState("");
+  /*
+   * Defaults to this month, not all time.
+   *
+   * Lifetime is the figure you check once; "how is this month going" is the
+   * one someone opens a dashboard for. The lifetime totals are still on the
+   * screen -- the payout card carries them -- so nothing is hidden by this.
+   */
+  const [period, setPeriod] = useState("month");
 
   useEffect(() => {
-    const suffix = organiserId ? `?organiserId=${organiserId}` : "";
+    const params = new URLSearchParams();
+    if (organiserId) params.set("organiserId", organiserId);
+    const suffix = params.toString() ? `?${params}` : "";
     setFinance(null);
     setPayouts(null);
     api.get(`/organiser/orders/detailed${suffix}`).then((data) => setOrders(data.orders));
-    api.get(`/organiser/finance${suffix}`).then(setFinance);
+    // The period only narrows the money figures, so only this call carries
+    // it: the order table and the payout list are not period-scoped.
+    api.get(`/organiser/finance${suffix}${suffix ? "&" : "?"}period=${period}`).then(setFinance);
     api.get(`/organiser/payouts${suffix}`).then((data) => setPayouts(data.payouts));
-  }, [organiserId]);
+  }, [organiserId, period]);
 
   // Per-event rows stay client-side: this is a breakdown of orders already
   // fetched for the table, not a money figure anyone is charged on.
@@ -68,6 +80,39 @@ export default function Finance() {
 
   const lifetime = finance?.lifetime;
   const pending = finance?.pending;
+  /*
+   * The figures for the chosen period.
+   *
+   * Falls back to `lifetime` while the response is in flight, so switching
+   * period re-renders with the old numbers rather than flashing zeros — and
+   * on an older server that does not send `period` at all, the screen still
+   * works and simply shows lifetime.
+   */
+  const span = finance?.period ?? lifetime;
+
+  const periodLabels = {
+    ariaLabel: t.periodLabel,
+    today: t.periodToday,
+    week: t.periodWeek,
+    month: t.periodMonth,
+    lastMonth: t.periodLastMonth,
+    year: t.periodYear,
+    all: t.periodAll,
+  };
+
+  /*
+   * A direction, not just a number.
+   *
+   * deltaPct returns null where a percentage would mislead — no previous
+   * period, or a previous period of zero, where "up ∞%" is a first sale
+   * rather than a trend. Returning undefined then leaves the card with no
+   * trend chip at all, which is the honest rendering.
+   */
+  const trendFor = (current, previous) => {
+    const pct = deltaPct(current, previous);
+    if (pct === null) return undefined;
+    return { dir: pct > 0 ? "up" : pct < 0 ? "down" : "flat", text: `${pct > 0 ? "+" : ""}${pct}%` };
+  };
 
   return (
     <div>
@@ -91,8 +136,18 @@ export default function Finance() {
         }
       />
 
-      {/* The four figures that matter, in the order they happen: money in,
-          refunds out, our cut, their share. */}
+      <PeriodPicker value={period} onChange={setPeriod} labels={periodLabels} className="mb-4" />
+
+      {/*
+        The four figures that matter, in the order they happen: money in,
+        refunds out, our cut, their share.
+
+        The first three follow the PERIOD; the fourth does not. "To be paid
+        out" is settled against every outstanding order, so narrowing it to a
+        month would show a figure that is not what the next transfer pays —
+        its sub-line says "all time" so the mismatch is stated rather than
+        left to be noticed.
+      */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {!lifetime ? (
           <StatSkeletons count={4} />
@@ -102,29 +157,47 @@ export default function Finance() {
               accent
               icon={<Wallet className="size-5" />}
               label={t.netRevenue}
-              value={`${money(lifetime.netRevenueCents)} MAD`}
-              sub={`${t.gross} ${money(lifetime.grossCents)} MAD`}
+              value={`${money(span.netRevenueCents)} MAD`}
+              sub={`${t.gross} ${money(span.grossCents)} MAD`}
+              trend={trendFor(span.netRevenueCents, span.previous?.netRevenueCents)}
             />
             <StatCard
               icon={<Undo2 className="size-5" />}
               label={t.refundedLabel}
-              value={`${money(lifetime.refundedCents)} MAD`}
+              value={`${money(span.refundedCents)} MAD`}
+              sub={span.orders > 0 ? t.ordersInPeriod.replace("{n}", String(span.orders)) : undefined}
             />
             <StatCard
               icon={<Percent className="size-5" />}
               label={t.fee}
-              value={`${money(lifetime.feeCents)} MAD`}
+              value={`${money(span.feeCents)} MAD`}
               sub={finance.plan ? `${finance.plan.label} · ${RATE(finance.plan.rateBps)}` : undefined}
             />
             <StatCard
               icon={<Landmark className="size-5" />}
               label={t.payable}
               value={`${money(pending?.payableCents ?? 0)} MAD`}
-              sub={`${t.paidOut} ${money(finance.paidOutCents)} MAD`}
+              sub={`${t.allTime} · ${t.paidOut} ${money(finance.paidOutCents)} MAD`}
             />
           </>
         )}
       </div>
+
+      {/* Hidden for "all time", which has no start to bucket from. */}
+      {finance?.period?.series?.length ? (
+        <Card className="mt-4">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted">{t.revenueOverTime}</p>
+          <RevenueBars
+            className="mt-3"
+            series={finance.period.series}
+            labels={{ empty: t.noSalesInPeriod, chartAlt: t.revenueOverTime }}
+            formatAmount={(cents) => `${money(cents)} MAD`}
+            formatDate={(iso) =>
+              new Date(iso).toLocaleDateString(intlLocaleTag(locale), { day: "numeric", month: "short" })
+            }
+          />
+        </Card>
+      ) : null}
 
       {/* Plan — read-only. It used to be three buttons that changed the fee
           on screen and nothing in the world. */}

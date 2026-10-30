@@ -225,6 +225,19 @@ platformRouter.get(
           /** Owed right now: what a payout run would transfer today. */
           owedCents: owed.payableCents,
           owedOrders: owedOrders.length,
+          /*
+           * How much of what they sold came back.
+           *
+           * In basis points so the API stays integer, like every other rate
+           * here. This is the figure that separates "sells a lot" from
+           * "sells a lot and keeps it" — a leaderboard ranked on revenue
+           * alone flatters whoever refunds the most, which is the bug the
+           * net-of-refunds comment above already guards against for the
+           * total but could not express per organiser.
+           */
+          refundRateBp:
+            totals.grossCents > 0 ? Math.round((totals.refundedCents / totals.grossCents) * 10_000) : 0,
+          refundedCents: totals.refundedCents,
           /** False means a payout would be refused — chase, do not pay. */
           hasBankAccount: Boolean(organiser.bankAccount),
         };

@@ -7,6 +7,7 @@ import { organiserScope } from "../domain/auth.js";
 import { feeForOrder, normaliseRib, ribOk, summariseRevenue } from "../domain/commission.js";
 import { salesWindowOk } from "../domain/inventory.js";
 import { organiserEarnings } from "../lib/payout.js";
+import { isPeriodKey } from "../domain/period.js";
 import { publicEvent, publicOrderWithContext } from "../lib/serialize.js";
 import { committedForTier, remainingByTier } from "../lib/availability.js";
 import { broadcastRateLimit } from "../middleware/rateLimit.js";
@@ -1147,7 +1148,10 @@ organiserRouter.get(
     const scope = await scopeFor(req);
     const mayActAnywhere = await userHasPermission(req.user, "scope.any");
     const organiserId = scope.organiserId ?? (mayActAnywhere ? null : req.user!.id);
-    res.json(await organiserEarnings(organiserId));
+    // An unknown ?period= falls back to all time rather than erroring: a
+    // stale bookmark should show the dashboard, not a 400.
+    const period = isPeriodKey(req.query.period) ? req.query.period : "all";
+    res.json(await organiserEarnings(organiserId, period));
   }),
 );
 

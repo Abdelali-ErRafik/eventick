@@ -2,6 +2,7 @@ import { prisma } from "./prisma.js";
 import { HttpError } from "./http.js";
 import { feeAfterRefund, monthStart, monthsInPeriod, summariseRevenue, type RevenueLine } from "../domain/commission.js";
 import { logger } from "./logger.js";
+import { bucketsFor, previousWindow, windowFor, type PeriodKey } from "../domain/period.js";
 
 /**
  * Payouts — what the platform owes an organiser, and the record of sending it.
@@ -88,7 +89,10 @@ async function pricingPlanFor(organiserId: string) {
  * route, which is the only place that knows whether the caller may see across
  * organisers; this function just honours what it is given.
  */
-export async function organiserEarnings(organiserId: string | null) {
+export async function organiserEarnings(organiserId: string | null, period: PeriodKey = "all") {
+  // One instant for the whole call: computing "now" per window would let a
+  // period and its comparison straddle midnight on a slow request.
+  const now = new Date();
   /*
    * The event filter, written out rather than left to an `undefined`.
    *
@@ -138,6 +142,46 @@ export async function organiserEarnings(organiserId: string | null) {
   const lifetime = summariseRevenue(orders.map(toLine), fallback);
   const unpaid = orders.filter((o) => !o.payoutOrder);
   const pending = summariseRevenue(unpaid.map(toLine), fallback);
+
+  /*
+   * The same figures, for one period, with the one before it to compare.
+   *
+   * Filtered in memory rather than re-queried: the full order set is already
+   * loaded above for the lifetime and pending figures, and a second and third
+   * round trip to the database to re-read rows we are holding would be slower
+   * for no benefit at these volumes.
+   *
+   * `lifetime` and `pending` stay period-INDEPENDENT on purpose. Payouts are
+   * settled against everything outstanding, so narrowing "what is owed" to a
+   * month would show an organiser a figure that is not what the next transfer
+   * will pay them.
+   */
+  const inWindow = (at: Date, w: { start: Date | null; end: Date | null }) =>
+    (!w.start || at >= w.start) && (!w.end || at < w.end);
+
+  const window = windowFor(period, now);
+  const previous = previousWindow(period, now);
+  const periodOrders = orders.filter((o) => inWindow(o.createdAt, window));
+  const current = summariseRevenue(periodOrders.map(toLine), fallback);
+  const prior = previous
+    ? summariseRevenue(orders.filter((o) => inWindow(o.createdAt, previous)).map(toLine), fallback)
+    : null;
+
+  /*
+   * Buckets for the bar chart — daily, or weekly past ten weeks.
+   *
+   * Gross rather than net: the chart answers "when did sales happen", and a
+   * refund processed in November against an October sale would otherwise dig
+   * a hole in October, which is not when anything went wrong.
+   */
+  const series = bucketsFor(window, now).map((bucket) => {
+    const rows = periodOrders.filter((o) => inWindow(o.createdAt, bucket));
+    return {
+      start: bucket.start.toISOString(),
+      grossCents: rows.reduce((sum, o) => sum + o.totalCents, 0),
+      orders: rows.length,
+    };
+  });
 
   const [paidOut, organiser] = await Promise.all([
     prisma.payout.aggregate({
@@ -201,6 +245,23 @@ export async function organiserEarnings(organiserId: string | null) {
       current: row.key === plan?.key,
     })),
     lifetime,
+    /**
+     * One period's figures, the one before it, and a daily/weekly series.
+     *
+     * Separate from `lifetime` rather than replacing it, because the two
+     * answer different questions and the payout screen needs both: "how did
+     * October go" and "what are you owed in total".
+     */
+    period: {
+      key: period,
+      start: window.start?.toISOString() ?? null,
+      end: window.end?.toISOString() ?? null,
+      ...current,
+      orders: periodOrders.length,
+      // Null for "all time", which has nothing before it to compare against.
+      previous: prior ? { ...prior } : null,
+      series,
+    },
     /** Earned but not yet included in any payout. */
     pending,
     paidOutCents: paidOut._sum.netCents ?? 0,

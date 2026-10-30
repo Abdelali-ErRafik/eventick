@@ -19,6 +19,7 @@ export { Dropdown } from "./Dropdown.jsx";
 export { DateField, TimeField } from "./DateField.jsx";
 export { SalesWindow, salesWindowAt, splitSalesWindow } from "./SalesWindow.jsx";
 export { RadioOption, CheckOption } from "./Choice.jsx";
+export { PeriodPicker, RevenueBars, deltaPct, PERIOD_KEYS } from "./Period.jsx";
 export { RangeField } from "./RangeField.jsx";
 export { Modal } from "./Modal.jsx";
 export { Popover, PopoverItem } from "./Popover.jsx";

@@ -263,6 +263,53 @@ async function main() {
     const onPro = await call("GET", "/api/organiser/finance", { token: orga });
     const tiers = onPro.data.plans ?? [];
     check("finance lists every plan", tiers.length >= 3, `${tiers.length} plan(s)`);
+
+    /*
+     * Reporting periods.
+     *
+     * Every money figure was LIFETIME, which answers "how have we done ever"
+     * and leaves "how did October go" unanswerable. `?period=` narrows the
+     * revenue block; `lifetime` and `pending` stay whole on purpose, because
+     * a payout settles everything outstanding and an organiser shown a
+     * month's worth would be reading a number that is not what the next
+     * transfer pays them.
+     */
+    const thisMonth = await call("GET", "/api/organiser/finance?period=month", { token: orga });
+    check("a period narrows the revenue block", thisMonth.data.period?.key === "month",
+      `${thisMonth.data.period?.key}`);
+    check("and carries a window to label it with",
+      typeof thisMonth.data.period?.start === "string", `${thisMonth.data.period?.start}`);
+    check("the lifetime figures are NOT narrowed by it",
+      thisMonth.data.lifetime.grossCents >= thisMonth.data.period.grossCents,
+      `lifetime ${mad(thisMonth.data.lifetime.grossCents)} >= period ${mad(thisMonth.data.period.grossCents)}`);
+    check("neither is what is payable, which a payout settles in full",
+      thisMonth.data.pending.payableCents === (await call("GET", "/api/organiser/finance?period=today", { token: orga }))
+        .data.pending.payableCents);
+
+    const lastMonth = await call("GET", "/api/organiser/finance?period=lastMonth", { token: orga });
+    check("a closed period has both bounds", Boolean(lastMonth.data.period.start && lastMonth.data.period.end));
+    check("and holds none of this month's sales", lastMonth.data.period.grossCents === 0,
+      mad(lastMonth.data.period.grossCents));
+
+    const allTime = await call("GET", "/api/organiser/finance?period=all", { token: orga });
+    check("all time has no comparison to offer", allTime.data.period.previous === null);
+    check("and no chart, having no start to bucket from", allTime.data.period.series.length === 0);
+    check("a chart appears for a bounded period", thisMonth.data.period.series.length > 0,
+      `${thisMonth.data.period.series.length} bucket(s)`);
+    check("the buckets sum to the period's gross",
+      thisMonth.data.period.series.reduce((sum, p) => sum + p.grossCents, 0) === thisMonth.data.period.grossCents,
+      `${mad(thisMonth.data.period.series.reduce((sum, p) => sum + p.grossCents, 0))}`);
+
+    const nonsense = await call("GET", "/api/organiser/finance?period=decade", { token: orga });
+    check("an unknown period falls back to all time rather than erroring",
+      nonsense.status === 200 && nonsense.data.period.key === "all", `${nonsense.status}`);
+
+    // The admin comparison columns, on the page that ranks organisers.
+    const ranked = await call("GET", "/api/platform/organisers", { token: admin });
+    const me = ranked.data.organisers.find((o) => o.id === orgaId);
+    check("the organiser list carries a refund rate to compare on",
+      typeof me?.refundRateBp === "number", `${(me?.refundRateBp ?? 0) / 100}%`);
+    check("and the refunded total behind it", typeof me?.refundedCents === "number", mad(me?.refundedCents ?? 0));
     check(
       "exactly one is marked as theirs, and it is the one they are on",
       tiers.filter((p) => p.current).length === 1 && tiers.find((p) => p.current)?.key === onPro.data.plan?.key,
