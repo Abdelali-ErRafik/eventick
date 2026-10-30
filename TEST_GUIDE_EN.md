@@ -1,17 +1,21 @@
 # 🎟️ Eventick — hands-on test guide
 
-**Nineteen checks. Do them in any order.** Every step says exactly where to click and what you must see.
+**Twenty-six checks. Do them in any order.** Every step says exactly where to click and what you must see.
 
 Checks **1–12** cover the buying, ticketing and admin surface. Checks **13–15**
 cover the money side — commission, payouts and the audit journal. Checks
 **16–19** cover what an organiser needs in the first week of running a real
 event: a cap on how many one person may buy, sales windows, calling an event
-off, and free tickets that are not a sale. Those four are the newest part and
-the part worth most attention.
+off, and free tickets that are not a sale. Checks **20–22** cover who an
+account is *for* (staff sell, customers buy), the detail pages a support call
+needs, and the live image and email services. Checks **23–26** are the money and inventory work added
+since: figures for a period rather than for all time, what a plan costs and
+how an organiser asks for a different one, who is owed what, and where a
+freed seat goes.
 
 > 📅 30/10/2026 · Written by walking the running app at **http://localhost:3100**. The interface ships in **French**; every label in quotes below is the text actually on screen. Switch to English from the account menu if you prefer — the checks work the same.
 
-> 🤖 **All nineteen now run automatically.** Walking them by hand takes about
+> 🤖 **Checks 1–19 run automatically.** Walking them by hand takes about
 > forty-five minutes, which meant nobody did it often enough to catch a
 > regression. `npm run test:live:checks` (from `backend/`, in mock payment
 > mode) asserts the same things through the same API the browser uses — 112
@@ -19,6 +23,15 @@ the part worth most attention.
 > first, because the manual pass will only find the same thing more slowly.
 > It does **not** replace the manual pass — a human still has to look at the
 > screens, which is what checks 11 and 12 are entirely about.
+>
+> ⚠️ **Checks 20–26 are manual only.** They were added after that suite.
+> 22 can never have it (it talks to Bunny and Resend, and a suite that sends
+> real email on every run is worse than no suite); the rest could. Parts of
+> 23–26 are covered from underneath instead — `npm test` has 24 unit tests
+> on the period windows, and `npm run test:live:money` checks the period
+> figures, the plan arithmetic and the owed-versus-paid agreement. Nothing
+> automated opens the screens, so treat these as the part most likely to
+> regress unnoticed.
 
 ---
 
@@ -202,12 +215,14 @@ one nobody reads.
 | **FINANCES** | Finance | organiser + admin |
 | **ADMINISTRATION** | Plateforme · Équipe · Permissions · Journal | **admin only** |
 
+**Account menu** (top right, both areas) — **"Mon compte"** · theme · language · sign out. For staff that page is identity and profile only; for a customer it also holds their tickets, history and saved events. *(Check 20.)*
+
 > 💡 The group headings are labels, not buttons — click the item under them.
 > 💡 **The sidebar is permission-driven.** An item you cannot use does not appear at all. That is check 9.
 
 ### What already exists
 
-**16 events** across Casablanca, Rabat, Marrakech, Tanger, Agadir, Essaouira, Fès and Dakhla — 14 owned by the admin account, 2 by the organiser
+**16 events** across Casablanca, Rabat, Marrakech, Tanger, Agadir, Essaouira, Fès and Dakhla — **all owned by the organiser account**. (They used to be admin-owned, which modelled defect #26 as if it were the design: `organiserId` is what decides who the payout pays.)
 **Promo codes:** `SAFRAN15` (−15 %) and `CASA50` (−50 MAD)
 **Commission plans:** Starter 5 % · Pro 3 % + 499 MAD/month · Business 2 % + 1 999 MAD/month — Starter is the default
 **Rules:** seats are held **15 minutes** · buyers may cancel up to **48 h** before the event · one buyer may hold **10 tickets** per event · resale is **off** until the organiser turns it on
@@ -1401,6 +1416,578 @@ to buy it.
 
 ---
 
+# 🧑‍💼 CHECK 20 — Staff sell, customers buy
+
+An organiser and an admin run ticketing; they are not shoppers. That is a
+product rule, so it is enforced on the **server** — hiding a button would only
+hide the evidence, since `POST /orders/hold` is callable directly.
+
+### Step 1 — The account page knows who you are
+
+1. Sign in as **organisateur@eventick.ma** and open the account menu → **"Mon compte"**.
+
+**✔️ You see** your name, email and **"Modifier le profil"** — and nothing else.
+No ticket tabs, no "Billets prêts / Dépenses" figures, no saved events, no
+"Dernière transaction".
+
+2. Sign in as **client@eventick.ma** and open the same page.
+
+**✔️ You see** the full buyer view: *"Mes billets actifs"*, *"Historique"*,
+*"Enregistrés"*, the two stat tiles and the last transaction.
+
+> 💡 The label used to say *"Mes billets"* for everyone. The page was always an
+> **account** page — its i18n key is literally `account`, and it holds the
+> profile editor — but the French string narrowed it to tickets, which is why
+> it read as misplaced in an organiser's menu. The gate is the `events.manage`
+> **capability**, not the role name, so an organiser who loses that grant
+> correctly falls back to the buyer view.
+
+### Step 2 — Staff cannot reach checkout
+
+3. Still as the organiser, open any event page and pick a zone.
+
+**✔️ Where "Payer" would be** you get a short explanation instead:
+*"Ce compte gère la billetterie et ne peut pas acheter de billets. Utilisez un
+compte personnel pour réserver."* On a phone, the sticky bottom bar does not
+appear at all.
+
+### Step 3 — And the server refuses too
+
+```bash
+# As an organiser or admin token:
+curl -s -X POST http://localhost:4100/api/orders/hold \
+  -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"eventSlug":"<slug>","lines":[{"tierId":"<id>","qty":1}]}'
+```
+
+**✔️ 403** — *"This account manages ticketing and cannot buy tickets."*
+
+The same guard sits on `POST /orders/:id/pay` and on `POST /resale/:token/buy`.
+Three doors, one rule.
+
+**✔️ A customer and a signed-out guest both still get 201.** That is the part
+worth checking: guest checkout has no session, so a careless guard would have
+blocked the most common path of all.
+
+> 💡 Why `/pay` as well as `/hold`? A customer can hold seats, be approved as
+> an organiser while the hold is live, and come back to pay. The role has to be
+> re-checked at the step that actually takes money.
+>
+> 💡 **Not** blocked: claiming a gifted ticket. Receiving is not buying, and
+> stopping it would mean a friend cannot send an organiser a ticket to an
+> unrelated concert.
+
+### Step 4 — An invitation cannot change its own zone
+
+4. Open a **comp** ticket's page (any ticket issued from **Invitations**).
+
+**✔️ There is no "Changer de zone" panel at all.** `GET /tickets/:id/options`
+returns an empty exchange list for a comp, so the UI has nothing to draw.
+
+5. Try it directly:
+
+```bash
+curl -s -X POST "http://localhost:4100/api/tickets/<ID>/exchange?k=<TOKEN>" \
+  -H 'content-type: application/json' -d '{"tierId":"<other-zone>"}'
+```
+
+**✔️ 403** — *"An invitation cannot be moved to another zone. Ask the organiser."*
+
+> 💡 A comp is a seat the organiser **chose** to give. Letting the guest move it
+> makes them the one deciding what was given away — and since a comp was never
+> a sale, there is no price paid to measure the change against.
+
+### Step 5 — A downgrade now says what it costs
+
+6. On a **paid** ticket in an expensive zone, look at **"Changer de zone"**.
+
+**✔️ The cheaper zone reads** *"Vous perdez 700,00 MAD — aucun remboursement"*
+in amber — not *"Sans supplément"*.
+
+7. Click it.
+
+**✔️ A confirmation first:** *"Passer à cette zone vous fait perdre 700,00 MAD.
+Ce montant n'est pas remboursé. Continuer ?"* Cancel, and the ticket does not
+move.
+
+> 💡 The no-refund rule is **deliberate** and was not changed: refunding the
+> difference would let someone buy the dearest seat and downgrade purely to
+> extract cash. What was wrong was the wording. *"Sans supplément"* is true —
+> there is no extra charge — and reads as *"this is free"* to someone about to
+> forfeit 700 MAD. The fix is disclosure, not money movement.
+
+---
+
+# 🔎 CHECK 21 — Detail pages: the answer to a support call
+
+A list says *which* orders exist. It cannot say *what happened to this one*,
+which is the question an organiser is actually asked on the phone.
+
+### Step 1 — Open an order
+
+1. Pro → **Réservations**. Click a **buyer's name**.
+
+**✔️ You land on** `/pro/orders/<id>` — a real URL you can paste into a support
+thread, which is why this is a page and not a modal.
+
+**✔️ Four sections:** *Acheteur* (name, email, phone, date), *Billets* (every
+ticket with its reference, status and a link to the pass), *Paiement*
+(subtotal, discount, total, refunded, card, payment reference, promo code), and
+*Historique*.
+
+### Step 2 — The history is the point
+
+2. Cancel or refund that order, then reload the page.
+
+**✔️ The history gains a row:** the action, who did it and when —
+e.g. `order.cancelled · organisateur@eventick.ma · 30 octobre 2026`.
+
+> 💡 The status tells you a refund happened. The history tells you **who issued
+> it and when**, which is what a disputed charge turns on. This is why the page
+> needed its own endpoint rather than filtering the list client-side:
+> `/orders/detailed` returns every order on the event — downloading the whole
+> book to read one page — and carries no audit trail at all.
+
+### Step 3 — It is not a way around the permission
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" \
+  http://localhost:4100/api/organiser/orders/<ID>                      # 401
+curl -s -o /dev/null -w "%{http_code}\n" -H "authorization: Bearer $CUSTOMER" \
+  http://localhost:4100/api/organiser/orders/<ID>                      # 403
+curl -s -o /dev/null -w "%{http_code}\n" -H "authorization: Bearer $ADMIN" \
+  http://localhost:4100/api/organiser/orders/<ID>                      # 200
+curl -s -o /dev/null -w "%{http_code}\n" -H "authorization: Bearer $ADMIN" \
+  http://localhost:4100/api/organiser/orders/nonsense                  # 404
+```
+
+**✔️ 401 · 403 · 200 · 404.** An organiser also gets **403** on another
+organiser's order — ownership is checked before anything is read.
+
+### Step 4 — Invitations link to the guest's own ticket
+
+3. Pro → **Invitations**, pick an event with comps issued.
+
+**✔️ The third column is headed "Billet"** — it used to say *"Porte"* (Gate),
+which it has never held. The cell shows the ticket reference.
+
+4. Click a reference.
+
+**✔️ It opens the guest's ticket** in a new tab, carrying **their** access
+token — so when someone says *"the link you emailed me doesn't work"*, you are
+looking at exactly what they are looking at, not a different view of the same
+ticket.
+
+**✔️ Revoked rows show a red "Annulée"** instead of a link. A cancelled ticket
+has nothing to open.
+
+### Step 5 — An admin must say whose event
+
+5. As **admin**, open Pro → **Placements** (and again → **Invitations**).
+
+**✔️ Before anything loads:** *"Choisissez d'abord un organisateur"*, with no
+event picker and the action button disabled.
+
+6. Pick an organiser.
+
+**✔️ The event picker appears**, their events load, the button enables. Switch
+to an organiser with no events and you get *"Cet organisateur n'a aucun
+événement."* — not an empty picker.
+
+7. As **organisateur@eventick.ma**, open the same two pages.
+
+**✔️ No organiser picker at all.** An organiser has one scope — their own — so
+the event picker is step one.
+
+> 💡 Elsewhere (Réservations, Événements, Finance) the organiser dropdown is an
+> optional *filter*: "all organisers" is a sensible default for **reading**.
+> Here it is a required **first step**, because adding a zone or issuing a comp
+> is a *write* that inherits an owner — and `event.organiserId` decides who the
+> payout pays, at which plan's rate, into which bank account. The server already
+> insists a caller with `scope.any` names an owner; the UI now matches that
+> instead of letting an admin discover it by hitting an error.
+
+---
+
+# 🖼️ CHECK 22 — Images on a CDN, email that actually sends
+
+Both are live services, so this check costs real (tiny) resources. It is the
+one check with no automated version — a suite that sends real email on every
+run is worse than no suite.
+
+### Step 1 — Upload a poster
+
+1. Pro → **Événements** → edit any event → upload an image.
+
+**✔️ The URL that comes back** starts with `https://storeno.b-cdn.net/events/`,
+not `/uploads/`. Open it directly: the image loads from the CDN.
+
+```bash
+curl -s -X POST http://localhost:4100/api/uploads/image \
+  -H "authorization: Bearer $TOKEN" -F "file=@poster.jpg;type=image/jpeg"
+# -> {"url":"https://storeno.b-cdn.net/events/1793368756164-….jpg"}
+```
+
+> 💡 With no `BUNNY_STORAGE_KEY` the route falls back to local disk. That is
+> not a nicety: it keeps the upload flow exercisable offline and in tests, and
+> it means losing the CDN credentials degrades the app rather than breaking
+> event creation outright. The existing security is unchanged — magic-byte
+> sniffing, a MIME allowlist and random filenames.
+
+### Step 2 — Issue an invitation to an address you can read
+
+2. Pro → **Invitations** → **"Offrir des billets"** → one guest, your own email.
+
+**✔️ The row shows "Envoyé"** — eventually. The email is sent *after* the
+response returns, so the badge may read *"Non envoyé"* for a second or two.
+Reload and it flips.
+
+**✔️ The email arrives** from `Eventick <contact@storeino.com>` with:
+- a **"Voir mon billet"** button → the live ticket page, QR and all
+- the ticket reference
+- a **"Télécharger le PDF"** link
+
+3. Open that button's link in a private window — no account, no session.
+
+**✔️ The guest's pass renders**: QR, *"Valide à l'entrée"*, their name, zone and
+gate.
+
+> 💡 This is the fix for a real dead end. A comp sits on an order the guest does
+> not own, so they had **no credential for their own ticket** — the email could
+> only quote a reference number, and even if they found the URL they would have
+> got a 403. Comps now carry the same per-ticket token a gifted ticket gets,
+> scoped to that one seat so it never unlocks the rest of the order.
+>
+> 💡 The PDF route had the same gap in reverse: it only ever checked the
+> **order's** token, so a guest holding a valid ticket credential could see
+> their pass on screen but got 403 downloading it — the one format they would
+> actually take to the door. Shared/gifted tickets were affected identically.
+
+### Step 3 — "Envoyé" means sent
+
+**✔️ Remove `RESEND_API_KEY` from `backend/.env`, restart, issue another comp.**
+The new row reads **"Non envoyé"** and stays that way.
+
+> 💡 It used to say *"Envoyé"* regardless. `sendEmail` never throws — it returns
+> `false` when the send is rejected or when no key is configured — and the code
+> did `.then(() => markAsSent())`, which runs either way. Every guest showed as
+> emailed on an installation that had never sent a single message. Put the key
+> back before carrying on.
+
+⚠️ **Before inviting real guests:** `PUBLIC_APP_URL` and `PUBLIC_API_URL` in
+`backend/.env` still point at `localhost`. The links in the email are built
+from them, so they work for you and for nobody else.
+
+---
+
+
+---
+---
+
+# ⏱️ CHECK 23 — Money figures for a period, not only forever
+
+Every figure on Finance used to be LIFETIME: net revenue, refunds,
+commission, per-event takings. That answers "how have we done ever", which
+nobody asks twice, and left "how did October go" unanswerable.
+
+### Step 1 — Narrow the period
+
+1. Pro → **FINANCES → Finance**.
+
+**✔️ You must see** a row of buttons above the figures: **Aujourd'hui ·
+Cette semaine · Ce mois · Mois dernier · Cette année · Tout**. It opens on
+**Ce mois**.
+
+2. Click through them.
+
+**✔️ The first three cards change**; the fourth does not.
+
+| Card | Follows the period? |
+|---|---|
+| Recettes nettes | yes |
+| Remboursé | yes |
+| Commission Eventick | yes |
+| **À reverser** | **no — and its sub-line says "Depuis le début"** |
+
+> 🎯 A payout settles every outstanding order, not one month's worth. If "à
+> reverser" narrowed with the period it would show a figure that is not what
+> the next transfer pays — so it stays whole and says so, rather than leaving
+> the mismatch to be noticed.
+
+### Step 2 — The comparison, where it informs
+
+**✔️ A card shows "+12%" style chips** when the previous period had sales,
+and **no chip at all** when it had none.
+
+> 🎯 "Up ∞%" from zero is a first sale, not a trend. A percentage that cannot
+> inform is not shown.
+
+> 💡 A PARTIAL month is compared against the SAME span of the previous one —
+> eight days of October against the first eight days of September. Comparing
+> it against all of September would read as a collapse every month until the
+> 30th.
+
+### Step 3 — The chart
+
+**✔️ Under the cards, a bar per day** (per week beyond ten weeks — a year of
+365 bars is unreadable). **"Tout" shows no chart**, having no start to count
+from.
+
+```bash
+curl -s "http://localhost:4100/api/organiser/finance?period=month" \
+  -H "authorization: Bearer ORGANISER_TOKEN" | jq '.period | {key, orders, grossCents, series: (.series|length)}'
+```
+
+**✔️ The bars sum to the period's gross.** The suite asserts this, so the
+chart and the headline cannot drift apart.
+
+### Step 4 — A stale bookmark does not 400
+
+```bash
+curl -s "http://localhost:4100/api/organiser/finance?period=decade" \
+  -H "authorization: Bearer ORGANISER_TOKEN" | jq -r .period.key
+# -> all
+```
+
+**✔️ An unknown period falls back to all time.** A bookmark from a renamed
+period should show the dashboard, not an error.
+
+> 💡 Morocco is UTC+1, so a local day starts at 23:00 UTC the day before. An
+> evening sale belongs to the day it was made. Twenty-four unit tests cover
+> that, the 31st-of-the-month case and the year boundary — `npm test`.
+
+✅ **Check 23 done.**
+
+---
+---
+
+# 🏷️ CHECK 24 — Plans: what they cost, and asking for a different one
+
+A plan is pure pricing — a commission rate and a monthly fee, nothing gated.
+Starter 5%, Pro 3% + 499/month, Business 2% + 1 999/month. An organiser could
+see their own rate and nothing else, so nobody on the 5% default ever learned
+the cheaper tiers existed.
+
+### Step 1 — All three are visible
+
+1. Pro → **Finance** → scroll to **Offre**.
+
+**✔️ You must see** the current plan with a padlock, then **"Les autres
+offres"** listing all three with their rates, the current one marked.
+
+> 🎯 Only Eventick assigns a plan. An organiser setting their own rate was the
+> original bug: the plan used to be three buttons that changed the displayed
+> fee and nothing in the world.
+
+> 💡 An **admin** reading someone else's books through the organiser filter
+> sees the comparison but no **Demander** button — the request would be
+> recorded against the admin's own account, not the organiser they are
+> looking at.
+
+### Step 2 — Ask for one
+
+2. Click **Demander** beside Pro.
+
+**✔️ The button becomes "Demandé · annuler".** The plan has NOT changed.
+
+3. Look at the third plan.
+
+**✔️ Its "Demander" button is gone.** One open request at a time, so the
+UI offers no way to stack a second. The API refuses it too — **409** — which
+is what matters, the hidden button being only a courtesy:
+
+```bash
+curl -s -X POST http://localhost:4100/api/organiser/plan-request \
+  -H "authorization: Bearer ORGANISER_TOKEN" -H "content-type: application/json" \
+  -d '{"planKey":"business"}' | jq -r .error
+# -> You already have a plan request waiting for a decision
+```
+
+4. Ask for the plan you are already on.
+
+**✔️ Refused — 409.** Compared against the plan you are EFFECTIVELY on:
+`planId` is null for anyone nobody has assigned, and they are charged the
+default, so the raw column would let someone on the default request the
+default.
+
+### Step 3 — An admin decides
+
+5. Sign in as **admin** → **ADMINISTRATION → Plateforme**.
+
+**✔️ A "Demandes d'offre" block appears above the seller list**, carrying the
+rate — "wants Pro" means nothing without knowing Pro is 3% + 499.
+
+6. Click **Accepter**.
+
+**✔️ The organiser is moved**, their Finance screen shows the new rate, and
+the queue empties. Deciding it twice is refused (409).
+
+> 🎯 Approving performs the assignment itself. A queue that only marks things
+> decided, relying on someone remembering a second step, is how an approved
+> request never takes effect.
+
+> 💡 It is journalled under the same action as a direct assignment, with the
+> request id attached. A journal that split them by route would hide half the
+> plan changes from anyone reading for "who moved onto Pro".
+
+### Step 4 — The nudge, when the figures justify it
+
+**✔️ Once a full month has passed with real volume**, the plan card says
+which plan would have cost less, with the saving and the volume behind it.
+
+| Volume last month | What it says |
+|---|---|
+| 10 250 MAD | nothing — Starter is already cheapest |
+| 49 450 MAD | *"move to Pro, saves 490,00 MAD"* |
+| 0 MAD | **nothing** |
+
+> 🎯 That last row is the one worth understanding. Arithmetically an organiser
+> on Business who sold nothing "saves" the whole 1 999 by dropping to Starter
+> — true, and a terrible thing to tell someone still setting up. It fired for
+> exactly that case in the live suite before the guard went in.
+
+> 💡 It works DOWNWARDS too: an organiser whose volume fell is told they have
+> outgrown a plan in the other direction. Advice that only ever sells upgrades
+> is marketing.
+
+✅ **Check 24 done.**
+
+---
+---
+
+# 🏦 CHECK 25 — Who is owed what, and paying them
+
+The admin page that lists everyone who sells showed lifetime revenue and
+nothing about what was still OWED — so "who do I pay today" meant opening
+each organiser in turn.
+
+### Step 1 — The figure that answers the question
+
+1. Admin → **Plateforme** → **"Qui vend"**.
+
+**✔️ Each row carries "à reverser"** beside lifetime revenue, in green when
+there is money waiting and grey at zero, plus the order count.
+
+**✔️ A row with money owed and no RIB shows a "Pas de RIB" badge** — that one
+needs chasing, not paying, because the payout would be refused.
+
+2. Rank the list: **Recettes · À reverser · Remboursements · Événements**.
+
+> 🎯 Ranking on revenue alone flatters whoever refunds the most, which is what
+> the refund-rate column is for.
+
+### Step 2 — It agrees with what is actually transferred
+
+3. **Préparer un reversement** on a row with money owed.
+
+**✔️ The net in the modal equals the "à reverser" in the list, to the cent.**
+Both go through the same calculation against the same filter — settled, not a
+comp, not already in a payout. The suite asserts they match rather than merely
+resemble each other.
+
+### Step 3 — An unfiltered admin sees the platform
+
+4. Still as admin, open **Finance** with the organiser filter on **"Tous les
+   organisateurs"**.
+
+**✔️ Real figures, and every payout.** Not zeros.
+
+> 🎯 This used to fall back to `req.user.id` — the admin's own id. An admin
+> owns no events, so the screen showed 0,00 revenue and "aucun reversement"
+> directly above a list of real orders, because the order table was already
+> platform-wide. The two halves of the screen disagreed.
+
+**✔️ Each payout row names who was paid.** An organiser reading their own list
+does not get that field — repeating their own name on every row is noise.
+
+### Step 4 — Bank details belong to the organiser
+
+**✔️ The form prefills the holder and bank, and leaves the RIB empty**, with a
+line saying why: the server returns only the last four digits, so the full
+number must be re-entered.
+
+> 🎯 An admin cannot type someone else's RIB. It is their account, and an admin
+> retyping it is a worse place for a typo. The panel is read-only when an admin
+> views another organiser through the filter.
+
+✅ **Check 25 done.**
+
+---
+---
+
+# 📬 CHECK 26 — A freed seat goes to the queue, not the public
+
+A sold-out event is a dead end. The waitlist recycles seats that come free —
+refunds, cancellations, abandoned checkouts, and seats an organiser ADDS.
+
+### Step 1 — Join a sold-out event
+
+1. Open a sold-out event as a stranger.
+
+**✔️ No buy button — a waitlist form.** Join with any address.
+Asking twice returns **409** — nobody can stack the queue.
+
+2. Pro → **CATALOGUE → Offres**.
+
+**✔️ The entry reads "En attente".**
+
+### Step 2 — Free a seat by REFUNDING
+
+3. **Réservations** → refund an order for that event → refresh **Offres**.
+
+**✔️ The oldest entry flips to "Place réservée"** with an expiry 30 minutes
+out, and an email goes out. Nobody pressed anything.
+
+### Step 3 — Free a seat by ADDING one
+
+4. Pro → **Placements** → raise that tier's capacity by 1 → save.
+
+**✔️ The next person in the queue is offered it too.**
+
+> 🎯 This was a real bug. Raising capacity put the new seats straight into the
+> public catalogue, so anyone refreshing the page bought what the queue had
+> been waiting for — the opposite of what a queue is for. Verified before the
+> fix: capacity 2 → 4 with two people waiting left both WAITING and put two
+> seats on public sale.
+
+> 💡 Only an INCREASE offers. A decrease frees nothing, and re-offering on
+> every save would mail the queue each time someone fixed a typo in a zone
+> name.
+
+### Step 4 — The hold is real inventory
+
+5. While an offer is outstanding, try to buy that seat as someone else.
+
+**✔️ 409 "Not enough tickets remaining".** An offered seat is subtracted from
+public availability, so it cannot be bought out from under the person holding
+it.
+
+### Step 5 — Lapsing passes it on
+
+The window is **30 minutes**; a sweeper runs every **5 minutes** inside the
+server, expires stale offers and re-offers the seat to the next person.
+
+```bash
+cd backend && npx tsx ../scripts/demo-waitlist.mjs
+```
+
+**✔️ That script walks the whole cycle** — sells out a throwaway event, queues
+three people, refunds one buyer, shows the automatic offer, proves nobody else
+can take it, then backdates the offer and sweeps so the lapse is visible
+without waiting half an hour. It deletes the event afterwards.
+
+> ⚠️ **With no `RESEND_API_KEY` the waitlist silently does nothing useful.**
+> The offer is still made and the seat still held, but the email is written to
+> the log and dropped — so nobody learns they were offered a seat and every
+> offer lapses. `.\payment-mode.ps1` reports whether email is live.
+
+> 💡 A CANCELLED event offers nothing. `offerFreedSeats()` returns early
+> unless the event is PUBLISHED, so calling an event off does not spray offers
+> at a waitlist for a show that is not happening.
+
+✅ **Check 26 done.**
+
+---
 # ✅ Tick them off
 
 | # | Check | Where to go | Done |
@@ -1424,6 +2011,13 @@ to buy it.
 | 17 | **Calling an event off** | Pro → **Événements** → 🚫 icon | ☐ |
 | 18 | **Invitations are not a sale** | Pro → CATALOGUE → **Invitations** | ☐ |
 | 19 | **A closed zone says so** | Pro → CATALOGUE → **Placements** | ☐ |
+| 20 | **Staff sell, customers buy** | Account menu → **"Mon compte"** · any event page | ☐ |
+| 21 | **Detail pages** | Pro → **Réservations** → a buyer's name | ☐ |
+| 22 | **CDN images + real email** | Pro → **Événements** (upload) · **Invitations** | ☐ |
+| 23 | **Money by period** | Pro → FINANCES → **Finance** → period buttons | ☐ |
+| 24 | **Plans and asking for one** | Pro → **Finance** → **Offre** · admin **Plateforme** | ☐ |
+| 25 | **Who is owed what** | Pro → ADMINISTRATION → **Plateforme** → **Qui vend** | ☐ |
+| 26 | **Freed seats go to the queue** | Pro → CATALOGUE → **Offres** · **Placements** | ☐ |
 
 ---
 
@@ -1436,7 +2030,7 @@ a seeded database.
 
 | Suite | Command | What it proves | Result |
 |---|---|---|---|
-| **`live-all-checks`** | **`npm run test:live:checks`** | **all nineteen checks in this guide, end to end** | **112 / 112** |
+| **`live-all-checks`** | **`npm run test:live:checks`** | **checks 1–19 in this guide, end to end** (20–22 are manual) | **112 / 112** |
 | `vitest` | `npm test` | commission, pricing, inventory, ticket refs, the CMI hash | **123 / 123** |
 | `live-api-test` | `npm run test:live` | the API surface end to end | **123 / 123** |
 | `live-authz-test` | `npm run test:live:authz` | who may reach what, across roles | **54 / 54** |
@@ -1514,6 +2108,19 @@ npm test
 26. **An admin creating an event became its payee.** `organiserId` was copied from whoever was signed in, and `organiserId` is what decides who the payout pays, at which plan's rate, into which bank account — so an admin helping an organiser set up a show silently pointed the money at the platform. Neither the create nor the update schema accepted the field, so it could not be corrected afterwards: a `PATCH` carrying `organiserId` returned 200 and changed nothing. Fifteen of the sixteen seeded events were admin-owned, which modelled the mistake as if it were the design. An admin must now name an organiser, the target is checked to be one, and the seed hands every event to a real organiser. *(Check 6, steps 6–7.)*
 27. **A cancelled event could be put back on sale, and refunded twice.** The dashboard's hide/restore eye wrote `status: PUBLISHED` unconditionally, overwriting `CANCELLED` — so cancelling an event, refunding every buyer and voiding every ticket, then clicking restore, returned it to the public catalogue and a fresh order went through end to end. Checkout never looked at `cancelledAt`; it refused these only by accident, via the status check. The double-cancel guard had the same flaw: hiding a cancelled event moved its status to `HIDDEN`, after which it could be cancelled again and refund buyers who had already been refunded. *(Check 17.)*
 28. **Four cross-organiser 403 checks were asserting nothing.** They used a seeded event on the assumption that the demo organiser owned only some of them; once the seed was corrected the "foreign" event was the caller's own, and the suite was quietly comparing 200 against 200. It now creates an event owned by a second organiser. *(`live-api-test`.)*
+29. **Typing one letter into any modal form lost focus.** Every call site passes `onClose={() => setOpen(false)}` — a new function each render — and the modal's focus-management effect listed `onClose` as a dependency. So each keystroke re-ran the effect, whose last act is `focus()` on the first focusable element: the close button. One character in, focus gone, second character dropped. It affected **every form in the app** behind a modal — issuing comps, adding a zone, editing an event, changing a role. Fixed in `Modal` with a ref rather than asking twenty call sites to remember `useCallback`. *(Check 18, and any modal.)*
+30. **An invited guest could not reach their own ticket.** A comp sits on an order the guest does not own, so they had no credential for it: the email could only quote a reference number, and the ticket URL would have returned 403 even if they found it. Comps now carry the same per-ticket token a gifted ticket gets, and the email leads with a **"Voir mon billet"** button. *(Check 22, step 2.)*
+31. **The ticket PDF refused a valid ticket credential.** `/tickets/:id/pdf` authorised against the **order's** token only, so a share recipient or an invited guest could see their pass on screen but got 403 downloading it — the one format they would take to the door. It now accepts a per-ticket token, which also fixes PDF downloads for every gifted ticket. *(Check 22, step 2.)*
+32. **Every invitation showed "Envoyé" on an installation that had never sent an email.** `sendEmail` returns `false` rather than throwing — on a rejected send, or with no `RESEND_API_KEY` at all — and the code did `.then(() => markAsSent())`, which runs either way. The result was a guest list claiming everyone had been emailed when nothing had left the building. *(Check 22, step 3.)*
+33. **A guest could silently forfeit money by changing zone.** Moving to a cheaper zone refunds nothing — deliberately, since refunding the difference would let someone buy the dearest seat and downgrade purely to extract cash. But the UI labelled it *"Sans supplément"* ("no extra charge"), which is true and reads as *"free"* to someone about to lose 700 MAD. The amount is now stated in amber and confirmed before the move. *(Check 20, step 5.)*
+34. **An invited guest could downgrade the seat they were given.** Exchange was open to comp tickets, so a guest could move a 1.100 MAD invitation into a 400 MAD zone — deciding for the organiser what had been given away, with no price paid to measure the change against. Comps are now refused at the engine and offered no zones by the API. *(Check 20, step 4.)*
+35. **Staff could buy tickets.** Nothing in the order routes consulted the caller's role, so an organiser could hold seats on a rival's sold-out event and an admin — who can see every order — could buy into an event they moderate. Blocked server-side on `/orders/hold`, `/orders/:id/pay` and `/resale/:token/buy`; guest checkout is deliberately untouched, since no session means no role. *(Check 20, step 3.)*
+36. **An admin was shown a buyer's dashboard with nothing in it.** `/billets` offered ticket tabs, a "2026 spending" figure and a saved-events wishlist to accounts that sell rather than buy — a permanent `0 MAD` next to a permanent `0` tickets, which reads as broken rather than empty. Staff now get the identity page and the profile editor, which is the one thing on it they need. *(Check 20, step 1.)*
+37. **An admin could add a zone or issue a comp without knowing whose event it was.** Placements and Invitations listed every event on the platform in one flat picker. Both are *writes* that inherit an owner — and `event.organiserId` decides who the payout pays, at which rate, into which bank account. The server already insisted a caller with `scope.any` name an owner; the UI let them discover that by hitting an error. Both pages now require the organiser first. *(Check 21, step 5.)*
+38. **An order had no detail page at all.** Eleven dashboard sections, zero `:id` routes. A support call — *"my payment failed"*, *"I need a refund"* — had to be answered from a table row and a modal, with no way to see the payment reference, the per-ticket status and the audit trail together, and no URL to paste into a thread. `GET /organiser/orders/:id` and `/pro/orders/:id` now exist. *(Check 21.)*
+39. **The invitations table labelled its reference column "Porte" (Gate).** It has never held a gate; it holds the ticket reference. Invisible while the table was empty, wrong the moment it had rows — which is exactly why it survived until real data went in. *(Check 21, step 4.)*
+40. **A native `<select>` opened the browser's own popup over the dark dashboard.** The organiser filter on Réservations — and the rows-per-page, role and manifest pickers — rendered as a plain light list with OS highlight colours, ignoring the app's theme entirely the moment they opened. All four now use the shared `Dropdown`. `Dropdown` gained per-option `disabled` for the role picker, which must *display* an existing ADMIN without letting anyone pick it. *(Checks 7, 12.)*
+41. **Replacing those selects broke their labels, invisibly.** A `<label>` wrapping a `<button>` trigger gives no implicit association, so the visible text and the accessible name became two strings that could drift. Fixed with `aria-labelledby` pointing at the text already on screen. The role picker also announced a bare *"change role"* on every row with no indication of **whose** — it now names the person.
 
 ---
 
@@ -1554,6 +2161,12 @@ npm test
 | An invitation consumed a seat | Correct. A comp takes capacity exactly like a sale — it just never becomes revenue |
 | Revenue did **not** move after issuing invitations | Correct, and the whole reason comps are not a 100 % promo code |
 | **"Publier"** refuses with *"La clôture doit être après l'ouverture"* | One of your sales windows closes before it opens. The base tier and the VIP tier have separate windows |
+| An invitation row reads **"Non envoyé"** right after issuing | The email is sent after the response returns. Reload — it flips to "Envoyé". If it stays, the send genuinely failed (check `RESEND_API_KEY`) |
+| An uploaded poster URL starts with **`/uploads/`** | Bunny is not configured, so the route fell back to local disk. Check `BUNNY_STORAGE_KEY` in `backend/.env` and restart |
+| The organiser sees **no "Payer" button** on an event | Correct — staff sell, they do not buy. See check 20 |
+| A comp ticket has **no "Changer de zone"** panel | Correct. An invitation is the organiser's choice to make, not the guest's |
+| **Placements / Invitations look empty** as admin | Pick an organiser first. Both are writes that inherit an owner, so the page will not guess one |
+| The event picker defaults to an event with **no data** | It picks the first event in the list, not the busiest. Switch events from the picker |
 
 ---
 
@@ -1565,10 +2178,26 @@ changes. **Actual gaps** are work not done yet.
 
 ### Deliberate limits
 
-- **Payments default to simulated.** With no `CMI_CLIENT_ID`/`CMI_STORE_KEY` no card is charged. The CMI integration itself is complete — signed redirect, hash-verified callback, replay-safe settlement — but it needs real merchant credentials to exercise, and production refuses to boot without them.
+- **Payments default to simulated.** With no `CMI_CLIENT_ID`/`CMI_STORE_KEY` no card is charged. Switch with `.\payment-mode.ps1 cmi` (or `mock`) from the project root — it comments the four `CMI_*` lines in place rather than swapping `.env` files, which is what used to drop the Resend and Bunny keys silently on every mode change. The CMI integration itself is complete — signed redirect, hash-verified callback, replay-safe settlement — but it needs real merchant credentials to exercise, and production refuses to boot without them.
+- **Email and images are live services, not simulations.** `RESEND_API_KEY` sends real mail from `contact@storeino.com`; `BUNNY_STORAGE_KEY` puts real files on a CDN. Both degrade rather than break when unset — email drops to log-only, uploads fall back to local disk — which is how the flows stay exercisable offline. *(Check 22.)*
 - **Refunds do not move money.** CMI has no refund API: `/organiser/orders/:id/refund` records the refund, voids the tickets and emails the buyer, but someone must then reverse the transaction by hand in the CMI back office. Use `/organiser/orders/:id/reconcile-refund` to sync the books after a reversal made there, since CMI notifies us of nothing.
 - **A refused late payment leaves the order PENDING, not CANCELLED.** When the seats are gone the server declines the money and stops; the sweeper tidies the order up on its next pass (within five minutes). Nothing is charged in the meantime, but the order looks unpaid rather than explicitly failed until then.
 - **Commission and subscription are withheld, not invoiced.** Both are real and computed server-side — the percentage is written onto each order when it settles, the monthly fee is charged per calendar month that had sales — but Eventick never issues an invoice or takes a card. Both are collected by being deducted from the payout, so an organiser with no payout due is never charged.
+- **An organiser cannot change their own plan; they can only ask.** The rate
+  decides what Eventick keeps, so letting the person it is charged to set it
+  is not a plan at all. `POST /organiser/plan-request` queues the ask and an
+  admin accepts or declines it on **Plateforme**; approving performs the
+  assignment itself, so there is no second step to forget. *(Check 24.)*
+- **Plan advice needs a month of evidence.** The nudge on the plan card
+  compares last month's volume against all three plans, and says nothing at
+  zero volume — arithmetically an organiser on Business who sold nothing
+  "saves" the whole monthly fee by dropping to Starter, which is true and a
+  terrible thing to tell someone still setting up. *(Check 24, step 4.)*
+- **"À reverser" ignores the period filter, deliberately.** A payout settles
+  every outstanding order, not one month's worth, so narrowing it with the
+  period would show a figure that is not what the next transfer pays. The
+  card says "Depuis le début" rather than leaving the mismatch to be
+  noticed. *(Check 23, step 1.)*
 - **A dormant month is not billed, and no debt accrues.** If a month's sales do not cover the plan's monthly fee, the shortfall is simply not collected rather than carried forward. Charging it would mean a debt model, which is a bigger decision than the payout run should make.
 - **Payouts are a ledger, not a bank integration.** A run calculates what is owed and records the transfer, but nobody sends money automatically: an admin makes the transfer in their bank and pastes the reference back in. There is no bank API.
 - **The journal records decisions, not everything.** Role changes, permission grants, refunds, plan assignments, payouts and account removal are recorded. Ordinary reads and CRUD are deliberately not: a log of everything is one nobody reads.
@@ -1577,6 +2206,11 @@ changes. **Actual gaps** are work not done yet.
 ### Actual gaps
 
 - **The demo accounts use public passwords.** They are printed in this guide and in the seed. Change them before anything is deployed.
+- **`PUBLIC_APP_URL` and `PUBLIC_API_URL` still point at `localhost`.** Every link in an invitation email — the "Voir mon billet" button and the PDF — is built from them, so an email sent today works for you and for nobody else. Set both before inviting a real guest. *(Check 22.)*
+- **Checks 20–26 have no automated coverage of the screens.** They were added after `test:live:checks`. The logic underneath 23–26 is covered — 24 unit tests on the period windows, and `test:live:money` on the period figures, the plan arithmetic and the owed-versus-paid agreement — but nothing opens the pages. 22 can never be automated: it talks to Bunny and Resend, and a suite that uploads files and sends real email on every run is worse than no suite — it would need stubs, which is a different piece of work.
+- **Invitation emails carry a reference and a link, not a QR image.** The guest clicks through to their pass or downloads the PDF. Fine for a phone; it does assume the guest can open a link at the door, which a printed-ticket culture may not.
+- **The "Envoyé" badge does not refresh itself.** The email is sent after the response returns, so a freshly issued row shows "Non envoyé" until you reload. Harmless, and it looks like a bug the first time.
+- **Upgrading a zone is still impossible.** `/tickets/:id/exchange` returns **402** with the amount owed, because no flow collects the difference. So "Changer de zone" today only ever moves a buyer *down*. Either build the upgrade payment or hide upgrade options — right now the UI disables them, which is honest but unexplained. *(Check 20, step 5.)*
 - **`NEXT_PUBLIC_SITE_URL` must be set to the real domain before launch.** It drives every canonical URL, `og:url` and sitemap entry. Left at its `http://localhost:3100` default, the sitemap advertises localhost to Google and the canonicals point somewhere unreachable — the site looks finished while being worse than before. Set it per environment in `frontend/.env.local`, then submit `https://<domain>/sitemap.xml` in Search Console (that part is manual; it needs domain ownership).
 - **Event structured data is built, and switched off.** `Event.seoIndexable` defaults to **false**, so no event carries schema.org `Event` markup until someone marks it real. All 16 seeded events are false, which is why the demo catalogue emits none. Flip it per event once an event is genuinely bookable — markup describing an unbookable event risks a penalty against the whole domain, not merely a missing rich result. (`WebSite`/`Organization` markup is unconditional: it makes no claim about any event.)
   - That flag is also what drives the demo-catalogue notice: while **no** event is marked real, every public page carries a banner saying the events and prices are examples. Publish one real event and the banner disappears by itself.
@@ -1586,6 +2220,17 @@ changes. **Actual gaps** are work not done yet.
   - **The money path is already prepared.** `cmiUrls()` now takes the buyer's locale and prefixes `okUrl`/`failUrl` from a `LOCALE_PREFIXES` allowlist — which is deliberately **empty**, so behaviour is unchanged until locale routes exist. Add `"fr"` and `"ar"` to that set in the same change that creates `frontend/src/app/[locale]/`, and a buyer who paid in Arabic returns to the Arabic confirmation page instead of the French one.
   - **Still held until CMI works**, because that return path is what a paying buyer lands on and it cannot be tested end to end while no CMI test card works. The code change is in and unit-tested; only the routes and the two allowlist entries remain.
 - **City and category landing pages exist, for the cities and categories that earn one.** `/billets-ville/<city>` and `/billets-categorie/<category>` are real server-rendered pages with their own title, description, canonical and an HTML list of the actual events — unlike `?ville=`/`?cat=`, which a crawler cannot distinguish. A page is built only while it lists **2 or more** sellable events and 404s otherwise, so none of them is a near-empty doorway page. Today that is 3 cities (Rabat, Marrakech, Casablanca) and 4 categories; the rest appear by themselves as the catalogue grows. Raise `MIN_EVENTS` in `frontend/src/lib/landing.ts` if you want a stricter bar.
+- **The waitlist is useless without `RESEND_API_KEY`.** The offer is still
+  made and the seat still held for 30 minutes, but the email is written to
+  the log and dropped — so nobody learns they were offered a seat and every
+  offer lapses. The queue looks like it is working from the dashboard while
+  achieving nothing. *(Check 26.)*
+- **Nobody is told their plan request was decided.** Neither approval nor
+  refusal sends an email. A refusal can even carry a note — the admin may
+  type one and it is stored on the request — but nothing shows it to the
+  organiser, who sees only that their ask disappeared. The note is written
+  and never read, which is worse than not offering the field.
+  *(Check 24, step 3.)*
 - **Nothing purges the journal.** It only grows. Fine for now; it needs a retention policy before it is years old.
 - **No bank integration.** A payout records what is owed and who sent it, but an admin makes the transfer by hand — see *Payouts are a ledger* above.
 - **CMI is unexercised against real money.** The integration is complete and tested against a signed stand-in for the gateway, and verified against the real test gateway — our hash was reproduced byte-for-byte from CMI's own retry form, which confirms the key, the algorithm and the merchant id. What is still missing is a card: no test card supplied so far is provisioned for merchant `600002996`, and CMI answers `HOST based messaging problem (99)`, which is its gateway failing to reach the issuing bank rather than anything in this code.
