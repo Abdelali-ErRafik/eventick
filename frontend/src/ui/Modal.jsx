@@ -26,6 +26,22 @@ export function Modal({ open, onClose, title, sub, icon, children, footer, size 
   const titleId = `${id}-title`;
   const subId = sub ? `${id}-sub` : undefined;
 
+  /**
+   * The latest onClose, without the effect depending on its identity.
+   *
+   * Every call site writes `onClose={() => setOpen(false)}` — a NEW function
+   * on every render. With onClose in the effect's dependency array, the whole
+   * open-effect tore down and re-ran on each keystroke, and its last act is
+   * `target.focus()` on the first focusable element. So typing one character
+   * into any field inside a Modal moved focus to the close button and dropped
+   * the next character. A ref is the fix that does not require 20 call sites
+   * to remember useCallback.
+   */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   const trapTab = useCallback((event) => {
     if (event.key !== "Tab") return;
     const nodes = boxRef.current?.querySelectorAll(FOCUSABLE);
@@ -58,7 +74,7 @@ export function Modal({ open, onClose, title, sub, icon, children, footer, size 
         // propagation; it raises this flag instead and we stand down.
         if (document.body.dataset.confirming) return;
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       trapTab(event);
@@ -80,7 +96,9 @@ export function Modal({ open, onClose, title, sub, icon, children, footer, size 
       // button that opened it.
       if (previouslyFocused.current instanceof HTMLElement) previouslyFocused.current.focus();
     };
-  }, [open, onClose, trapTab]);
+    // onClose deliberately absent: it is read through onCloseRef, so a new
+    // inline arrow from the parent no longer re-runs focus management.
+  }, [open, trapTab]);
 
   if (!open) return null;
   if (typeof document === "undefined") return null;

@@ -14,6 +14,10 @@ import { cn } from "../utils";
  */
 export function Popover({
   label,
+  // An id pointing at visible text that already names this control. Preferred
+  // over `label` where such text exists: one string on screen and in the
+  // accessibility tree, instead of two that drift.
+  labelledBy,
   trigger,
   align = "start",
   width = "w-56",
@@ -58,7 +62,8 @@ export function Popover({
       <button
         ref={triggerRef}
         type="button"
-        aria-label={label}
+        aria-label={labelledBy ? undefined : label}
+        aria-labelledby={labelledBy}
         aria-haspopup="true"
         aria-expanded={open}
         aria-controls={open ? id : undefined}
@@ -91,6 +96,10 @@ export function PopoverItem({ as: As = "button", className, children, ...rest })
     <As
       className={cn(
         "flex w-full items-center gap-2.5 px-4 py-2.5 text-start text-sm font-semibold text-ink transition hover:bg-paper",
+        // `disabled` already reaches the <button> through ...rest, but a
+        // native disabled button still LOOKS identical to an enabled one
+        // here -- the row has its own colours, so it needs saying twice.
+        rest.disabled && "cursor-not-allowed opacity-50 hover:bg-transparent",
         className,
       )}
       {...(As === "button" ? { type: "button" } : null)}

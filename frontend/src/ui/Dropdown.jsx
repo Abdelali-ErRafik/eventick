@@ -26,12 +26,18 @@ export function Dropdown({
   options,
   placeholder,
   label,
+  /** Id of visible text naming this control; see Popover. */
+  labelledBy,
   // Accepted so this can sit inside a <Field> like any other control. The
   // render prop hands down an id and a describedby; without these they were
   // silently dropped, leaving the label pointing at nothing and the error
   // text unannounced.
   id,
   describedBy,
+  // A whole control that cannot be changed (the row for your own account in
+  // the user list). Forwarded to Popover, which already refuses to open a
+  // disabled trigger.
+  disabled = false,
   triggerClassName,
   panelClassName,
   align = "start",
@@ -42,8 +48,10 @@ export function Dropdown({
   return (
     <Popover
       label={label ?? placeholder}
+      labelledBy={labelledBy}
       align={align}
       width={width}
+      disabled={disabled}
       // Popover's own <button> has no width class, so it shrinks to content
       // by default -- fine for an icon trigger, wrong here where the whole
       // field width (icon + label column) needs to be one clickable target.
@@ -65,7 +73,13 @@ export function Dropdown({
           {options.map((option) => (
             <PopoverItem
               key={option.value}
+              // `option.disabled` exists for a value the list must DISPLAY but
+              // must not let you pick -- an existing ADMIN in the role picker,
+              // which has to render its own current value or the trigger would
+              // read blank, while nobody may be promoted into it from there.
+              disabled={option.disabled}
               onClick={() => {
+                if (option.disabled) return;
                 onChange(option.value);
                 close();
               }}

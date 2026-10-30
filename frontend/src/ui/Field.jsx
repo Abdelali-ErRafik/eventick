@@ -75,7 +75,22 @@ const CONTROL_BASE =
   "block w-full rounded-control border bg-card px-4 text-ink outline-none transition " +
   "duration-150 placeholder:text-mist disabled:cursor-not-allowed disabled:bg-sunken disabled:opacity-60";
 
-function controlClass(invalid, className) {
+/**
+ * The same control on a fixed-dark `stage` panel.
+ *
+ * Checkout's promo field, the waitlist box on an event page and the footer's
+ * newsletter input each hand-rolled this: --et-card and --et-line flip with
+ * the theme, so on a surface that never flips they produced a light box in
+ * dark mode. Three copies meant three slightly different heights and focus
+ * rings; naming it here is what stops the fourth.
+ */
+const CONTROL_STAGE =
+  "block w-full rounded-control border border-stage-fg/20 bg-stage-fg/10 px-4 text-stage-fg outline-none " +
+  "transition duration-150 placeholder:text-stage-muted focus:border-accent focus:ring-[3px] focus:ring-accent/25 " +
+  "disabled:cursor-not-allowed disabled:opacity-60";
+
+function controlClass(invalid, className, tone = "default") {
+  if (tone === "stage") return cn(CONTROL_STAGE, invalid && "border-danger focus:border-danger", className);
   return cn(
     CONTROL_BASE,
     invalid
@@ -108,13 +123,13 @@ export function triggerControlClass({ invalid, open, disabled, className }) {
   );
 }
 
-export function Input({ id, describedBy, invalid, className, ...rest }) {
+export function Input({ id, describedBy, invalid, tone, className, ...rest }) {
   return (
     <input
       id={id}
       aria-describedby={describedBy}
       aria-invalid={invalid || undefined}
-      className={controlClass(invalid, cn("h-11", className))}
+      className={controlClass(invalid, cn("h-11", className), tone)}
       {...rest}
     />
   );
