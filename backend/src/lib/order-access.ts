@@ -51,6 +51,17 @@ export function presentedToken(req: Request): string | null {
   return null;
 }
 
+/**
+ * Does this presented token open THIS ticket?
+ *
+ * Exported for routes that authorise a single ticket rather than its order —
+ * the PDF, which a share recipient or an invited guest reaches with a
+ * ticket-scoped token and no claim on the rest of the order.
+ */
+export function tokenMatchesTicket(presented: string, stored: string | null): boolean {
+  return tokenMatches(presented, stored);
+}
+
 /** Constant-time compare, so a wrong token cannot be narrowed down by timing
  * one character at a time. */
 function tokenMatches(presented: string, stored: string | null): boolean {

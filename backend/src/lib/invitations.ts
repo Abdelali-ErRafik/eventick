@@ -4,6 +4,7 @@ import { HttpError } from "./http.js";
 import { makeTicketRef } from "../domain/ticketRef.js";
 import { seatFor } from "../domain/inventory.js";
 import { sendEmail } from "./email.js";
+import { newAccessToken } from "./order-access.js";
 import { logger } from "./logger.js";
 
 /**
@@ -60,6 +61,8 @@ export interface IssuedComp {
   invitationId: string;
   ticketId: string;
   ref: string;
+  /** Per-ticket credential, so the guest's email can link to their own pass. */
+  accessToken: string | null;
   guestName: string;
   guestEmail: string | null;
   emailed: boolean;
@@ -134,8 +137,14 @@ export async function issueComps(
           kind: "COMP",
           seatRow: seat?.row ?? null,
           seatNumber: seat?.seat ?? null,
+          // A comp sits on an order the GUEST does not own and has no
+          // credential for, so without this their ticket is unreachable --
+          // the email could only quote a reference number. Same per-ticket
+          // token a shared ticket gets, scoped to this seat alone so it
+          // never unlocks the rest of the order.
+          accessToken: newAccessToken(),
         },
-        select: { id: true, ref: true },
+        select: { id: true, ref: true, accessToken: true },
       });
 
       const invitation = await tx.invitation.create({
@@ -156,6 +165,7 @@ export async function issueComps(
         invitationId: invitation.id,
         ticketId: ticket.id,
         ref: ticket.ref,
+        accessToken: ticket.accessToken,
         guestName: guest.guestName.trim(),
         guestEmail: guest.guestEmail?.trim() || null,
         emailed: false,
@@ -175,9 +185,20 @@ export async function issueComps(
     void sendEmail({
       to: comp.guestEmail,
       subject: `Votre invitation — ${event?.titleFr ?? "Eventick"}`,
-      html: inviteHtml(event?.titleFr ?? "", comp.guestName, comp.ref),
+      html: inviteHtml(event?.titleFr ?? "", comp.guestName, comp.ref, ticketUrl(comp), pdfUrl(comp)),
     })
-      .then(() => prisma.invitation.update({ where: { id: comp.invitationId }, data: { sentAt: new Date() } }))
+      // sendEmail NEVER throws -- it returns false when the send was rejected
+      // or when no RESEND_API_KEY is configured (log-only mode). So the result
+      // has to be checked: `.then(() => ...)` stamped sentAt unconditionally,
+      // and the UI showed every guest as "Sent" on an installation that had
+      // never sent an email at all.
+      .then((ok) => {
+        if (!ok) {
+          logger.warn({ invitationId: comp.invitationId }, "invitation email not sent");
+          return;
+        }
+        return prisma.invitation.update({ where: { id: comp.invitationId }, data: { sentAt: new Date() } });
+      })
       .catch((err) => logger.warn({ err, invitationId: comp.invitationId }, "invitation email failed"));
   }
 
@@ -204,15 +225,44 @@ export async function revokeComp(invitationId: string): Promise<void> {
   logger.info({ invitationId }, "comp ticket revoked");
 }
 
-function inviteHtml(title: string, guestName: string, ref: string): string {
+/**
+ * Where the guest actually sees their pass.
+ *
+ * The ticket id alone is not a credential (requireTicketAccess refuses it), so
+ * the per-ticket token rides in `k` — the same shape the share-claim flow uses
+ * for exactly the same reason.
+ */
+function ticketUrl(comp: IssuedComp): string {
+  const base = (process.env.PUBLIC_APP_URL ?? "http://localhost:3100").replace(/\/+$/, "");
+  return `${base}/billet/${comp.ticketId}?k=${encodeURIComponent(comp.accessToken ?? "")}`;
+}
+
+/** The printable version, authorised by the same token. */
+function pdfUrl(comp: IssuedComp): string {
+  const base = (process.env.PUBLIC_API_URL ?? "http://localhost:4100").replace(/\/+$/, "");
+  return `${base}/api/tickets/${comp.ticketId}/pdf?k=${encodeURIComponent(comp.accessToken ?? "")}`;
+}
+
+function inviteHtml(title: string, guestName: string, ref: string, url: string, pdf: string): string {
   const esc = (v: string) =>
     v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  return `<div style="font-family:system-ui,sans-serif;line-height:1.6">
+  return `<div style="font-family:system-ui,sans-serif;line-height:1.6;color:#17171c">
     <h2 style="margin:0 0 12px">Votre invitation</h2>
     <p>Bonjour ${esc(guestName)},</p>
     <p>Vous êtes invité(e) à <strong>${esc(title)}</strong>.</p>
-    <p>Référence de votre billet : <strong>${esc(ref)}</strong></p>
-    <p>Présentez-la à l'entrée. Ce billet est nominatif.</p>
-    <p style="color:#5f5f6b;font-size:13px">Eventick.ma</p>
+
+    <p style="margin:24px 0">
+      <a href="${esc(url)}" style="display:inline-block;background:#141418;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:999px;font-weight:600">Voir mon billet</a>
+    </p>
+
+    <p style="margin:0 0 4px">Référence : <strong>${esc(ref)}</strong></p>
+    <p style="margin:0 0 20px;color:#5f5f6b;font-size:14px">
+      Le lien ci-dessus affiche votre QR code — c'est lui qui est scanné à l'entrée.
+      Gardez ce message : il est votre billet.
+    </p>
+
+    <p style="font-size:14px"><a href="${esc(pdf)}" style="color:#d6246e">Télécharger le PDF</a></p>
+
+    <p style="color:#5f5f6b;font-size:13px;margin-top:28px">Ce billet est nominatif. Eventick.ma</p>
   </div>`;
 }

@@ -9,7 +9,7 @@ import { committedForTier } from "../lib/availability.js";
 import { ticketPayload } from "../lib/ticket-signature.js";
 import { cancelPolicy, exchangeTicket, renameHolder, selfCancelTicket } from "../lib/ticket-admin.js";
 import { shareTicket } from "../lib/share.js";
-import { authoriseOrderOrOrganiser, requireTicketAccess, requireTicketAccessWithSession } from "../lib/order-access.js";
+import { authoriseOrderOrOrganiser, presentedToken, requireTicketAccess, requireTicketAccessWithSession, tokenMatchesTicket } from "../lib/order-access.js";
 
 export const ticketsRouter = Router();
 
@@ -74,7 +74,14 @@ ticketsRouter.get(
     if (!ticket) throw new HttpError(404, "Ticket not found");
 
     const order = ticket.order;
-    await authoriseOrderOrOrganiser(req, order);
+    // A per-ticket token (a shared ticket, or a comp emailed to a guest) must
+    // open the PDF of THAT ticket. authoriseOrderOrOrganiser only ever checked
+    // the ORDER's token, so a guest holding a valid ticket credential could
+    // see their pass on screen but got 403 downloading it -- the one format
+    // they would actually take to the door.
+    const presented = presentedToken(req);
+    const holdsThisTicket = Boolean(presented) && tokenMatchesTicket(presented!, ticket.accessToken);
+    if (!holdsThisTicket) await authoriseOrderOrOrganiser(req, order);
 
     const pdf = await renderTicketsPdf([
       {
@@ -148,22 +155,33 @@ ticketsRouter.get(
       where: { eventId: ticket.order.eventId },
       orderBy: { priceCents: "asc" },
     });
-    const exchangeable = await Promise.all(
-      tiers
-        .filter((tier) => tier.id !== ticket.tierId)
-        .map(async (tier) => {
-          const committed = await committedForTier(tier.id);
-          return {
-            tierId: tier.id,
-            nameFr: tier.nameFr,
-            nameAr: tier.nameAr,
-            priceCents: tier.priceCents,
-            // Downgrades cost nothing and refund nothing.
-            dueCents: Math.max(0, tier.priceCents - ticket.tier.priceCents),
-            soldOut: committed >= tier.capacity,
-          };
-        }),
-    );
+    // A comp has no exchange options at all: exchangeTicket refuses one, so
+    // listing zones here would only render buttons certain to 403.
+    const exchangeable = ticket.kind === "COMP"
+      ? []
+      : await Promise.all(
+          tiers
+            .filter((tier) => tier.id !== ticket.tierId)
+            .map(async (tier) => {
+              const committed = await committedForTier(tier.id);
+              const diff = tier.priceCents - ticket.tier.priceCents;
+              return {
+                tierId: tier.id,
+                nameFr: tier.nameFr,
+                nameAr: tier.nameAr,
+                priceCents: tier.priceCents,
+                dueCents: Math.max(0, diff),
+                // What moving DOWN costs the holder. Downgrades refund
+                // nothing on purpose (otherwise buying the dearest seat and
+                // downgrading becomes a way to extract cash), but the UI
+                // showed only "no extra charge" -- true, and read as "free"
+                // by someone about to forfeit the difference. Stating the
+                // amount is what makes the choice an informed one.
+                forfeitCents: Math.max(0, -diff),
+                soldOut: committed >= tier.capacity,
+              };
+            }),
+        );
 
     // An open share link, so the UI shows it back instead of offering a
     // "share" button that would only 409 on one already being out there.
