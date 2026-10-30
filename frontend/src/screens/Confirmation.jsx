@@ -6,7 +6,7 @@ import { TicketPass, toTicketPassProps } from "../components/TicketPass";
 import { api, money, rememberOrderKey, rememberTicketOrder } from "../api";
 import { useI18n } from "../i18n";
 import { Container, ErrorState } from "../ui";
-import { intlLocaleTag } from "../utils";
+import { eventText, intlLocaleTag } from "../utils";
 
 export default function Confirmation() {
   const { orderId } = useParams();
@@ -71,8 +71,8 @@ export default function Confirmation() {
 
   const first = order.tickets[0];
   const event = first?.event;
-  const title = event ? (locale === "ar" ? event.titleAr : event.titleFr) : null;
-  const venue = event ? (locale === "ar" ? event.venueAr : event.venueFr) : null;
+  const title = event ? (eventText(event, "title", locale)) : null;
+  const venue = event ? (eventText(event, "venue", locale)) : null;
   const count = order.tickets.length;
   const ticketsLabel = (count === 1 ? t("ticketsCount") : t("ticketsCountPlural")).replace("{n}", String(count));
 

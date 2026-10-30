@@ -9,7 +9,7 @@ import { api, downloadFile, money, rememberTicketKey, tokenForTicket } from "../
 import { useI18n } from "../i18n";
 import { useAuth } from "../AuthContext";
 import { Badge, Button, Card, Container, ErrorState, Field, IconButton, Input, Modal } from "../ui";
-import { cn, intlLocaleTag } from "../utils";
+import { cn, eventText, intlLocaleTag } from "../utils";
 
 const STATUS_TONE = { VALID: "success", USED: "neutral", CANCELLED: "danger", TRANSFERRED: "warn" };
 
@@ -196,11 +196,11 @@ export default function TicketDetail() {
   }
 
   const { ticket, event, tier, order } = data;
-  const title = locale === "ar" ? event.titleAr : event.titleFr;
-  const venue = locale === "ar" ? event.venueAr : event.venueFr;
-  const zone = locale === "ar" ? tier.zoneAr : tier.zoneFr;
-  const gate = locale === "ar" ? tier.gateAr : tier.gateFr;
-  const tierName = locale === "ar" ? tier.nameAr : tier.nameFr;
+  const title = eventText(event, "title", locale);
+  const venue = eventText(event, "venue", locale);
+  const zone = eventText(tier, "zone", locale);
+  const gate = eventText(tier, "gate", locale);
+  const tierName = eventText(tier, "name", locale);
   const seat = seatLabel(ticket, locale);
   const statusLabel =
     ticket.status === "VALID"
@@ -397,7 +397,7 @@ export default function TicketDetail() {
                       )}
                     >
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold">{locale === "ar" ? z.nameAr : z.nameFr}</span>
+                        <span className="block truncate text-sm font-semibold">{eventText(z, "name", locale)}</span>
                         <span className="block text-xs text-muted">
                           {z.dueCents > 0 ? t("zoneExtra").replace("{n}", money(z.dueCents)) : t("zoneIncluded")}
                         </span>

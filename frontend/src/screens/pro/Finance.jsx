@@ -6,7 +6,7 @@ import { useI18n } from "../../i18n";
 import { useOrganisers } from "./useOrganisers";
 import { Card, EmptyState, PageHead, SectionTitle, StatCard, StatSkeletons } from "./ui";
 import { Button, Field, Input, Select } from "../../ui";
-import { cn } from "../../utils";
+import { cn, eventText } from "../../utils";
 import { text } from "./copy";
 
 /**
@@ -52,7 +52,7 @@ export default function Finance() {
         if (ticket.status === "CANCELLED") continue;
         const current = map.get(ticket.event.slug) ?? {
           slug: ticket.event.slug,
-          title: locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr,
+          title: eventText(ticket.event, "title", locale),
           image: ticket.event.image,
           city: ticket.event.city,
           gross: 0,

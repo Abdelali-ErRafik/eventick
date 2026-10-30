@@ -20,6 +20,38 @@ export function intlLocaleTag(locale) {
   return "fr-FR";
 }
 
+/**
+ * Organiser-written content in the reader's language.
+ *
+ * Events carry their text in French and Arabic only — there is no `titleEn`,
+ * `blurbEn` or `venueEn` on the model — so an English reader is shown the
+ * French. That is a deliberate fallback for a francophone market, not an
+ * oversight, but it was written out as an inline conditional on the locale,
+ * once per call site, in FIFTY-TWO places across eight fields.
+ *
+ * The cost of that was not the duplication; it was that adding English later
+ * meant finding and correctly editing fifty-one ternaries, which is the kind
+ * of change that half-lands and leaves a few screens quietly French forever.
+ * The same mistake, in the same shape, already produced two shipped bugs —
+ * see intlLocaleTag above.
+ *
+ * So the decision lives here once. When English content is added, this
+ * function gains one line and every screen follows.
+ *
+ *   eventText(event, "title", locale)   // titleFr / titleAr
+ *   eventText(tier, "name", locale)     // nameFr / nameAr
+ *
+ * Falls back to French whenever the requested language is missing or empty,
+ * because a visible French title beats a blank one.
+ */
+export function eventText(row, field, locale) {
+  if (!row) return "";
+  const fr = row[`${field}Fr`] ?? "";
+  if (locale === "ar") return row[`${field}Ar`] || fr;
+  // When `${field}En` exists one day, it is read here and nothing else moves.
+  return fr;
+}
+
 export function cn(...parts) {
   return parts.filter(Boolean).join(" ");
 }

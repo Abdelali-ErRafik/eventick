@@ -4,7 +4,7 @@ import { Banknote, Check, Download, ExternalLink, Trash2, Undo2, XCircle } from 
 import { toast } from "sonner";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
-import { longDate } from "../../utils";
+import { eventText, longDate } from "../../utils";
 import { useConfirm } from "./ConfirmContext";
 import { useOrganisers } from "./useOrganisers";
 import { Badge, Btn, EmptyState, FilterBar, IconBtn, PageHead, Pager } from "./ui";
@@ -57,7 +57,7 @@ export default function Orders() {
   const events = useMemo(() => {
     const map = new Map();
     for (const order of orders ?? []) {
-      for (const ticket of order.tickets) map.set(ticket.event.slug, locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr);
+      for (const ticket of order.tickets) map.set(ticket.event.slug, eventText(ticket.event, "title", locale));
     }
     return [...map.entries()];
   }, [orders, locale]);
@@ -286,9 +286,9 @@ function OrderCard({ order, ticket, locale, t, badgeTone, badgeLabel, onToggleAd
       <div className="mt-4 flex items-center gap-3 border-t border-line/10 pt-4">
         <img src={ticket.event.image} alt="" className="size-11 shrink-0 rounded-control object-cover" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold">{locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr}</p>
+          <p className="truncate text-sm font-bold">{eventText(ticket.event, "title", locale)}</p>
           <p className="truncate text-xs text-muted">
-            {longDate(ticket.event.start, locale)} · {locale === "ar" ? ticket.tierNameAr : ticket.tierNameFr}
+            {longDate(ticket.event.start, locale)} · {eventText(ticket, "tierName", locale)}
           </p>
         </div>
         <p className="shrink-0 text-end">

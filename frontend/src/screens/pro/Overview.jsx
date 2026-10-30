@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { QrCode, RefreshCw, Ticket, Wallet } from "lucide-react";
 import { api, money } from "../../api";
 import { useI18n } from "../../i18n";
-import { intlLocaleTag, longDate, todayKey } from "../../utils";
+import { eventText, intlLocaleTag, longDate, todayKey } from "../../utils";
 import { useRealtime } from "./useRealtime";
 import { Badge, Card, EmptyState, PageHead, SectionTitle, StatCard, StatSkeletons } from "./ui";
 import { useAuth } from "../../AuthContext";
@@ -147,7 +147,7 @@ export default function Overview() {
                 <div className="flex min-w-0 items-center gap-3">
                   <img src={event.image} alt="" className="size-10 shrink-0 rounded-control object-cover" />
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-bold">{locale === "ar" ? event.titleAr : event.titleFr}</p>
+                    <p className="truncate text-sm font-bold">{eventText(event, "title", locale)}</p>
                     <p className="truncate text-xs text-muted">
                       {event.city} · {longDate(event.start, locale)}
                     </p>
@@ -186,7 +186,7 @@ export default function Overview() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">{order.holderName}</p>
                     <p className="truncate text-xs text-muted">
-                      {order.tickets[0] ? (locale === "ar" ? order.tickets[0].event.titleAr : order.tickets[0].event.titleFr) : order.id}
+                      {order.tickets[0] ? (eventText(order.tickets[0].event, "title", locale)) : order.id}
                     </p>
                   </div>
                 </div>

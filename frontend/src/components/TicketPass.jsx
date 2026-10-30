@@ -3,7 +3,7 @@ import { QrMark } from "./QrMark";
 import { money } from "../api";
 import { useI18n } from "../i18n";
 import { Badge } from "../ui";
-import { intlLocaleTag } from "../utils";
+import { eventText, intlLocaleTag } from "../utils";
 
 export function seatLabel(ticket, locale) {
   if (!ticket.seatRow || !ticket.seatNumber) return null;
@@ -31,11 +31,11 @@ export function toTicketPassProps(item) {
 // `ticket`, `event`, `tier` match GET /api/tickets/:id's response shape.
 export function TicketPass({ ticket, event, tier, priceCents, qrPayload }) {
   const { locale, t } = useI18n();
-  const title = locale === "ar" ? event.titleAr : event.titleFr;
-  const venue = locale === "ar" ? event.venueAr : event.venueFr;
-  const zone = locale === "ar" ? tier.zoneAr : tier.zoneFr;
-  const gate = locale === "ar" ? tier.gateAr : tier.gateFr;
-  const tierName = locale === "ar" ? tier.nameAr : tier.nameFr;
+  const title = eventText(event, "title", locale);
+  const venue = eventText(event, "venue", locale);
+  const zone = eventText(tier, "zone", locale);
+  const gate = eventText(tier, "gate", locale);
+  const tierName = eventText(tier, "name", locale);
   const seat = seatLabel(ticket, locale);
 
   return (

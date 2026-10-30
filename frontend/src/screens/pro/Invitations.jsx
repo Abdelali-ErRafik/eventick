@@ -3,6 +3,7 @@ import { MailPlus, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { useI18n } from "../../i18n";
+import { eventText } from "../../utils";
 import { useConfirm } from "./ConfirmContext";
 import { EventSwitcher } from "./EventSwitcher";
 import { Badge, Btn, DataTable, EmptyState, IconBtn, Modal, PageHead, PersonCell, Td, Th } from "./ui";
@@ -72,7 +73,7 @@ export default function Invitations() {
   }, [load]);
 
   const tierLabel = (tier) =>
-    `${locale === "ar" ? tier.nameAr : tier.nameFr} · ${tier.remaining} ${t.left.toLowerCase()}`;
+    `${eventText(tier, "name", locale)} · ${tier.remaining} ${t.left.toLowerCase()}`;
 
   const openForm = () => {
     setTierId(tiers[0]?.id ?? "");
@@ -188,7 +189,7 @@ export default function Invitations() {
                 <Td>
                   <PersonCell name={invitation.guestName} sub={invitation.guestEmail ?? invitation.note ?? undefined} />
                 </Td>
-                <Td>{locale === "ar" ? invitation.tierNameAr : invitation.tierNameFr}</Td>
+                <Td>{eventText(invitation, "tierName", locale)}</Td>
                 <Td>
                   {/* A revoked invitation stays on the list by design — the
                       backend keeps it so "issued, then revoked" is visible

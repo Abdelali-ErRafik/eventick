@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, Keyboard, QrCode, ScanLine, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
-import { Notice, Verdict } from "../../ui";
+import { Dropdown, Notice, Verdict, triggerControlClass } from "../../ui";
 import { useI18n } from "../../i18n";
 import QrScanner from "./QrScanner";
 import { Badge, Btn, Card, EmptyState, PageHead, PersonCell } from "./ui";
-import { cn } from "../../utils";
+import { cn, eventText, intlLocaleTag } from "../../utils";
 import {
   flushQueue,
   loadManifest,
@@ -17,6 +17,7 @@ import {
   saveManifest,
 } from "./offlineGate";
 import { text } from "./copy";
+import { useConfirm } from "./ConfirmContext";
 
 /** The headline word for each outcome. The full sentence goes underneath as
  * the detail — at a door you read the word first and the reason second. */
@@ -32,6 +33,7 @@ const VERDICT_WORD = (t) => ({
 export default function Gate() {
   const { locale } = useI18n();
   const t = text[locale];
+  const confirm = useConfirm();
   const [mode, setMode] = useState("scan");
   const [ref, setRef] = useState("");
   const [result, setResult] = useState(null);
@@ -159,6 +161,41 @@ export default function Gate() {
     checkIn(ref, "manual");
   };
 
+  /*
+   * Take back the admission that just happened.
+   *
+   * Offered only on the scan that succeeded, because that is the moment the
+   * mistake is noticed — the wrong person stepped forward, or a group was
+   * waved through and one of them was turned away. Anything older belongs on
+   * the Orders desk, where the whole order is in view.
+   *
+   * Confirmed first: this makes a spent ticket work again, and a stray tap on
+   * a phone held in one hand at a dark door is exactly how that happens by
+   * accident. It needs the network, so it is hidden while offline rather than
+   * queued — an undo that silently did nothing would be worse than none.
+   */
+  const undoLast = async () => {
+    if (!result?.ok || !result.ref) return;
+    const confirmed = await confirm({
+      title: t.undoTitle,
+      message: t.undoConfirm,
+      tone: "warn",
+      confirmLabel: t.undoConfirmLabel,
+      cancelLabel: t.undoKeep,
+    });
+    if (!confirmed) return;
+    try {
+      await api.post("/gate/undo", { ref: result.ref });
+      setResult(null);
+      // Drop it from the recent list too: leaving it there would show the
+      // door staff an admission that no longer stands.
+      setLog((prev) => prev.filter((entry) => entry.ref !== result.ref));
+      toast.success(t.undoDone);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
   const admitted = log.filter((entry) => entry.code === "ok").length;
 
   return (
@@ -217,16 +254,20 @@ export default function Gate() {
         )}
         {queued > 0 ? <Badge tone="warn">{t.queuedScans.replace("{n}", String(queued))}</Badge> : null}
         <div className="ms-auto flex flex-wrap items-center gap-2">
-          <select
-            className="h-10 rounded-control border border-line/20 bg-card px-3 text-sm outline-none focus:border-primary"
-            defaultValue=""
-            onChange={(e) => { if (e.target.value) downloadManifest(e.target.value); e.target.value = ""; }}
-          >
-            <option value="">{t.downloadManifest}</option>
-            {events.map((ev) => (
-              <option key={ev.slug} value={ev.slug}>{locale === "ar" ? ev.titleAr : ev.titleFr}</option>
-            ))}
-          </select>
+          {/* A menu, not a value: picking an event downloads its manifest and
+              the control goes straight back to its prompt, so `value` stays
+              empty on purpose and the placeholder is the only label it ever
+              shows. */}
+          <span className="w-56">
+            <Dropdown
+              value=""
+              onChange={(slug) => { if (slug) downloadManifest(slug); }}
+              options={events.map((ev) => ({ value: ev.slug, label: eventText(ev, "title", locale) }))}
+              placeholder={t.downloadManifest}
+              label={t.downloadManifest}
+              triggerClassName={triggerControlClass({ className: "h-10 text-sm" })}
+            />
+          </span>
           {queued > 0 && online ? (
             <Btn variant="secondary" size="sm" onClick={flush}>
               <Download className="size-4" />
@@ -298,6 +339,23 @@ export default function Gate() {
             idleLabel={t.waiting}
             className="mt-5"
           />
+
+          {/*
+            Understated on purpose: it sits under the verdict, not beside the
+            scanner, so it is reachable in the seconds after a wrong scan
+            without ever competing with the next person in the queue.
+          */}
+          {result?.ok && result.ref && online ? (
+            <div className="mt-3 text-center">
+              <button
+                type="button"
+                onClick={undoLast}
+                className="text-xs font-bold text-encre/60 underline decoration-dotted underline-offset-4 hover:text-corail"
+              >
+                {t.undoLast}
+              </button>
+            </div>
+          ) : null}
         </Card>
 
         <Card>
@@ -317,7 +375,7 @@ export default function Gate() {
                 <li key={`${entry.ref}-${i}`} className="flex items-center justify-between gap-3 rounded-control bg-paper px-3 py-2.5">
                   <PersonCell
                     name={entry.holder || entry.ref}
-                    sub={entry.at.toLocaleTimeString(locale === "ar" ? "ar-MA" : "fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                    sub={entry.at.toLocaleTimeString(intlLocaleTag(locale), { hour: "2-digit", minute: "2-digit" })}
                   />
                   <Badge tone={entry.code === "ok" ? "success" : entry.code === "used" ? "warn" : "danger"}>
                     {entry.code === "ok"

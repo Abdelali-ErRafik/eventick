@@ -10,7 +10,7 @@ import { useAuth } from "../AuthContext";
 import { useI18n } from "../i18n";
 import { Button, Card, Container, Countdown, Field, Input, LoadingState, Notice } from "../ui";
 import { emailOk, phoneOk } from "../payment";
-import { cn } from "../utils";
+import { cn, eventText } from "../utils";
 
 export default function Checkout() {
   const { locale, t, tf } = useI18n();
@@ -351,7 +351,7 @@ export default function Checkout() {
             <Card pad={false} className="overflow-hidden bg-stage text-stage-fg">
               <img src={event.image} alt="" className="h-28 w-full object-cover" />
               <div className="p-5">
-                <h2 className="font-display text-subhead font-extrabold">{locale === "ar" ? event.titleAr : event.titleFr}</h2>
+                <h2 className="font-display text-subhead font-extrabold">{eventText(event, "title", locale)}</h2>
                 <p className="mt-0.5 text-sm text-stage-muted">{event.city}</p>
 
                 <ul className="mt-4 grid gap-2 border-t border-stage-fg/15 pt-4 text-sm">
@@ -359,7 +359,7 @@ export default function Checkout() {
                     <li key={line.tier.id} className="flex justify-between gap-3">
                       <span className="min-w-0">
                         <span className="font-semibold tabular-nums">{line.qty}x</span>{" "}
-                        {locale === "ar" ? line.tier.nameAr : line.tier.nameFr}
+                        {eventText(line.tier, "name", locale)}
                       </span>
                       <span className="shrink-0 tabular-nums">{money(line.qty * line.tier.priceCents)}</span>
                     </li>
@@ -368,12 +368,13 @@ export default function Checkout() {
 
                 {!payment ? (
                   <form className="mt-4 flex gap-2 border-t border-stage-fg/15 pt-4" onSubmit={applyPromo}>
-                    <input
+                    <Input
+                      tone="stage"
                       value={promo}
                       onChange={(e) => setPromo(e.target.value)}
                       placeholder={t("promo")}
                       aria-label={t("promo")}
-                      className="h-11 min-w-0 flex-1 rounded-control border border-stage-fg/20 bg-stage-fg/10 px-4 font-mono text-sm uppercase text-stage-fg outline-none placeholder:text-stage-muted focus:border-accent"
+                      className="min-w-0 flex-1 font-mono text-sm uppercase"
                     />
                     <Button variant="inverse" type="submit">
                       {t("promoApply")}

@@ -7,8 +7,8 @@ import { useCatalog } from "../../useCatalog";
 import { money } from "../../api";
 import { categoryLabel, LOCALES, LOCALE_LABELS, useI18n } from "../../i18n";
 import { useTheme } from "../../ThemeContext";
-import { Button, IconButton, Popover, PopoverItem } from "../../ui";
-import { cn, CITIES, minPriceCents, monthBadge } from "../../utils";
+import { Button, IconButton, Input, Popover, PopoverItem } from "../../ui";
+import { CITIES, cn, eventText, minPriceCents, monthBadge } from "../../utils";
 import { EventTicker } from "./EventTicker";
 
 /**
@@ -255,14 +255,14 @@ export function SiteHeader({ overlay = false }) {
           >
             {({ close }) => (
               <div className="p-3">
-                <input
+                <Input
                   autoFocus
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   onKeyDown={(event) => event.key === "Enter" && submitSearch(close)}
                   placeholder={t("searchPh")}
                   aria-label={t("searchPh")}
-                  className="h-11 w-full rounded-control border border-line/15 bg-card px-4 text-sm outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/20"
+                  className="text-sm"
                 />
                 {/* Poster thumbnail + month stamp + price, same information
                     hierarchy EventCard uses -- a bare text row told you a
@@ -288,7 +288,7 @@ export function SiteHeader({ overlay = false }) {
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-sm font-semibold">
-                                {locale === "ar" ? event.titleAr : event.titleFr}
+                                {eventText(event, "title", locale)}
                               </span>
                               <span className="block truncate text-xs text-muted">{event.city}</span>
                             </span>

@@ -8,14 +8,11 @@
  */
 export { useCatalog } from "./CatalogContext.jsx";
 
-export function eventTitle(event, locale) {
-  return locale === "ar" ? event.titleAr : event.titleFr;
-}
-
-export function eventVenue(event, locale) {
-  return locale === "ar" ? event.venueAr : event.venueFr;
-}
-
-export function eventBlurb(event, locale) {
-  return locale === "ar" ? event.blurbAr : event.blurbFr;
-}
+/*
+ * eventTitle/eventVenue/eventBlurb used to live here and had NO callers —
+ * every screen wrote the locale conditional inline instead, fifty-two times.
+ * A per-field wrapper that nobody reaches for is worse than none, so they are
+ * gone: `eventText(row, field, locale)` in utils.js is the one way to read
+ * organiser-written text, and it works for tier names, zones and gates too,
+ * which these three never covered.
+ */

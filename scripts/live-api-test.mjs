@@ -410,6 +410,49 @@ await expectStatus("PATCH own event (content)", "PATCH", `/api/organiser/events/
   token: tokens.organiser,
   body: { city: "Rabat" },
 });
+
+/*
+ * The whole listing is correctable, not just the title.
+ *
+ * It used to accept title/city/image only, so a typo in the VENUE or the
+ * ADDRESS was permanent: no route took them, and an event with sales cannot
+ * be deleted and rebuilt. Those are the two mistakes that actually strand
+ * someone at the door.
+ */
+await expectStatus("PATCH own event (venue, address, description, age)", "PATCH", `/api/organiser/events/${newSlug}`, 200, {
+  token: tokens.organiser,
+  body: {
+    venueFr: "Salle corrigée", venueAr: "قاعة مصححة",
+    address: "Avenue Mohammed VI, Rabat",
+    category: "culture",
+    blurbFr: "Accroche corrigée", blurbAr: "وصف مصحح",
+    aboutFr: "Description corrigée.", aboutAr: "وصف مصحح طويل.",
+    ageFr: "16 ans et plus", ageAr: "16 سنة فما فوق",
+  },
+});
+const corrected = await call("GET", `/api/events/${newSlug}`);
+record(
+  "the correction is what the public page now shows",
+  corrected.data?.event?.venueFr === "Salle corrigée" && corrected.data?.event?.address === "Avenue Mohammed VI, Rabat",
+  `${corrected.data?.event?.venueFr} · ${corrected.data?.event?.address}`,
+);
+await expectStatus("a venue too short to be one is refused", "PATCH", `/api/organiser/events/${newSlug}`, 400, {
+  token: tokens.organiser,
+  body: { venueFr: "x" },
+});
+
+/*
+ * Dates stay out. Moving an event buyers have planned around has to tell
+ * them, and nothing does that yet — so the field is not merely unused, it is
+ * absent from the schema, and a date in the body must change nothing.
+ */
+const beforeDate = (await call("GET", `/api/events/${newSlug}`)).data?.event?.start;
+await call("PATCH", `/api/organiser/events/${newSlug}`, {
+  token: tokens.organiser,
+  body: { start: "2030-01-01T20:00:00" },
+});
+const afterDate = (await call("GET", `/api/events/${newSlug}`)).data?.event?.start;
+record("a date in the body changes nothing", beforeDate === afterDate, `${afterDate}`);
 await expectStatus("PATCH visibility (hide)", "PATCH", `/api/organiser/events/${newSlug}/visibility`, 200, {
   token: tokens.organiser,
   body: { hidden: true },

@@ -3,7 +3,7 @@ import { CalendarDays, MapPin } from "lucide-react";
 import { money } from "../api";
 import { categoryLabel, useI18n } from "../i18n";
 import { Badge } from "../ui";
-import { cn, fillRatio, groupNumber, intlLocaleTag, minPriceCents, monthBadge, totalRemaining } from "../utils";
+import { cn, eventText, fillRatio, groupNumber, intlLocaleTag, minPriceCents, monthBadge, totalRemaining } from "../utils";
 
 /**
  * An event in a list.
@@ -36,8 +36,8 @@ export function EventCard({ event, variant = "grid" }) {
   const ratio = fillRatio(event);
   const left = totalRemaining(event);
   const badge = event.badge ? BADGE_TONES[event.badge] : null;
-  const title = locale === "ar" ? event.titleAr : event.titleFr;
-  const venue = locale === "ar" ? event.venueAr : event.venueFr;
+  const title = eventText(event, "title", locale);
+  const venue = eventText(event, "venue", locale);
 
   const feature = variant === "feature";
   const compact = variant === "compact";

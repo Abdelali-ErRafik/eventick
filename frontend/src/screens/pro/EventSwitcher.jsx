@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Calendar, Check, ChevronDown, Search } from "lucide-react";
-import { Popover, PopoverItem } from "../../ui";
-import { cn } from "../../utils";
+import { Input, Popover, PopoverItem } from "../../ui";
+import { cn, eventText, intlLocaleTag } from "../../utils";
 
 /**
  * The "which event am I looking at" control for Placements, and any other
@@ -27,7 +27,7 @@ export function EventSwitcher({ events, value, onChange, locale, labels }) {
     );
   }, [events, query]);
 
-  const title = (event) => (locale === "ar" ? event.titleAr : event.titleFr);
+  const title = (event) => (eventText(event, "title", locale));
 
   return (
     <Popover
@@ -55,13 +55,13 @@ export function EventSwitcher({ events, value, onChange, locale, labels }) {
           <div className="border-b border-line/10 p-2.5">
             <div className="relative">
               <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden />
-              <input
+              <Input
                 autoFocus
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={labels.search}
                 aria-label={labels.search}
-                className="h-10 w-full rounded-control border border-line/15 bg-paper ps-9 pe-3 text-sm outline-none focus:border-primary"
+                className="h-10 bg-paper ps-9 pe-3 text-sm"
               />
             </div>
           </div>
@@ -83,7 +83,7 @@ export function EventSwitcher({ events, value, onChange, locale, labels }) {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">{title(event)}</span>
                     <span className="block truncate text-xs text-muted">
-                      {event.city} · {new Date(event.start).toLocaleDateString(locale === "ar" ? "ar-MA" : "fr-MA", { day: "numeric", month: "short" })}
+                      {event.city} · {new Date(event.start).toLocaleDateString(intlLocaleTag(locale), { day: "numeric", month: "short" })}
                     </span>
                   </span>
                   {event.slug === value ? <Check className="size-4 shrink-0 text-primary" aria-hidden /> : null}

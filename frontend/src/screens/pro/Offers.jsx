@@ -8,7 +8,7 @@ import { useConfirm } from "./ConfirmContext";
 import { Badge, Btn, EmptyState, IconBtn, Modal, PageHead, SectionTitle } from "./ui";
 import { text } from "./copy";
 import { Dropdown, Field, Input, triggerControlClass } from "../../ui";
-import { intlLocaleTag } from "../../utils";
+import { eventText, intlLocaleTag } from "../../utils";
 
 const WAITLIST_TONE = { WAITING: "neutral", OFFERED: "warn", CLAIMED: "success", EXPIRED: "danger" };
 
@@ -49,14 +49,14 @@ export default function Offers() {
       events.map((event) =>
         api
           .get(`/organiser/events/${event.slug}/waitlist`)
-          .then((data) => data.entries.map((entry) => ({ ...entry, slug: event.slug, title: locale === "ar" ? event.titleAr : event.titleFr }))),
+          .then((data) => data.entries.map((entry) => ({ ...entry, slug: event.slug, title: eventText(event, "title", locale) }))),
       ),
     ).then((lists) => setWaitlist(lists.flat()));
   }, [events, locale]);
 
   const eventById = useMemo(() => {
     const map = new Map();
-    for (const event of events ?? []) map.set(event.id, locale === "ar" ? event.titleAr : event.titleFr);
+    for (const event of events ?? []) map.set(event.id, eventText(event, "title", locale));
     return map;
   }, [events, locale]);
 
@@ -240,7 +240,7 @@ export default function Offers() {
                   { value: "", label: t.allDates },
                   ...(events ?? []).map((event) => ({
                     value: event.slug,
-                    label: locale === "ar" ? event.titleAr : event.titleFr,
+                    label: eventText(event, "title", locale),
                   })),
                 ]}
                 triggerClassName={triggerControlClass({ invalid })}

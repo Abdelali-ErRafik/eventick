@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Flame } from "lucide-react";
 import { useI18n } from "../../i18n";
-import { cn, daysUntil } from "../../utils";
+import { cn, daysUntil, eventText } from "../../utils";
 
 const URGENCY_TONE = {
   last: "text-danger-fg bg-danger",
@@ -49,7 +49,7 @@ export function EventTicker({ events, onImage }) {
   if (items.length === 0) return null;
 
   const { event, left } = items[index % items.length];
-  const title = locale === "ar" ? event.titleAr : event.titleFr;
+  const title = eventText(event, "title", locale);
   const urgencyKey = URGENCY_LABEL_KEY[event.badge];
   const countdown = left <= 0 ? t("nextToday") : left === 1 ? t("nextTomorrow") : tf("daysLeft", { n: left });
 

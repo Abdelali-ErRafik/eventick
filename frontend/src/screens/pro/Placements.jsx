@@ -7,8 +7,8 @@ import { useConfirm } from "./ConfirmContext";
 import { EventSwitcher } from "./EventSwitcher";
 import { Badge, Btn, EmptyState, IconBtn, Modal, PageHead } from "./ui";
 import { text } from "./copy";
-import { Field, Input, SalesWindow, salesWindowAt, splitSalesWindow } from "../../ui";
-import { longDate } from "../../utils";
+import { CheckOption, Field, Input, SalesWindow, salesWindowAt, splitSalesWindow } from "../../ui";
+import { eventText, longDate } from "../../utils";
 
 const BLANK = {
   nameFr: "",
@@ -158,7 +158,7 @@ export default function Placements() {
   const remove = async (tier) => {
     const ok = await confirm({
       title: t.confirmTitle,
-      message: `${t.remove} — ${locale === "ar" ? tier.nameAr : tier.nameFr}`,
+      message: `${t.remove} — ${eventText(tier, "name", locale)}`,
       tone: "danger",
       confirmLabel: t.remove,
       cancelLabel: t.cancelBtn,
@@ -303,10 +303,9 @@ export default function Placements() {
               <Input id={id} describedBy={describedBy} invalid={invalid} type="number" min={1} value={form.capacity} onChange={(e) => field("capacity", Number(e.target.value))} />
             )}
           </Field>
-          <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
-            <input type="checkbox" checked={form.numbered} onChange={(e) => field("numbered", e.target.checked)} />
-            {t.numbered}
-          </label>
+          <div className="sm:col-span-2">
+            <CheckOption label={t.numbered} checked={form.numbered} onChange={(checked) => field("numbered", checked)} />
+          </div>
           {form.numbered ? (
             <Field label={t.seatsPerRow}>
               {({ id, describedBy, invalid }) => (
@@ -360,9 +359,9 @@ function ZoneCard({ tier, locale, t, nowIso, onEdit, onRemove }) {
     <article className="flex flex-col gap-4 rounded-card border border-line/10 bg-card p-5 shadow-card">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="truncate font-display text-subhead font-bold">{locale === "ar" ? tier.nameAr : tier.nameFr}</h3>
+          <h3 className="truncate font-display text-subhead font-bold">{eventText(tier, "name", locale)}</h3>
           <p className="mt-0.5 truncate text-xs text-muted">
-            {locale === "ar" ? tier.zoneAr : tier.zoneFr} · {t.gateCol} {locale === "ar" ? tier.gateAr : tier.gateFr}
+            {eventText(tier, "zone", locale)} · {t.gateCol} {eventText(tier, "gate", locale)}
           </p>
         </div>
         <div className="flex shrink-0 gap-1">

@@ -4,8 +4,8 @@ import { Ban, Copy, ExternalLink, Eye, EyeOff, Mail, Pencil, SlidersHorizontal, 
 import { toast } from "sonner";
 import { api, money } from "../../api";
 import { useAuth } from "../../AuthContext";
-import { useI18n } from "../../i18n";
-import { CITIES, longDate, totalCapacity, totalRemaining } from "../../utils";
+import { categoryLabel, useI18n } from "../../i18n";
+import { CATEGORIES, CITIES, eventText, longDate, totalCapacity, totalRemaining } from "../../utils";
 import { useConfirm } from "./ConfirmContext";
 import { useOrganisers } from "./useOrganisers";
 import { Badge, Btn, EmptyState, FilterBar, IconBtn, Modal, PageHead } from "./ui";
@@ -13,7 +13,7 @@ import { text } from "./copy";
 import { CheckOption, Dropdown, Field, Input, Notice, Textarea, triggerControlClass } from "../../ui";
 
 export default function Events() {
-  const { locale } = useI18n();
+  const { locale, t: tr } = useI18n();
   const t = text[locale];
   const navigate = useNavigate();
   const confirm = useConfirm();
@@ -34,6 +34,20 @@ export default function Events() {
   const [titleFr, setTitleFr] = useState("");
   const [titleAr, setTitleAr] = useState("");
   const [editCity, setEditCity] = useState("Casablanca");
+  // The rest of the listing. Everything a buyer reads and an organiser can
+  // mistype -- none of it was correctable before, and an event with sales
+  // cannot be deleted and rebuilt, so a typo in the venue was permanent.
+  const [editCategory, setEditCategory] = useState("festivals");
+  const [editVenueFr, setEditVenueFr] = useState("");
+  const [editVenueAr, setEditVenueAr] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [editImage, setEditImage] = useState("");
+  const [editBlurbFr, setEditBlurbFr] = useState("");
+  const [editBlurbAr, setEditBlurbAr] = useState("");
+  const [editAboutFr, setEditAboutFr] = useState("");
+  const [editAboutAr, setEditAboutAr] = useState("");
+  const [editAgeFr, setEditAgeFr] = useState("");
+  const [editAgeAr, setEditAgeAr] = useState("");
   const [contact, setContact] = useState(null);
   const [audience, setAudience] = useState(null);
   const [subject, setSubject] = useState("");
@@ -103,11 +117,37 @@ export default function Events() {
     setTitleFr(event.titleFr);
     setTitleAr(event.titleAr);
     setEditCity(event.city);
+    setEditCategory(event.category ?? "festivals");
+    setEditVenueFr(event.venueFr ?? "");
+    setEditVenueAr(event.venueAr ?? "");
+    setEditAddress(event.address ?? "");
+    setEditImage(event.image ?? "");
+    setEditBlurbFr(event.blurbFr ?? "");
+    setEditBlurbAr(event.blurbAr ?? "");
+    setEditAboutFr(event.aboutFr ?? "");
+    setEditAboutAr(event.aboutAr ?? "");
+    setEditAgeFr(event.ageFr ?? "");
+    setEditAgeAr(event.ageAr ?? "");
   };
 
   const save = async (e) => {
     e.preventDefault();
-    await api.patch(`/organiser/events/${edit.slug}`, { titleFr, titleAr, city: editCity });
+    await api.patch(`/organiser/events/${edit.slug}`, {
+      titleFr,
+      titleAr,
+      category: editCategory,
+      city: editCity,
+      venueFr: editVenueFr,
+      venueAr: editVenueAr,
+      address: editAddress,
+      image: editImage,
+      blurbFr: editBlurbFr,
+      blurbAr: editBlurbAr,
+      aboutFr: editAboutFr,
+      aboutAr: editAboutAr,
+      ageFr: editAgeFr,
+      ageAr: editAgeAr,
+    });
     setEdit(null);
     load();
     toast.success(t.saved);
@@ -260,7 +300,7 @@ export default function Events() {
     for (const order of orders) {
       for (const ticket of order.tickets) {
         if (ticket.event.slug !== event.slug) continue;
-        lines.push([ticket.ref, ticket.holderName, ticket.status, locale === "ar" ? ticket.tierNameAr : ticket.tierNameFr, String(ticket.priceCents / 100)]);
+        lines.push([ticket.ref, ticket.holderName, ticket.status, eventText(ticket, "tierName", locale), String(ticket.priceCents / 100)]);
       }
     }
     const csv = lines.map((line) => line.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
@@ -410,19 +450,103 @@ export default function Events() {
               />
             )}
           </Field>
-          <Field label={t.cityLabel}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t.categoryLabel}>
+              {({ id, describedBy, invalid }) => (
+                <Dropdown
+                  label={t.categoryLabel}
+                  id={id}
+                  describedBy={describedBy}
+                  value={editCategory}
+                  onChange={setEditCategory}
+                  options={CATEGORIES.map((value) => ({ value, label: categoryLabel(value, tr) }))}
+                  triggerClassName={triggerControlClass({ invalid })}
+                />
+              )}
+            </Field>
+            <Field label={t.cityLabel}>
+              {({ id, describedBy, invalid }) => (
+                <Dropdown
+                  label={t.cityLabel}
+                  id={id}
+                  describedBy={describedBy}
+                  value={editCity}
+                  onChange={setEditCity}
+                  options={CITIES.map((name) => ({ value: name, label: name }))}
+                  triggerClassName={triggerControlClass({ invalid })}
+                />
+              )}
+            </Field>
+          </div>
+
+          {/* The venue and address were unreachable after creation, so a
+              misspelled hall or a wrong street was permanent on an event
+              that had already sold — the two mistakes that actually strand
+              someone at the door. */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t.venueFrLabel}>
+              {({ id, describedBy, invalid }) => (
+                <Input id={id} describedBy={describedBy} invalid={invalid} value={editVenueFr} onChange={(e) => setEditVenueFr(e.target.value)} minLength={2} />
+              )}
+            </Field>
+            <Field label={t.venueArLabel}>
+              {({ id, describedBy, invalid }) => (
+                <Input id={id} describedBy={describedBy} invalid={invalid} dir="rtl" value={editVenueAr} onChange={(e) => setEditVenueAr(e.target.value)} minLength={2} />
+              )}
+            </Field>
+          </div>
+          <Field label={t.addressLabel} hint={t.addressHint}>
             {({ id, describedBy, invalid }) => (
-              <Dropdown
-                label={t.cityLabel}
-                id={id}
-                describedBy={describedBy}
-                value={editCity}
-                onChange={setEditCity}
-                options={CITIES.map((name) => ({ value: name, label: name }))}
-                triggerClassName={triggerControlClass({ invalid })}
-              />
+              <Input id={id} describedBy={describedBy} invalid={invalid} value={editAddress} onChange={(e) => setEditAddress(e.target.value)} minLength={3} />
             )}
           </Field>
+
+          <Field label={t.coverLabel} hint={t.coverHint}>
+            {({ id, describedBy, invalid }) => (
+              <Input id={id} describedBy={describedBy} invalid={invalid} value={editImage} onChange={(e) => setEditImage(e.target.value)} />
+            )}
+          </Field>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t.blurbFrLabel} hint={t.blurbHint}>
+              {({ id, describedBy, invalid }) => (
+                <Textarea id={id} describedBy={describedBy} invalid={invalid} rows={2} value={editBlurbFr} onChange={(e) => setEditBlurbFr(e.target.value)} />
+              )}
+            </Field>
+            <Field label={t.blurbArLabel} hint={t.blurbHint}>
+              {({ id, describedBy, invalid }) => (
+                <Textarea id={id} describedBy={describedBy} invalid={invalid} dir="rtl" rows={2} value={editBlurbAr} onChange={(e) => setEditBlurbAr(e.target.value)} />
+              )}
+            </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t.aboutFrLabel}>
+              {({ id, describedBy, invalid }) => (
+                <Textarea id={id} describedBy={describedBy} invalid={invalid} rows={4} value={editAboutFr} onChange={(e) => setEditAboutFr(e.target.value)} />
+              )}
+            </Field>
+            <Field label={t.aboutArLabel}>
+              {({ id, describedBy, invalid }) => (
+                <Textarea id={id} describedBy={describedBy} invalid={invalid} dir="rtl" rows={4} value={editAboutAr} onChange={(e) => setEditAboutAr(e.target.value)} />
+              )}
+            </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t.ageFrLabel} hint={t.ageHint}>
+              {({ id, describedBy, invalid }) => (
+                <Input id={id} describedBy={describedBy} invalid={invalid} value={editAgeFr} onChange={(e) => setEditAgeFr(e.target.value)} />
+              )}
+            </Field>
+            <Field label={t.ageArLabel} hint={t.ageHint}>
+              {({ id, describedBy, invalid }) => (
+                <Input id={id} describedBy={describedBy} invalid={invalid} dir="rtl" value={editAgeAr} onChange={(e) => setEditAgeAr(e.target.value)} />
+              )}
+            </Field>
+          </div>
+
+          {/* Dates are absent on purpose: moving a date buyers have planned
+              around has to tell them, and no route accepts one yet. */}
+          <Notice tone="info">{t.editDatesNote}</Notice>
         </form>
       </Modal>
 
@@ -545,7 +669,7 @@ export default function Events() {
         open={Boolean(cancelling)}
         onClose={() => setCancelling(null)}
         title={t.cancelEvent}
-        sub={cancelling ? (locale === "ar" ? cancelling.titleAr : cancelling.titleFr) : undefined}
+        sub={cancelling ? (eventText(cancelling, "title", locale)) : undefined}
         icon={<Ban className="size-5" />}
         footer={
           <>
@@ -607,7 +731,7 @@ function EventRow({ row, locale, t, onEdit, onDuplicate, onGuests, onContact, on
       <div className="flex items-start gap-3">
         <img src={event.image} alt="" className="size-14 shrink-0 rounded-control object-cover" />
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-display text-subhead font-bold">{locale === "ar" ? event.titleAr : event.titleFr}</h3>
+          <h3 className="truncate font-display text-subhead font-bold">{eventText(event, "title", locale)}</h3>
           <p className="mt-0.5 truncate text-xs text-muted">
             {event.city} · {longDate(event.start, locale)}
           </p>

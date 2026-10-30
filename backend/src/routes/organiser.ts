@@ -339,11 +339,37 @@ organiserRouter.delete(
   }),
 );
 
+/*
+ * What may be corrected after an event exists.
+ *
+ * This used to be title/city/image only, which meant a typo in the VENUE, a
+ * wrong street address, or a mistake in the description could never be fixed:
+ * there was no route that accepted them, and an event with sales cannot be
+ * deleted and rebuilt. Everything below is text a buyer reads and an
+ * organiser can get wrong, so all of it is correctable.
+ *
+ * Still deliberately absent:
+ *   - start/end/doors. Moving a date buyers have planned around is not a text
+ *     correction; it needs to tell them. Until that exists, no route accepts
+ *     a new date (see the note in lib/audit.ts about event.rescheduled).
+ *   - maxPerBuyer / allowResale, which have their own /settings route.
+ *   - slug, which is the public URL and is already printed on tickets.
+ */
 const updateEventSchema = z.object({
   titleFr: z.string().min(3).optional(),
   titleAr: z.string().min(3).optional(),
+  category: z.string().min(2).optional(),
   city: z.string().optional(),
+  venueFr: z.string().min(2).optional(),
+  venueAr: z.string().min(2).optional(),
+  address: z.string().min(3).optional(),
   image: z.string().optional(),
+  blurbFr: z.string().min(3).optional(),
+  blurbAr: z.string().min(3).optional(),
+  aboutFr: z.string().min(3).optional(),
+  aboutAr: z.string().min(3).optional(),
+  ageFr: z.string().min(1).optional(),
+  ageAr: z.string().min(1).optional(),
   cancelCutoffHours: z.number().int().min(0).max(8760).optional(),
   /** Hand the event to a different organiser. Admin-only, and refused once
    * the event has settled money — see the route below. */

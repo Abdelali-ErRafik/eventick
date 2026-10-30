@@ -12,12 +12,12 @@ import { useFavorites } from "../FavoritesContext";
 import { useCatalog } from "../useCatalog";
 import { Button, EmptyState, Field, Input, Modal } from "../ui";
 import { useI18n } from "../i18n";
-import { daysUntil, longDate, todayKey } from "../utils";
+import { daysUntil, eventText, longDate, todayKey } from "../utils";
 
 function BilletsInner() {
   const { locale, t, tf } = useI18n();
   const navigate = useNavigate();
-  const { user, refresh } = useAuth();
+  const { user, refresh, canUsePro } = useAuth();
   const { favorites } = useFavorites();
   const { events } = useCatalog();
   const [orders, setOrders] = useState(null);
@@ -89,7 +89,7 @@ function BilletsInner() {
   const exportCsv = () => {
     const header = ["title", "date", "ref", "price", "status"];
     const rows = past.map(({ ticket }) => [
-      locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr,
+      eventText(ticket.event, "title", locale),
       ticket.event.start,
       ticket.ref,
       String(ticket.priceCents / 100),
@@ -123,13 +123,28 @@ function BilletsInner() {
             <h1 className="font-display text-3xl font-extrabold">{user?.name}</h1>
             <p className="text-sm text-stage-muted">{user?.email}</p>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Mini value={String(active.length)} label={t("ready")} />
-            <Mini value={orders.length ? `${money(orders.reduce((s, o) => s + o.totalCents, 0))} MAD` : "0 MAD"} label={t("spend")} />
-          </div>
+          {/* Buyer stats only. "Dépenses 2026" is a question staff never
+              ask of this page -- for an organiser or admin it is a permanent
+              0 MAD next to a permanent 0 tickets, which reads as a broken
+              dashboard rather than an empty one. Their equivalent figures
+              (sold, checked in, revenue) live in /pro, scoped per event. */}
+          {canUsePro ? null : (
+            <div className="grid grid-cols-2 gap-2">
+              <Mini value={String(active.length)} label={t("ready")} />
+              <Mini value={orders.length ? `${money(orders.reduce((s, o) => s + o.totalCents, 0))} MAD` : "0 MAD"} label={t("spend")} />
+            </div>
+          )}
         </div>
       </section>
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">
+        {/* Every tab here is a buyer surface: active and past read the
+            caller's own orders, saved reads the shopping wishlist. Staff
+            sell rather than buy, so for them this page is an identity page
+            and nothing else -- the whole bar goes, not a subset of it.
+
+            Hidden, not disabled: a tab that can never hold anything is not
+            a state the user can get out of, so there is nothing to disable. */}
+        {canUsePro ? null : (
         <div className="flex gap-2 overflow-x-auto">
           {[
             ["active", t("tabActive")],
@@ -151,8 +166,9 @@ function BilletsInner() {
             </button>
           ))}
         </div>
+        )}
 
-        {tab === "active" ? (
+        {!canUsePro && tab === "active" ? (
           <div className="mt-6 space-y-4">
             {next ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-card bg-brume px-4 py-3">
@@ -190,7 +206,7 @@ function BilletsInner() {
           </div>
         ) : null}
 
-        {tab === "past" ? (
+        {!canUsePro && tab === "past" ? (
           <div className="mt-6 overflow-x-auto rounded-card border border-line/10 bg-card">
             <div className="flex items-center justify-between p-4">
               <h2 className="font-display text-xl font-bold">{t("historyTitle")}</h2>
@@ -219,7 +235,7 @@ function BilletsInner() {
                 {past.map(({ ticket }) => (
                   <tr key={ticket.id} className="border-t border-line/10">
                     <td className="px-4 py-3">
-                      <p className="font-semibold">{locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr}</p>
+                      <p className="font-semibold">{eventText(ticket.event, "title", locale)}</p>
                       <p className="text-muted">{ticket.event.city}</p>
                     </td>
                     <td className="px-4 py-3">{longDate(ticket.event.start, locale)}</td>
@@ -236,7 +252,7 @@ function BilletsInner() {
           </div>
         ) : null}
 
-        {tab === "saved" ? (
+        {!canUsePro && tab === "saved" ? (
           <div className="mt-6">
             <p className="text-sm text-muted">{t("alertsOn")}</p>
             {savedEvents.length === 0 ? (
@@ -258,14 +274,18 @@ function BilletsInner() {
           </div>
         ) : null}
 
-        <section className="mt-8 grid gap-4 lg:grid-cols-2">
+        {/* Two columns for a buyer (receipt + profile), one for staff: the
+            last transaction is a purchase receipt, so for an account that
+            never buys it is a card that exists only to say "nothing here". */}
+        <section className={`mt-8 grid gap-4 ${canUsePro ? "" : "lg:grid-cols-2"}`}>
+          {canUsePro ? null : (
           <article className="rounded-card border border-line/10 bg-card p-4 shadow-card">
             <h2 className="font-display text-xl font-bold">{t("lastTx")}</h2>
             {latest ? (
               <>
                 <p className="mt-2 text-sm text-muted">{latest.paymentRef}</p>
                 <p className="mt-3 flex justify-between">
-                  <span>{latest.tickets[0] ? (locale === "ar" ? latest.tickets[0].event.titleAr : latest.tickets[0].event.titleFr) : t("tickets")}</span>
+                  <span>{latest.tickets[0] ? (eventText(latest.tickets[0].event, "title", locale)) : t("tickets")}</span>
                   <span>{money(latest.subtotalCents)} MAD</span>
                 </p>
                 <p className="flex justify-between text-sm">
@@ -286,6 +306,7 @@ function BilletsInner() {
               <p className="mt-2 text-sm text-muted">{t("noTx")}</p>
             )}
           </article>
+          )}
           <article className="rounded-card border border-line/10 bg-card p-4 shadow-card">
             <h2 className="font-display text-xl font-bold">{t("edit")}</h2>
             {editingName ? (
@@ -362,7 +383,7 @@ function SmallTicket({ ticket, locale, t, onTransfer }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="truncate font-display font-bold">{locale === "ar" ? ticket.event.titleAr : ticket.event.titleFr}</h3>
+            <h3 className="truncate font-display font-bold">{eventText(ticket.event, "title", locale)}</h3>
             {/* Date and price were missing entirely -- the main TicketPass
                 above shows both, so these secondary cards read thinner than
                 they needed to by comparison, with nothing but a title and

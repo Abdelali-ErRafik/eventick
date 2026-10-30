@@ -5,12 +5,13 @@ import { toast } from "sonner";
 import { Shell } from "../components/Shell";
 import { EventCard } from "../components/EventCard";
 import { api, money, rememberOrderKey } from "../api";
+import { useAuth } from "../AuthContext";
 import { useCart } from "../CartContext";
 import { useFavorites } from "../FavoritesContext";
 import { useCatalog } from "../useCatalog";
 import { categoryLabel, useI18n } from "../i18n";
-import { Badge, Button, Card, Container, ErrorState, LoadingState } from "../ui";
-import { cn, dateRange, groupNumber, mapsUrl, minPriceCents, totalCapacity, totalRemaining } from "../utils";
+import { Badge, Button, Card, Container, ErrorState, Input, LoadingState } from "../ui";
+import { cn, dateRange, eventText, groupNumber, intlLocaleTag, mapsUrl, minPriceCents, totalCapacity, totalRemaining } from "../utils";
 
 const MAX_QTY_PER_TIER = 8;
 
@@ -23,6 +24,11 @@ export default function EventDetail() {
   const { events, bySlug, loading, error, reload } = useCatalog();
   const event = bySlug(slug);
   const [qty, setQty] = useState({});
+  // Staff sell rather than buy. The server refuses their purchase outright
+  // (refuseStaffPurchase on /orders/hold), so without this they would fill a
+  // basket, press Pay and collect a 403 toast -- a wall at the last step
+  // instead of an explanation at the first.
+  const { canUsePro } = useAuth();
   const [waitEmail, setWaitEmail] = useState("");
   const [waitBusy, setWaitBusy] = useState(false);
   const [booking, setBooking] = useState(false);
@@ -100,8 +106,8 @@ export default function EventDetail() {
   const sameCat = events.filter((item) => isLive(item) && item.category === event.category);
   const otherCat = events.filter((item) => isLive(item) && item.category !== event.category).sort((a, b) => a.start.localeCompare(b.start));
   const related = [...sameCat, ...otherCat].slice(0, 3);
-  const title = locale === "ar" ? event.titleAr : event.titleFr;
-  const venue = locale === "ar" ? event.venueAr : event.venueFr;
+  const title = eventText(event, "title", locale);
+  const venue = eventText(event, "venue", locale);
   const soldOut = totalRemaining(event) === 0;
   const isSaved = favorites.includes(event.slug);
 
@@ -196,7 +202,7 @@ export default function EventDetail() {
             ) : null}
           </div>
           <h1 className="mt-4 max-w-4xl font-display text-4xl font-extrabold leading-none md:text-hero">{title}</h1>
-          <p className="mt-4 max-w-2xl text-stage-muted">{locale === "ar" ? event.aboutAr : event.aboutFr}</p>
+          <p className="mt-4 max-w-2xl text-stage-muted">{eventText(event, "about", locale)}</p>
           {/* Pill chips instead of loose icon-plus-text pairs floating in a
               row -- matches the trust-row/stat-chip language used
               everywhere else in the app rather than being the one part of
@@ -208,7 +214,7 @@ export default function EventDetail() {
             </span>
             <span className="inline-flex items-center gap-2 rounded-full bg-stage-fg/10 px-3.5 py-2">
               <Clock className="size-4 text-accent" />
-              {t("doors")} {new Date(event.doors).toLocaleTimeString(locale === "ar" ? "ar-MA" : "fr-FR", { hour: "2-digit", minute: "2-digit" })}
+              {t("doors")} {new Date(event.doors).toLocaleTimeString(intlLocaleTag(locale), { hour: "2-digit", minute: "2-digit" })}
             </span>
             <span className="inline-flex items-center gap-2 rounded-full bg-stage-fg/10 px-3.5 py-2">
               <MapPin className="size-4 text-accent" />
@@ -309,13 +315,13 @@ export default function EventDetail() {
                         </div>
 
                         <h3 className="mt-2 font-display text-subhead font-bold">
-                          {locale === "ar" ? tier.nameAr : tier.nameFr}
+                          {eventText(tier, "name", locale)}
                         </h3>
                         <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted">
-                          {locale === "ar" ? tier.blurbAr : tier.blurbFr}
+                          {eventText(tier, "blurb", locale)}
                         </p>
                         <p className="mt-2 font-mono text-xs text-primary">
-                          {locale === "ar" ? tier.zoneAr : tier.zoneFr} · {locale === "ar" ? tier.gateAr : tier.gateFr}
+                          {eventText(tier, "zone", locale)} · {eventText(tier, "gate", locale)}
                         </p>
                       </div>
 
@@ -371,7 +377,7 @@ export default function EventDetail() {
                         {new Date(item.day).getUTCDate()} · {item.time}
                       </p>
                       <h3 className="font-display font-bold">{item.name}</h3>
-                      <p className="text-sm text-muted">{locale === "ar" ? item.genreAr : item.genreFr}</p>
+                      <p className="text-sm text-muted">{eventText(item, "genre", locale)}</p>
                     </div>
                   </article>
                 ))}
@@ -436,7 +442,7 @@ export default function EventDetail() {
                 body={`${venue}, ${event.address}. ${t("accessBody")}`}
               />
               <Info tone="bg-secondary text-secondary-fg" icon={<ParkingCircle className="size-5" />} title={t("parking")} body={t("parkingBody")} />
-              <Info tone="bg-accent text-accent-fg" icon={<ShieldCheck className="size-5" />} title={t("age")} body={locale === "ar" ? event.ageAr : event.ageFr} />
+              <Info tone="bg-accent text-accent-fg" icon={<ShieldCheck className="size-5" />} title={t("age")} body={eventText(event, "age", locale)} />
               <Info tone="bg-info text-info-fg" icon={<QrCode className="size-5" />} title={t("fraud")} body={t("fraudBody")} />
             </div>
           </section>
@@ -465,7 +471,7 @@ export default function EventDetail() {
                         <span className={cn("size-2 shrink-0 rounded-full", line.tier.recommended ? "bg-primary" : "bg-accent")} aria-hidden />
                         <span className="min-w-0 truncate">
                           <span className="font-semibold tabular-nums">{line.qty}×</span>{" "}
-                          {locale === "ar" ? line.tier.nameAr : line.tier.nameFr}
+                          {eventText(line.tier, "name", locale)}
                         </span>
                       </span>
                       <span className="shrink-0 font-semibold tabular-nums">{money(line.qty * line.tier.priceCents)}</span>
@@ -491,23 +497,30 @@ export default function EventDetail() {
                 </p>
               </div>
 
-              <Button
-                full
-                size="lg"
-                className="mt-4"
-                disabled={!count}
-                loading={booking}
-                onClick={checkout}
-              >
-                {t("pay")}
-              </Button>
+              {canUsePro ? (
+                <p className="mt-4 rounded-control border border-stage-fg/20 bg-stage-fg/10 p-3 text-sm leading-relaxed text-stage-muted">
+                  {t("staffNoBuy")}
+                </p>
+              ) : (
+                <Button
+                  full
+                  size="lg"
+                  className="mt-4"
+                  disabled={!count}
+                  loading={booking}
+                  onClick={checkout}
+                >
+                  {t("pay")}
+                </Button>
+              )}
 
               {soldOut ? (
                 <form className="mt-5 grid gap-2 border-t border-stage-fg/15 pt-5" onSubmit={joinWaitlist}>
                   <p className="text-sm font-bold">{t("waitTitle")}</p>
                   <p className="text-xs leading-relaxed text-stage-muted">{t("waitBody")}</p>
-                  <input
-                    className="h-11 w-full rounded-control border border-stage-fg/20 bg-stage-fg/10 px-4 text-sm text-stage-fg outline-none placeholder:text-stage-muted focus:border-accent"
+                  <Input
+                    tone="stage"
+                    className="text-sm"
                     type="email"
                     required
                     value={waitEmail}
@@ -539,7 +552,7 @@ export default function EventDetail() {
 
       {/* Phone action bar. The count used to render as a bare number under
           the price — just "3", with no unit — so it read as a stray figure. */}
-      {count > 0 ? (
+      {count > 0 && !canUsePro ? (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line/10 bg-card/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md lg:hidden">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
             <div className="min-w-0">

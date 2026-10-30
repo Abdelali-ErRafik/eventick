@@ -6,7 +6,7 @@ import { Shell } from "../components/Shell";
 import { Protected } from "../components/Protected";
 import { api, money, uploadImage } from "../api";
 import { categoryLabel, useI18n } from "../i18n";
-import { CATEGORIES, CITIES } from "../utils";
+import { CATEGORIES, CITIES, eventText } from "../utils";
 import { parseBrief, exampleBrief } from "../strategy";
 import { useOrganisers } from "./pro/useOrganisers";
 import { useAuth } from "../AuthContext";
@@ -820,7 +820,7 @@ function OrganiserInner() {
                     >
                       <img src={event.image} alt="" className="size-12 shrink-0 rounded-control object-cover" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold">{locale === "ar" ? event.titleAr : event.titleFr}</p>
+                        <p className="truncate font-semibold">{eventText(event, "title", locale)}</p>
                         <p className="truncate text-xs text-muted">{event.city}</p>
                       </div>
                       {/* Only shown once something has actually sold. Printing
