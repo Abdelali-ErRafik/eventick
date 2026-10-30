@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { MailPlus, Plus, Trash2, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ExternalLink, MailPlus, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../api";
 import { useI18n } from "../../i18n";
@@ -8,6 +9,7 @@ import { useConfirm } from "./ConfirmContext";
 import { EventSwitcher } from "./EventSwitcher";
 import { Badge, Btn, DataTable, EmptyState, IconBtn, Modal, PageHead, PersonCell, Td, Th } from "./ui";
 import { text } from "./copy";
+import { useOrganisers } from "./useOrganisers";
 import { Dropdown, Field, Input, Notice, triggerControlClass } from "../../ui";
 
 /** The server refuses a batch larger than this, so the form stops first. */
@@ -35,6 +37,16 @@ export default function Invitations() {
   const confirm = useConfirm();
   const [events, setEvents] = useState([]);
   const [slug, setSlug] = useState("");
+  /**
+   * Same required first step as Placements, for the same reason: issuing a
+   * comp is a WRITE against somebody's event. It consumes that organiser's
+   * capacity and mints a real ticket on their inventory, so "which event"
+   * cannot be answered until "whose" is. An admin owns no events, so a flat
+   * all-events list here is a list of other people's stock with nothing
+   * saying so.
+   */
+  const { maySeeAllOrganisers, organisers } = useOrganisers();
+  const [organiserId, setOrganiserId] = useState("");
   const [invitations, setInvitations] = useState(null);
   const [tiers, setTiers] = useState([]);
   const [open, setOpen] = useState(false);
@@ -43,14 +55,22 @@ export default function Invitations() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (maySeeAllOrganisers && !organiserId) {
+      setEvents([]);
+      setSlug("");
+      return;
+    }
+    const suffix = organiserId ? `?organiserId=${encodeURIComponent(organiserId)}` : "";
     api
-      .get("/organiser/events")
+      .get(`/organiser/events${suffix}`)
       .then((data) => {
         setEvents(data.events);
-        if (data.events.length) setSlug((current) => current || data.events[0].slug);
+        // Reset rather than keep: the previous organiser's slug is not one
+        // this organiser owns.
+        setSlug(data.events.length ? data.events[0].slug : "");
       })
       .catch(() => {});
-  }, []);
+  }, [maySeeAllOrganisers, organiserId]);
 
   const load = useCallback(() => {
     if (!slug) return;
@@ -69,6 +89,12 @@ export default function Invitations() {
 
   useEffect(() => {
     setInvitations(null);
+    // Clear the zones too, not just the rows. `load` returns early when
+    // there is no slug, so without this the PREVIOUS event's tiers survive
+    // -- and "Issue comps" is enabled on tiers.length, so it stayed clickable
+    // over zones belonging to an event no longer selected. Reachable now
+    // that switching organiser can empty the selection.
+    setTiers([]);
     load();
   }, [load]);
 
@@ -152,13 +178,28 @@ export default function Invitations() {
         sub={t.invitationsSub}
         actions={
           <>
-            <EventSwitcher
-              events={events}
-              value={slug}
-              onChange={setSlug}
-              locale={locale}
-              labels={{ pick: t.pickEvent, search: t.searchEvents, noMatch: t.noNavResults }}
-            />
+            {/* Step 1, admins only -- it gates the event picker beside it. */}
+            {maySeeAllOrganisers ? (
+              <span className="inline-block w-56">
+                <Dropdown
+                  value={organiserId}
+                  onChange={setOrganiserId}
+                  options={organisers.map((o) => ({ value: o.id, label: o.name || o.email }))}
+                  placeholder={t.pickOrganiser}
+                  label={t.pickOrganiser}
+                  triggerClassName={triggerControlClass({ className: "h-11" })}
+                />
+              </span>
+            ) : null}
+            {!maySeeAllOrganisers || organiserId ? (
+              <EventSwitcher
+                events={events}
+                value={slug}
+                onChange={setSlug}
+                locale={locale}
+                labels={{ pick: t.pickEvent, search: t.searchEvents, noMatch: t.noNavResults }}
+              />
+            ) : null}
             <Btn onClick={openForm} disabled={!slug || tiers.length === 0}>
               <MailPlus className="size-4" />
               {t.issueComps}
@@ -167,8 +208,13 @@ export default function Invitations() {
         }
       />
 
-      {!slug ? (
-        <EmptyState icon="🎟️" title={t.selectEventFirst} />
+      {maySeeAllOrganisers && !organiserId ? (
+        <EmptyState icon="👤" title={t.pickOrganiserFirst} body={t.pickOrganiserBodyComp} />
+      ) : !slug ? (
+        <EmptyState
+          icon="🎟️"
+          title={maySeeAllOrganisers && events.length === 0 ? t.organiserNoEvents : t.selectEventFirst}
+        />
       ) : invitations && rows.length === 0 ? (
         <EmptyState icon="🎁" title={t.noInvitations} />
       ) : (
@@ -177,7 +223,10 @@ export default function Invitations() {
             <tr>
               <Th>{t.guestName}</Th>
               <Th>{t.compZone}</Th>
-              <Th>{t.gateCol}</Th>
+              {/* Was t.gateCol ("Porte"/"Gate") -- this cell has never held
+                  a gate, it holds the ticket reference. Invisible while the
+                  table was empty, wrong the moment it had rows. */}
+              <Th>{t.ticketColumn}</Th>
               <Th>{t.compEmailed}</Th>
               <Th>{t.invitedBy}</Th>
               <Th className="text-end">{t.remove}</Th>
@@ -196,6 +245,21 @@ export default function Invitations() {
                       rather than silently gone. */}
                   {invitation.revoked ? (
                     <Badge tone="danger">{t.cancelled}</Badge>
+                  ) : invitation.ticketId ? (
+                    // Opens the guest's OWN page, carrying their token -- so
+                    // "the link you emailed me doesn't work" can be answered
+                    // by looking at the same thing they are looking at,
+                    // rather than at a different view of the same ticket.
+                    <Link
+                      to={`/billet/${invitation.ticketId}?k=${encodeURIComponent(invitation.accessToken ?? "")}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={t.openGuestTicket}
+                      className="inline-flex items-center gap-1.5 font-mono text-xs text-primary transition hover:underline"
+                    >
+                      {invitation.ref ?? "—"}
+                      <ExternalLink className="size-3.5 shrink-0" aria-hidden />
+                    </Link>
                   ) : (
                     <span className="font-mono text-xs">{invitation.ref ?? "—"}</span>
                   )}

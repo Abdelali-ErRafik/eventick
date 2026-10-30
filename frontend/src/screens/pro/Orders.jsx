@@ -272,7 +272,15 @@ function OrderCard({ order, ticket, locale, t, badgeTone, badgeLabel, onToggleAd
             {initial}
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold">{order.holderName}</p>
+            {/* The buyer's name is the way in: it is the thing an organiser
+                looks at while reading a row, so making it the link avoids a
+                sixth icon in an action row that already has five. */}
+            <Link
+              to={`/pro/orders/${order.id}`}
+              className="block truncate text-sm font-bold transition hover:text-primary hover:underline"
+            >
+              {order.holderName}
+            </Link>
             <p className="truncate text-xs text-muted">{order.email}</p>
           </div>
         </div>

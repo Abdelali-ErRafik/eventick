@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ExternalLink, LogOut, Menu, Moon, Sun } from "lucide-react";
+import { ChevronDown, ExternalLink, LogOut, Menu, Moon, Sun, UserRound } from "lucide-react";
 import { IconButton } from "../../../ui";
 import { cn } from "../../../utils";
 
@@ -126,6 +126,20 @@ export function Topbar({ eyebrow, title, onOpenNav, user, onLogout, theme, onTog
               <p className="truncate text-sm font-semibold sm:font-bold">{user?.email}</p>
               <p className="truncate text-xs text-muted">{labels.role ?? user?.role}</p>
             </div>
+
+            {/* Account. The dashboard had no route to the profile at all, so
+                a signed-in organiser could change the theme and the language
+                here but not their own name -- the one thing on /billets that
+                is theirs rather than the event's. */}
+            <Link
+              to="/billets"
+              role="menuitem"
+              onClick={() => setMenuOpen(false)}
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-start text-sm font-semibold text-ink transition hover:bg-sunken"
+            >
+              <UserRound className="size-4 shrink-0 text-muted" aria-hidden />
+              <span>{labels.myAccount}</span>
+            </Link>
 
             {/* Theme */}
             <button

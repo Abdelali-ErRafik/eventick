@@ -7,7 +7,8 @@ import { useConfirm } from "./ConfirmContext";
 import { EventSwitcher } from "./EventSwitcher";
 import { Badge, Btn, EmptyState, IconBtn, Modal, PageHead } from "./ui";
 import { text } from "./copy";
-import { CheckOption, Field, Input, SalesWindow, salesWindowAt, splitSalesWindow } from "../../ui";
+import { CheckOption, Dropdown, Field, Input, SalesWindow, salesWindowAt, splitSalesWindow, triggerControlClass } from "../../ui";
+import { useOrganisers } from "./useOrganisers";
 import { eventText, longDate } from "../../utils";
 
 const BLANK = {
@@ -64,20 +65,40 @@ export default function Placements() {
   const confirm = useConfirm();
   const [events, setEvents] = useState([]);
   const [slug, setSlug] = useState("");
+  /**
+   * An admin owns no events, so "which event" is not a question they can
+   * answer on its own -- every event on the platform belongs to someone, and
+   * a zone inherits that owner's payout, plan rate and bank account (see
+   * resolveOwner in routes/organiser.ts). So for a caller with scope.any the
+   * organiser is a REQUIRED first step, not a filter: nothing loads until one
+   * is chosen. An organiser holds exactly one scope -- their own -- so for
+   * them this control does not exist and the event picker is step one.
+   */
+  const { maySeeAllOrganisers, organisers } = useOrganisers();
+  const [organiserId, setOrganiserId] = useState("");
   const [tiers, setTiers] = useState(null);
   const [editing, setEditing] = useState(null); // tier object, or "new"
   const [form, setForm] = useState(BLANK);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    // Nothing to show an admin until they say whose events they mean.
+    if (maySeeAllOrganisers && !organiserId) {
+      setEvents([]);
+      setSlug("");
+      return;
+    }
+    const suffix = organiserId ? `?organiserId=${encodeURIComponent(organiserId)}` : "";
     api
-      .get("/organiser/events")
+      .get(`/organiser/events${suffix}`)
       .then((data) => {
         setEvents(data.events);
-        if (data.events.length) setSlug((current) => current || data.events[0].slug);
+        // Switching organiser must not keep the previous one's event
+        // selected -- that would load a slug this organiser does not own.
+        setSlug(data.events.length ? data.events[0].slug : "");
       })
       .catch(() => {});
-  }, []);
+  }, [maySeeAllOrganisers, organiserId]);
 
   const load = useCallback(() => {
     if (!slug) return;
@@ -193,13 +214,32 @@ export default function Placements() {
         sub={t.placementsSub}
         actions={
           <>
-            <EventSwitcher
-              events={events}
-              value={slug}
-              onChange={setSlug}
-              locale={locale}
-              labels={{ pick: t.pickEvent, search: t.searchEvents, noMatch: t.noNavResults }}
-            />
+            {/* Step 1, admins only. Placed BEFORE the event picker because it
+                gates it: until an organiser is named there are no events to
+                choose between. */}
+            {maySeeAllOrganisers ? (
+              <span className="inline-block w-56">
+                <Dropdown
+                  value={organiserId}
+                  onChange={setOrganiserId}
+                  options={organisers.map((o) => ({ value: o.id, label: o.name || o.email }))}
+                  placeholder={t.pickOrganiser}
+                  label={t.pickOrganiser}
+                  triggerClassName={triggerControlClass({ className: "h-11" })}
+                />
+              </span>
+            ) : null}
+            {/* Step 2. Hidden rather than disabled while step 1 is unanswered:
+                an empty picker invites a click that can do nothing. */}
+            {!maySeeAllOrganisers || organiserId ? (
+              <EventSwitcher
+                events={events}
+                value={slug}
+                onChange={setSlug}
+                locale={locale}
+                labels={{ pick: t.pickEvent, search: t.searchEvents, noMatch: t.noNavResults }}
+              />
+            ) : null}
             <Btn onClick={openNew} disabled={!slug}>
               <Plus className="size-4" />
               {t.addZone}
@@ -208,8 +248,16 @@ export default function Placements() {
         }
       />
 
-      {!slug ? (
-        <EmptyState icon="🎫" title={t.selectEventFirst} />
+      {maySeeAllOrganisers && !organiserId ? (
+        <EmptyState icon="👤" title={t.pickOrganiserFirst} body={t.pickOrganiserBody} />
+      ) : !slug ? (
+        // Two different "nothing selected" cases: an admin who picked an
+        // organiser with no events needs to hear THAT, not "pick an event"
+        // over a picker with nothing in it.
+        <EmptyState
+          icon="🎫"
+          title={maySeeAllOrganisers && events.length === 0 ? t.organiserNoEvents : t.selectEventFirst}
+        />
       ) : tiers && tiers.length === 0 ? (
         <EmptyState icon="🎪" title={t.noTiers} />
       ) : (

@@ -104,6 +104,7 @@ export default function DashboardShell({ sections, children }) {
             market: t.market,
             userMenu: t.userMenu,
             signOut: t.signOut,
+            myAccount: t.myAccount,
             themeLight: t.themeLight,
             themeDark: t.themeDark,
             langLabel: t.langLabel,

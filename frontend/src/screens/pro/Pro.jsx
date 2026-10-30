@@ -11,6 +11,7 @@ import { text } from "./copy";
 import Overview from "./Overview";
 import Events from "./Events";
 import Orders from "./Orders";
+import OrderDetail from "./OrderDetail";
 import Gate from "./Gate";
 import Finance from "./Finance";
 import Offers from "./Offers";
@@ -94,6 +95,16 @@ function ProInner() {
           element={
             <Protected permission="orders.manage">
               <Orders />
+            </Protected>
+          }
+        />
+        {/* Same permission as the list: a detail page that opened to someone
+            who may not see the list would be a way around it. */}
+        <Route
+          path="orders/:orderId"
+          element={
+            <Protected permission="orders.manage">
+              <OrderDetail />
             </Protected>
           }
         />
