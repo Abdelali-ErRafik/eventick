@@ -265,7 +265,13 @@ export default function Home() {
             now carries its own icon and a real divider between items
             (border, not just a grid gap) instead of three bare numbers
             floating in a lot of empty space. */}
-        <dl className="relative mx-auto grid w-full max-w-7xl grid-cols-3 divide-x divide-stage-fg/10 border-t border-stage-fg/10 px-4 py-7 md:px-8 rtl:divide-x-reverse">
+        {/* pb-10, not the py-7 this used to carry on both sides. The section
+            below the hero has its own background, so its top edge lands
+            directly under this row -- at an even 28px the numbers sat right
+            on that seam and the two surfaces read as one band split by a
+            colour change rather than as two sections. The extra bottom
+            padding is what separates them. */}
+        <dl className="relative mx-auto grid w-full max-w-7xl grid-cols-3 divide-x divide-stage-fg/10 border-t border-stage-fg/10 px-4 pb-10 pt-7 md:px-8 rtl:divide-x-reverse">
           <HeroStat icon={<Calendar className="size-5" />} value={live.length} label={t("eventsWord")} />
           <HeroStat icon={<MapPin className="size-5" />} value={cityCount} label={t("activeCities")} />
           <HeroStat
@@ -288,11 +294,14 @@ export default function Home() {
         // section sits on — one deliberate break in the rhythm at the
         // page's real centrepiece, instead of white-card, white-card,
         // white-card all the way down.
-        // pt-7 rather than py-14, and a smaller h2: this section's own
+        // pt-10 rather than py-14, and a smaller h2: this section's own
         // header was costing ~150px before the first card, which is what
         // kept the events just under the fold (966px against a 900px
         // viewport) even after the hero shrank and moved above the rail.
-        <section className="bg-brume/40 pb-14 pt-7">
+        // It was pt-7; the extra 12px is so the tinted background starts
+        // clear of the hero's stats rather than hard against them, which
+        // made the colour change read as a stripe through one section.
+        <section className="bg-brume/40 pb-14 pt-10">
           <div className="mx-auto max-w-7xl px-4 md:px-8">
             <p className="font-mono text-xs font-bold tracking-widest text-primary">{t("majorKicker")}</p>
             <h2 className="mt-1 font-display text-3xl font-extrabold text-encre md:text-4xl">{t("majorTitle")}</h2>
