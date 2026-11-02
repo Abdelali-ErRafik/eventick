@@ -3,9 +3,15 @@
 The admin's credentials are in. **No back-office step is needed**: the key
 below is already set for this merchant, which is why it verifies.
 
-> ⚠️ This is a **different merchant** from the MTZON account in the onboarding
-> email (`600001388`). These are Storeino's shared test credentials, and the
-> key is already registered against them.
+> ⚠️ **Correction (02/11/2026).** An earlier version of this note said
+> `600002996` was a *different* merchant from the MTZON account in the
+> onboarding email. It is not. CMI's own payment page displays this merchant
+> as **`MTZON (600002996)`**, so they are the same account — the `600001388`
+> in the onboarding email is the one that does not match what we are using.
+>
+> This matters for the test cards: cards are provisioned per merchant, so
+> cards issued for MTZON **should** work here. If they do not, the problem is
+> the card's provisioning at CMI, not a merchant mismatch on our side.
 
 ---
 
