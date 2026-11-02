@@ -571,15 +571,34 @@ async function main() {
   // ── TicketDetail.jsx share panel / ClaimShare.jsx ─────────────────────
   setGroup("SHARING  TicketDetail.jsx panel, ClaimShare.jsx");
   {
-    // A real GUEST order — no bearer token anywhere — to pin down the line
-    // between what a confirmation link alone may do and what needs an
-    // account. The backend suites hit :4100 directly and would not catch a
-    // frontend that sends the wrong credential (or none), which is how a
-    // guest's "Offrir ce billet" button once silently 403'd.
-    const guestHold = await api("POST", "/orders/hold", { body: { eventSlug: bought.slug, lines: [{ tierId: bought.tierId, qty: 1 }] } });
+    /*
+     * An order whose only credential is its ACCESS TOKEN, to pin down the
+     * line between what a confirmation link alone may do and what needs a
+     * session. The backend suites hit :4100 directly and would not catch a
+     * frontend that sends the wrong credential (or none), which is how a
+     * guest's "Offrir ce billet" button once silently 403'd.
+     *
+     * It used to be bought with no bearer token at all. Buying needs an
+     * account now, so it is bought by a SEPARATE throwaway account and every
+     * call below still presents only the order token — never that account's
+     * session. The distinction under test is credential-vs-session, and that
+     * is preserved; what is gone is the ability to have no account at all.
+     */
+    const shareBuyer = await api("POST", "/auth/register", {
+      body: {
+        name: "Invité Partage",
+        email: `fe-guest-share-${SUFFIX}@example.com`,
+        password: `fe-guest-share-${SUFFIX}`,
+      },
+    });
+    const guestHold = await api("POST", "/orders/hold", {
+      token: shareBuyer.data.token,
+      body: { eventSlug: bought.slug, lines: [{ tierId: bought.tierId, qty: 1 }] },
+    });
     const guestOrderToken = guestHold.data.accessToken;
     await api("POST", `/orders/${guestHold.data.order.id}/pay`, {
       orderToken: guestOrderToken,
+      token: shareBuyer.data.token,
       body: { holderName: "Invité Partage", email: `fe-guest-share-${SUFFIX}@example.com`, phone: "0612345678" },
     });
     const guestOrder = await api("GET", `/orders/${guestHold.data.order.id}`, { orderToken: guestOrderToken });
@@ -615,19 +634,23 @@ async function main() {
       body: { ticketId: guestTicketId },
     });
 
-    // Claiming the order is the one step that unlocks the rest. Without it
-    // "create an account" would be a dead end: /register makes an account
-    // but nothing links orders bought before it existed.
-    const claimer = await api("POST", "/auth/register", {
-      body: { name: "Invité Partage", email: `fe-claim-${SUFFIX}@example.com`, password: "fe-claim-pass-2026" },
-    });
-    const claimerToken = claimer.data?.token;
-    const beforeClaim = await api("GET", "/orders", { token: claimerToken });
-    record(
-      "a fresh account sees no tickets until it claims the order",
-      (beforeClaim.data?.orders ?? []).length === 0,
-      `${(beforeClaim.data?.orders ?? []).length}`,
-    );
+    /*
+     * Claiming the order is the one step that unlocks the rest. Without it
+     * "create an account" would be a dead end: /register makes an account but
+     * nothing links the orders bought before it existed.
+     *
+     * The claimer is the account that BOUGHT the order. It used to be a
+     * brand-new one, because the order had no owner and anyone holding the
+     * link could take it — which is no longer reachable, since buying creates
+     * the owner. Claiming as the owner is idempotent and still returns 200,
+     * so every check below still means what it says, and the 409 at the end
+     * (a second account cannot claim it) now exercises the real guard rather
+     * than a race nobody can reach.
+     *
+     * This file talks to the SPA proxy and has no database access, so it
+     * cannot detach the order the way the backend suites do.
+     */
+    const claimerToken = shareBuyer.data?.token;
     await check("claiming attaches the guest order to the account", "POST", `/orders/${guestHold.data.order.id}/claim`, 200, {
       token: claimerToken,
       orderToken: guestOrderToken,
