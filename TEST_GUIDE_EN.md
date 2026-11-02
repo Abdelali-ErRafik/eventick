@@ -18,7 +18,7 @@ freed seat goes.
 > 🤖 **Checks 1–19 run automatically.** Walking them by hand takes about
 > forty-five minutes, which meant nobody did it often enough to catch a
 > regression. `npm run test:live:checks` (from `backend/`, in mock payment
-> mode) asserts the same things through the same API the browser uses — 112
+> mode) asserts the same things through the same API the browser uses — 116
 > assertions, self-cleaning. Run it before you start: if it is red, fix that
 > first, because the manual pass will only find the same thing more slowly.
 > It does **not** replace the manual pass — a human still has to look at the
@@ -2030,7 +2030,7 @@ a seeded database.
 
 | Suite | Command | What it proves | Result |
 |---|---|---|---|
-| **`live-all-checks`** | **`npm run test:live:checks`** | **checks 1–19 in this guide, end to end** (20–22 are manual) | **112 / 112** |
+| **`live-all-checks`** | **`npm run test:live:checks`** | **checks 1–19 in this guide, end to end** (20–22 are manual) | **116 / 116** |
 | `vitest` | `npm test` | commission, pricing, inventory, ticket refs, the CMI hash | **123 / 123** |
 | `live-api-test` | `npm run test:live` | the API surface end to end | **123 / 123** |
 | `live-authz-test` | `npm run test:live:authz` | who may reach what, across roles | **54 / 54** |
@@ -2205,7 +2205,6 @@ changes. **Actual gaps** are work not done yet.
 
 ### Actual gaps
 
-- **`npm run test:live:checks` crashes on its first probe.** The suite holds seats with no session to detect mock payment mode, and guest checkout was closed — `/orders/hold` now requires an account, so the hold returns 401 and the script dereferences an undefined order. The suite has not been touched since before that change. Everything it covers still works; the harness is stale, not the app. It needs a signed-in buyer for every hold it makes.
 - **The demo accounts use public passwords.** They are printed in this guide and in the seed. Change them before anything is deployed.
 - **`PUBLIC_APP_URL` and `PUBLIC_API_URL` still point at `localhost`.** Every link in an invitation email — the "Voir mon billet" button and the PDF — is built from them, so an email sent today works for you and for nobody else. Set both before inviting a real guest. *(Check 22.)*
 - **Checks 20–26 have no automated coverage of the screens.** They were added after `test:live:checks`. The logic underneath 23–26 is covered — 24 unit tests on the period windows, and `test:live:money` on the period figures, the plan arithmetic and the owed-versus-paid agreement — but nothing opens the pages. 22 can never be automated: it talks to Bunny and Resend, and a suite that uploads files and sends real email on every run is worse than no suite — it would need stubs, which is a different piece of work.

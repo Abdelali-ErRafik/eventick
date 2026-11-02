@@ -116,18 +116,31 @@ async function makeEvent(token, slug, over = {}, tierOver = {}) {
   );
 }
 
-/** Guest purchase: hold then pay, exactly as the checkout screen does. */
-async function guestBuy(slug, tierId, email, qty = 1) {
+/**
+ * A buyer's purchase: hold then pay, exactly as the checkout screen does.
+ *
+ * Takes a token because guest checkout is closed — /orders/hold moved from
+ * optionalAuth to authenticate, so every hold needs a signed-in buyer. This
+ * used to be `guestBuy` and sent no credential at all, which is why the
+ * runner crashed on its first probe: the hold came back 401 and the next
+ * line dereferenced an order that was never created.
+ *
+ * The token must be a CUSTOMER's. An organiser or admin is refused with 403
+ * (staff sell, they do not buy), which would look like a broken checkout
+ * rather than the rule it is.
+ */
+async function buyAs(token, slug, tierId, email, qty = 1) {
   const hold = await call("POST", "/orders/hold", {
     eventSlug: slug,
     lines: [{ tierId, qty }],
     email,
-  });
+  }, token);
   if (hold.status !== 201) return { ok: false, status: hold.status, data: hold.data };
   const pay = await call(
     "POST",
     `/orders/${hold.data.order.id}/pay?k=${encodeURIComponent(hold.data.accessToken)}`,
     { holderName: "Acheteur Test", email, phone: "0612345678" },
+    token,
   );
   return {
     ok: pay.status === 200,
@@ -177,11 +190,20 @@ if (!org || !admin || !customer) {
     eventSlug: `${PREFIX}-mode-${stamp}`,
     lines: [{ tierId: tier, qty: 1 }],
     email: `mode-${stamp}@example.test`,
-  });
+  }, customer);
+  if (h.status !== 201) {
+    // Say which door closed rather than crashing on `h.data.order.id`. A 401
+    // here means checkout now needs a credential this runner is not sending.
+    console.log(red(`
+Could not hold seats to probe payment mode (HTTP ${h.status}).`));
+    console.log(JSON.stringify(h.data)?.slice(0, 200));
+    process.exit(1);
+  }
   const p = await call(
     "POST",
     `/orders/${h.data.order.id}/pay?k=${encodeURIComponent(h.data.accessToken)}`,
     { holderName: "Mode Probe", email: `mode-${stamp}@example.test`, phone: "0612345678" },
+    customer,
   );
   if (p.data?.mode !== "mock") {
     console.log(red(`\nPayments are in "${p.data?.mode}" mode, not "mock".`));
@@ -206,7 +228,7 @@ const c1Tier = c1.data?.event?.tiers?.[0]?.id;
 const c1PublicBefore = await call("GET", `/events/${c1Slug}`);
 ok("the event is in the public catalogue", c1PublicBefore.status === 200, `HTTP ${c1PublicBefore.status}`);
 
-const c1Sale = await guestBuy(c1Slug, c1Tier, `c1-${stamp}@example.test`);
+const c1Sale = await buyAs(customer, c1Slug, c1Tier, `c1-${stamp}@example.test`);
 ok("a guest can hold a seat with no account", Boolean(c1Sale.order), `order ${c1Sale.order ? "created" : "missing"}`);
 ok("a guest can pay and settle", c1Sale.ok, `pay HTTP ${c1Sale.pay?.status}`);
 ok("the guest is given an access token", Boolean(c1Sale.key), c1Sale.key ? "present" : "MISSING");
@@ -261,8 +283,19 @@ const c3Before = await call("GET", "/orders", undefined, c3Token);
 const c3CountBefore = (c3Before.data?.orders ?? []).length;
 ok("registering alone adopts no past orders", c3CountBefore === 0, `${c3CountBefore} order(s) before claiming`);
 
+/*
+ * A LEGACY guest order, made the only way one can exist now.
+ *
+ * Guest checkout is closed — /orders/hold requires an account — so the API
+ * cannot mint an unowned order any more. The claim feature is still real and
+ * still matters: every order placed before that change has customerId null,
+ * and those buyers must still be able to attach them. So the row is detached
+ * here directly, which is exactly the state those orders are in.
+ */
+await prisma.order.update({ where: { id: c1Sale.order.id }, data: { customerId: null } });
+
 const c3Claim = await call("POST", `/orders/${c1Sale.order.id}/claim?k=${encodeURIComponent(c1Sale.key)}`, {}, c3Token);
-ok("claiming attaches the guest order", c3Claim.status === 200, `HTTP ${c3Claim.status}`);
+ok("claiming attaches a legacy guest order", c3Claim.status === 200, `HTTP ${c3Claim.status}`);
 
 const c3After = await call("GET", "/orders", undefined, c3Token);
 ok("the order now appears in the account", (c3After.data?.orders ?? []).length === 1,
@@ -300,7 +333,7 @@ heading(5, "The gate: a QR scans exactly once");
 const c5Slug = `${PREFIX}-c5-${stamp}`;
 const c5 = await makeEvent(org, c5Slug);
 const c5Tier = c5.data?.event?.tiers?.[0]?.id;
-const c5Sale = await guestBuy(c5Slug, c5Tier, `c5-${stamp}@example.test`);
+const c5Sale = await buyAs(customer, c5Slug, c5Tier, `c5-${stamp}@example.test`);
 const c5Det = await call("GET", "/organiser/orders/detailed", undefined, org);
 const c5Ticket = (c5Det.data?.orders ?? []).flatMap((o) => o.tickets ?? []).find((t) => t.event?.slug === c5Slug);
 
@@ -340,7 +373,7 @@ heading(7, "Refunds, and who is allowed to make them");
 const c7Slug = `${PREFIX}-c7-${stamp}`;
 const c7 = await makeEvent(org, c7Slug);
 const c7Tier = c7.data?.event?.tiers?.[0]?.id;
-const c7Sale = await guestBuy(c7Slug, c7Tier, `c7-${stamp}@example.test`);
+const c7Sale = await buyAs(customer, c7Slug, c7Tier, `c7-${stamp}@example.test`);
 
 const c7First = await call("POST", `/organiser/orders/${c7Sale.order.id}/refund`, {}, org);
 ok("an organiser with finance.refund can refund", c7First.status === 200, `HTTP ${c7First.status}`);
@@ -430,10 +463,23 @@ const c11Event = c11.data?.event;
 ok("an event carries French text", Boolean(c11Event?.titleFr));
 ok("an event carries Arabic text", Boolean(c11Event?.titleAr));
 ok("the two differ (Arabic is not a French copy)", c11Event?.titleFr !== c11Event?.titleAr);
-const c11Seeded = await call("GET", "/events/gnaoua-2027");
-ok("a seeded event is genuinely translated",
-  Boolean(c11Seeded.data?.event?.titleAr) && c11Seeded.data?.event?.titleAr !== c11Seeded.data?.event?.titleFr,
-  c11Seeded.data?.event?.titleAr?.slice(0, 28));
+/*
+ * Asserted across the WHOLE seeded catalogue rather than one slug.
+ *
+ * This hardcoded "gnaoua-2027", which the seed later renamed — so the check
+ * failed for a reason that had nothing to do with translation. The claim
+ * worth making is about the catalogue anyway: /fr/ and /ar/ are advertised
+ * as genuine alternates, and that is only true while every event carries
+ * real Arabic copy, not just the one the test happened to name.
+ */
+const c11All = await call("GET", "/events");
+const c11Seeded = (c11All.data?.events ?? []).filter((e) => !e.slug.startsWith(PREFIX));
+const c11Untranslated = c11Seeded.filter((e) => !e.titleAr?.trim() || e.titleAr === e.titleFr);
+ok("every seeded event is genuinely translated",
+  c11Seeded.length > 0 && c11Untranslated.length === 0,
+  c11Untranslated.length
+    ? `${c11Untranslated.length} untranslated: ${c11Untranslated.slice(0, 3).map((e) => e.slug).join(", ")}`
+    : `${c11Seeded.length} events, all with distinct Arabic titles`);
 
 // ═══════════════════════════════════════════════════════ CHECK 12
 heading(12, "Dark and light, and no stray browser chrome");
@@ -447,7 +493,7 @@ heading(13, "Commission is the server's, not the browser's");
 const c13Slug = `${PREFIX}-c13-${stamp}`;
 const c13 = await makeEvent(org, c13Slug);
 const c13Tier = c13.data?.event?.tiers?.[0]?.id;
-const c13Sale = await guestBuy(c13Slug, c13Tier, `c13-${stamp}@example.test`);
+const c13Sale = await buyAs(customer, c13Slug, c13Tier, `c13-${stamp}@example.test`);
 
 const c13Fin = await call("GET", "/organiser/finance", undefined, org);
 ok("an organiser can read their finance summary", c13Fin.status === 200, `HTTP ${c13Fin.status}`);
@@ -482,7 +528,7 @@ ok("it reports the action vocabulary", (c15Before.data?.actions ?? []).length > 
 // A refund is an audited action; it must leave a row.
 const c15Slug = `${PREFIX}-c15-${stamp}`;
 const c15 = await makeEvent(org, c15Slug);
-const c15Sale = await guestBuy(c15Slug, c15.data?.event?.tiers?.[0]?.id, `c15-${stamp}@example.test`);
+const c15Sale = await buyAs(customer, c15Slug, c15.data?.event?.tiers?.[0]?.id, `c15-${stamp}@example.test`);
 await call("POST", `/organiser/orders/${c15Sale.order.id}/refund`, {}, org);
 // Filtered by action and subject rather than counting rows: the journal is
 // capped at 50 per page, so once it is full a count can never grow.
@@ -513,15 +559,15 @@ const c16Buyer = `c16-${stamp}@example.test`;
 
 const c16Over = await call("POST", "/orders/hold", {
   eventSlug: c16Slug, lines: [{ tierId: c16Tier, qty: 3 }], email: c16Buyer,
-});
+}, customer);
 ok("asking for more than the cap in one order is refused", c16Over.status >= 400, `HTTP ${c16Over.status}`);
 
-const c16Exact = await guestBuy(c16Slug, c16Tier, c16Buyer, 2);
+const c16Exact = await buyAs(customer, c16Slug, c16Tier, c16Buyer, 2);
 ok("asking for exactly the cap is allowed", c16Exact.ok, `pay HTTP ${c16Exact.pay?.status}`);
 
 const c16More = await call("POST", "/orders/hold", {
   eventSlug: c16Slug, lines: [{ tierId: c16Tier, qty: 1 }], email: c16Buyer,
-});
+}, customer);
 ok("coming back for one more is refused — the cap spans ORDERS", c16More.status >= 400, `HTTP ${c16More.status}`);
 
 const c16Settings = await call("PATCH", `/organiser/events/${c16Slug}/settings`, {
@@ -545,7 +591,7 @@ heading(17, "Calling an event off");
 const c17Slug = `${PREFIX}-c17-${stamp}`;
 const c17 = await makeEvent(org, c17Slug);
 const c17Tier = c17.data?.event?.tiers?.[0]?.id;
-const c17Sale = await guestBuy(c17Slug, c17Tier, `c17-${stamp}@example.test`);
+const c17Sale = await buyAs(customer, c17Slug, c17Tier, `c17-${stamp}@example.test`);
 
 const c17Short = await call("POST", `/organiser/events/${c17Slug}/cancel`, { reason: "x", notify: false }, org);
 ok("a reason under 5 characters is refused", c17Short.status === 400, `HTTP ${c17Short.status}`);
@@ -568,7 +614,7 @@ ok("the event leaves the public catalogue", c17Public.status === 404, `HTTP ${c1
 
 const c17Late = await call("POST", "/orders/hold", {
   eventSlug: c17Slug, lines: [{ tierId: c17Tier, qty: 1 }], email: `late-${stamp}@example.test`,
-});
+}, customer);
 ok("a cancelled event cannot be bought", c17Late.status === 410, `HTTP ${c17Late.status} — 410 Gone, with the reason`);
 
 /*
@@ -593,7 +639,7 @@ ok("hiding it further is still allowed",
   (await call("PATCH", `/organiser/events/${c17Slug}/visibility`, { hidden: true }, org)).status === 200);
 const c17StillDead = await call("POST", "/orders/hold", {
   eventSlug: c17Slug, lines: [{ tierId: c17Tier, qty: 1 }], email: `dead-${stamp}@example.test`,
-});
+}, customer);
 ok("and it still cannot be bought afterwards", c17StillDead.status >= 400, `HTTP ${c17StillDead.status}`);
 
 // Scoped to THIS event's own tier id, which we already hold. An earlier
@@ -685,7 +731,7 @@ ok("the window is stored as sent", c19FTier?.salesStartAt === "2027-12-01T09:00:
 
 const c19FBuy = await call("POST", "/orders/hold", {
   eventSlug: c19Future, lines: [{ tierId: c19FTier.id, qty: 1 }], email: `c19f-${stamp}@example.test`,
-});
+}, customer);
 ok("buying before the window opens is refused AT CHECKOUT", c19FBuy.status === 409, `HTTP ${c19FBuy.status}`);
 ok("and the refusal says when it opens", /open/i.test(JSON.stringify(c19FBuy.data)),
   JSON.stringify(c19FBuy.data)?.slice(0, 68));
@@ -696,7 +742,7 @@ const c19PTiers = await call("GET", `/organiser/events/${c19Past}/tiers`, undefi
 const c19PBuy = await call("POST", "/orders/hold", {
   eventSlug: c19Past, lines: [{ tierId: c19PTiers.data?.tiers?.[0]?.id, qty: 1 }],
   email: `c19p-${stamp}@example.test`,
-});
+}, customer);
 ok("buying after the window closes is refused", c19PBuy.status === 409, `HTTP ${c19PBuy.status}`);
 
 // A window cannot be inverted one field at a time.
