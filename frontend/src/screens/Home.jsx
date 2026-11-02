@@ -271,7 +271,7 @@ export default function Home() {
             on that seam and the two surfaces read as one band split by a
             colour change rather than as two sections. 64px here, and the
             same again below the seam, is what separates them. */}
-        <dl className="relative mx-auto grid w-full max-w-7xl grid-cols-3 divide-x divide-stage-fg/10 border-t border-stage-fg/10 px-4 pb-16 pt-7 md:px-8 rtl:divide-x-reverse">
+        <dl className="relative mx-auto grid w-full max-w-7xl grid-cols-3 divide-x divide-stage-fg/10 border-t border-stage-fg/10 px-4 py-7 md:px-8 rtl:divide-x-reverse">
           <HeroStat icon={<Calendar className="size-5" />} value={live.length} label={t("eventsWord")} />
           <HeroStat icon={<MapPin className="size-5" />} value={cityCount} label={t("activeCities")} />
           <HeroStat
@@ -281,6 +281,22 @@ export default function Home() {
           />
         </dl>
       </section>
+
+      {/*
+        Breathing room between the hero and whatever section follows it.
+
+        It has to live OUT HERE, as its own element, not as padding on the
+        stats row above. The hero is capped at max-h-[92vh]: padding added
+        inside it is absorbed by that ceiling, so the section's bottom edge
+        does not move and the next background still starts hard against the
+        stat labels. pb-7 -> pb-10 -> pb-16 on the dl all rendered
+        identically for exactly that reason.
+
+        bg-stage so it continues the hero's own surface rather than showing
+        the page background through the gap, which would just move the seam
+        up by 48px instead of removing it.
+      */}
+      <div aria-hidden className="h-12 bg-stage" />
 
       {/* Events first, then the category rail.
 
@@ -298,11 +314,11 @@ export default function Home() {
         // ~150px before the first card, which is what kept the events just
         // under the fold (966px against a 900px viewport) even after the
         // hero shrank and moved above the rail.
-        // pt-16 rather than the pt-7 that went with it: the tinted
-        // background has to start clear of the hero's stats, not hard
-        // against them, or the colour change reads as a stripe through one
-        // section instead of the start of the next.
-        <section className="bg-brume/40 pb-14 pt-16">
+        // pt-10 rather than the original pt-7. The real separation from the
+        // hero is the spacer above, not this value -- see the note on it --
+        // but a tinted band still wants a little more above its kicker than
+        // the ~28px that was tuned when it sat on plain paper.
+        <section className="bg-brume/40 pb-14 pt-10">
           <div className="mx-auto max-w-7xl px-4 md:px-8">
             <p className="font-mono text-xs font-bold tracking-widest text-primary">{t("majorKicker")}</p>
             <h2 className="mt-1 font-display text-3xl font-extrabold text-encre md:text-4xl">{t("majorTitle")}</h2>
