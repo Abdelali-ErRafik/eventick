@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError, param } from "../lib/http.js";
-import { optionalAuth, refuseStaffPurchase } from "../middleware/auth.js";
+import { authenticate, optionalAuth, refuseStaffPurchase } from "../middleware/auth.js";
 import { phoneOk, makePaymentRef } from "../lib/payment-sim.js";
 import { recordCommission } from "../lib/settle.js";
 import { buildPaymentRequest, cmiConfig, cmiUrls, isMockPayments } from "../lib/cmi.js";
@@ -116,9 +116,16 @@ const buySchema = z.object({
  */
 resaleRouter.post(
   "/:token/buy",
-  optionalAuth,
-  // Buying a resold seat is still buying -- the same conflict of interest as
-  // /orders/hold, just through a different door. Listing a ticket (above) is
+  /*
+   * An account is required, exactly as at /orders/hold.
+   *
+   * Buying a resold seat is still buying, just through a different door --
+   * and a rule enforced on only one of two doors is not enforced. Leaving
+   * this on optionalAuth would have kept guest checkout alive via any resale
+   * link, which is the same orders-with-no-owner this change exists to end.
+   */
+  authenticate,
+  // Same conflict of interest as /orders/hold. Listing a ticket (above) is
   // not guarded: that is selling, and a staff account has no ticket to sell.
   refuseStaffPurchase,
   asyncHandler(async (req, res) => {
@@ -130,7 +137,10 @@ resaleRouter.post(
 
     const order = await prisma.order.create({
       data: {
-        customerId: req.user?.id ?? null,
+        // `authenticate` above guarantees a user. Asserted rather than
+        // defaulted to null, so loosening the middleware cannot silently
+        // start minting ownerless orders again.
+        customerId: req.user!.id,
         eventId: listing.ticket.order.eventId,
         status: "PENDING",
         holderName: body.holderName.trim(),
