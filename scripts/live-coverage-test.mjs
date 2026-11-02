@@ -427,10 +427,12 @@ async function main() {
     await expectStatus("GET an unknown token → 410", "GET", "/api/resale/nope-xyz", 410);
 
     await expectStatus("buy with a bad phone → 400", "POST", `/api/resale/${token}/buy`, 400, {
+      token: tokens.customer,
       body: { holderName: "Acheteur Resale", email: "buyer@example.com", phone: "123" },
     });
 
     const bought = await expectStatus("POST /:token/buy completes the sale", "POST", `/api/resale/${token}/buy`, 200, {
+      token: tokens.customer,
       body: { holderName: "Acheteur Resale", email: "buyer@example.com", phone: "0612345678" },
     });
     record(
@@ -460,6 +462,7 @@ async function main() {
     );
 
     await expectStatus("buying an already-sold listing → 410", "POST", `/api/resale/${token}/buy`, 410, {
+      token: tokens.customer,
       body: { holderName: "Trop Tard", email: "late@example.com", phone: "0612345678" },
     });
 
@@ -484,6 +487,7 @@ async function main() {
       token: tokens.customer,
     });
     await expectStatus("buying a cancelled listing → 410", "POST", `/api/resale/${relist.data?.token}/buy`, 410, {
+      token: tokens.customer,
       body: { holderName: "Annulee Test", email: "x@example.com", phone: "0612345678" },
     });
   }
@@ -558,7 +562,14 @@ async function main() {
       const mine = (queue.data?.entries ?? []).find((e) => e.email === email);
       record("and the new seat is OFFERED to the person waiting", mine?.status === "OFFERED", `${mine?.status}`);
 
+      /*
+       * The stranger is SIGNED IN, on a different account from the person
+       * holding the offer. Anonymous would answer 401 for the account
+       * requirement and never reach the inventory check — the check would
+       * pass while proving nothing about whether the offered seat is held.
+       */
       const grabbed = await call("POST", "/api/orders/hold", {
+        token: tokens.customer,
         body: { eventSlug: s2, lines: [{ tierId: t2, qty: 1 }], email: `jumper-${Date.now()}@example.com` },
       });
       record("while a stranger still cannot buy it", grabbed.status === 409, `${grabbed.status}`);

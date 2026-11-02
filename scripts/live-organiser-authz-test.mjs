@@ -22,6 +22,9 @@ const API = process.env.API ?? "http://localhost:4100";
 const ACCOUNTS = {
   admin: { email: "admin@eventick.ma", password: "eventick-admin-2026" },
   organiser: { email: "organisateur@eventick.ma", password: "eventick-orga-2026" },
+  // The fixture order below has to be bought by someone, and buying needs an
+  // account.
+  customer: { email: "client@eventick.ma", password: "eventick-client-2026" },
 };
 
 const results = [];
@@ -62,7 +65,11 @@ const login = async (a) => {
   return r.data.token;
 };
 
-const tokens = { admin: await login(ACCOUNTS.admin), organiser: await login(ACCOUNTS.organiser) };
+const tokens = {
+  admin: await login(ACCOUNTS.admin),
+  organiser: await login(ACCOUNTS.organiser),
+  customer: await login(ACCOUNTS.customer),
+};
 
 const grant = (p) =>
   call("POST", "/api/auth/roles/ORGANISER/permissions", { token: tokens.admin, body: { permission: p } });
@@ -116,10 +123,14 @@ const made = await call("POST", "/api/organiser/events", {
 if (made.status !== 201) throw new Error(`fixture event failed: ${made.status} ${JSON.stringify(made.data)}`);
 const tierId = made.data.event.tiers[0].id;
 
-const hold = await call("POST", "/api/orders/hold", { body: { eventSlug: slug, lines: [{ tierId, qty: 1 }] } });
+const hold = await call("POST", "/api/orders/hold", {
+  token: tokens.customer,
+  body: { eventSlug: slug, lines: [{ tierId, qty: 1 }] },
+});
 const orderKey = hold.data.accessToken;
 const orderId = hold.data.order.id;
 await call("POST", `/api/orders/${orderId}/pay?k=${encodeURIComponent(orderKey)}`, {
+  token: tokens.customer,
   body: { holderName: "Acheteur Authz", email: `orgauthz-${SUFFIX}@example.com`, phone: "0612345678" },
 });
 const paidOrder = await call("GET", `/api/orders/${orderId}?k=${encodeURIComponent(orderKey)}`);
