@@ -146,7 +146,16 @@ export default function EventDetail() {
      */
     if (authLoading) return;
     if (!user) {
-      navigate(`/login?next=${encodeURIComponent(`/evenements/${event.slug}`)}`);
+      /*
+       * The CURRENT url, query string included, not a rebuilt path.
+       *
+       * A waitlist offer arrives as /evenements/<slug>?claim=<token> and that
+       * token is the seat being held for this person. Rebuilding the path
+       * from the slug alone would drop it, so signing in would cost them the
+       * offer -- and the 30-minute window keeps running while they do it.
+       */
+      const here = `${window.location.pathname}${window.location.search}`;
+      navigate(`/login?next=${encodeURIComponent(here)}`);
       return;
     }
     if (booking) return;
