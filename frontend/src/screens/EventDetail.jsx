@@ -28,7 +28,7 @@ export default function EventDetail() {
   // (refuseStaffPurchase on /orders/hold), so without this they would fill a
   // basket, press Pay and collect a 403 toast -- a wall at the last step
   // instead of an explanation at the first.
-  const { canUsePro, user } = useAuth();
+  const { canUsePro, user, loading: authLoading } = useAuth();
   const [waitEmail, setWaitEmail] = useState("");
   const [waitBusy, setWaitBusy] = useState(false);
   const [booking, setBooking] = useState(false);
@@ -139,7 +139,12 @@ export default function EventDetail() {
      * `?next=` brings them back to this event, so signing in costs them the
      * click and not the basket. Login only honours same-site paths, so this
      * cannot be turned into an open redirect.
+     *
+     * `authLoading` is checked first: a click landing during the auth
+     * hydration that runs on every page load would otherwise read `user` as
+     * null and send a signed-in buyer to the login page.
      */
+    if (authLoading) return;
     if (!user) {
       navigate(`/login?next=${encodeURIComponent(`/evenements/${event.slug}`)}`);
       return;
@@ -526,7 +531,7 @@ export default function EventDetail() {
                   {/* Says where the click actually leads. A button reading
                       "continue to payment" that opens a login page reads as a
                       fault, even though signing in is the intended step. */}
-                  {user ? t("pay") : t("paySignIn")}
+                  {user || authLoading ? t("pay") : t("paySignIn")}
                 </Button>
               )}
 

@@ -15,7 +15,7 @@ import { cn, eventText } from "../utils";
 export default function Checkout() {
   const { locale, t, tf } = useI18n();
   const { cart, clear } = useCart();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [event, setEvent] = useState(null);
   const filled = useRef(false);
@@ -44,8 +44,25 @@ export default function Checkout() {
       navigate("/explorer");
       return;
     }
+    /*
+     * Buying requires an account, and this screen is reachable by URL.
+     *
+     * In practice a cart only exists after a hold, which already requires a
+     * session — so a signed-out visitor here has no cart and is sent to the
+     * catalogue by the line above. This is the explicit check rather than the
+     * one that happens to fall out of that chain: a signed-out buyer who
+     * still has a stale cart in local storage would otherwise fill the form
+     * and be refused at /pay.
+     *
+     * `loading` is waited on so the redirect does not fire during the
+     * auth-context hydration that happens on every page load.
+     */
+    if (!authLoading && !user) {
+      navigate(`/login?next=${encodeURIComponent("/paiement")}`, { replace: true });
+      return;
+    }
     api.get(`/events/${cart.eventSlug}`).then((data) => setEvent(data.event));
-  }, [cart, navigate]);
+  }, [cart, navigate, user, authLoading]);
 
   useEffect(() => {
     if (filled.current || !user) return;

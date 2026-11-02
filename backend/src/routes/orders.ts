@@ -129,11 +129,16 @@ ordersRouter.post(
        * three 8-seat orders and take 24 seats of a high-demand show, which
        * was verified against the running app before this existed.
        *
-       * Identity here is the email for a guest and the account for a signed-in
-       * buyer. Neither is proof of a person, and a determined scalper can use
-       * more addresses — but the limit that stops the casual case is worth far
-       * more than no limit at all, and anything stronger means asking every
-       * buyer for ID.
+       * Identity is the ACCOUNT: buying requires one (`authenticate` on this
+       * route), so `req.user` is always set and the email branch below is
+       * unreachable for new orders. It is kept because the same counting runs
+       * against orders placed before accounts were required, which have no
+       * customerId and can only be matched by address.
+       *
+       * An account is not proof of a person — a determined scalper can
+       * register more — but it is harder to spin up than an address, so this
+       * limit got stronger when guest checkout closed. Anything beyond it
+       * means asking every buyer for ID.
        */
       if (event.maxPerBuyer > 0) {
         const identity = req.user?.id
