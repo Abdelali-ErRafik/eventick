@@ -106,28 +106,12 @@
  * agreed direction. Reads as black at a glance, without the OLED-glow effect
  * pure black gives large text blocks, and gentler over a long dashboard
  * session than the reference's literal #0a0a0a.
- *
- * --et-brume is a BARELY-THERE TINT, in both themes. In light that is what it
- * has always been: #fbe4ee over #f7f6f9 lifts saturation 1.2% -> 4.0%, which
- * nobody reads as a colour. Dark used to be #3a1226, a saturated maroon, and
- * the same `bg-brume/40` lifted 18.8% -> 51.6% — roughly thirteen times the
- * shift its light counterpart makes.
- *
- * That showed up on the home page as two different colours meeting in one
- * view: the hero is bg-stage (#141418, 16.7% saturation, deliberately never
- * flips with the theme) and the section under it is bg-brume/40, which landed
- * at 51.6% — a maroon band against a neutral near-black.
- *
- * These values keep the faint pink cast but put the tint back where it
- * belongs: bg-brume/40 now resolves to ~19.4% saturation, next to the hero's
- * 16.7%, and slightly above --et-paper in luminance so it still reads as a
- * lift rather than a colour.
  */
 :root[data-theme="dark"] {
   --et-paper: #0d0d10;
   --et-card: #161619;
-  --et-brume: #1a1419;
-  --et-brume-deep: #241c25;
+  --et-brume: #3a1226;
+  --et-brume-deep: #4d1831;
   --et-encre: #f5f5f7;
   --et-ink: #f5f5f7;
   --et-muted: #a3a3ad;
@@ -190,8 +174,8 @@
   :root:not([data-theme="light"]) {
     --et-paper: #0d0d10;
     --et-card: #161619;
-    --et-brume: #1a1419;
-    --et-brume-deep: #241c25;
+    --et-brume: #3a1226;
+    --et-brume-deep: #4d1831;
     --et-encre: #f5f5f7;
     --et-ink: #f5f5f7;
     --et-muted: #a3a3ad;
