@@ -1,33 +1,26 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import SpaMount from "../../../[[...slug]]/SpaMount";
-import { getEvent, type CatalogEvent } from "../../../../lib/catalog-server";
-import { eventJsonLd } from "../../../../lib/jsonld";
-import {
-  INDEXABLE_LOCALES,
-  isIndexableLocale,
-  localeAlternatesFor,
-  type IndexableLocale,
-} from "../../../../lib/locales";
+import SpaMount from "../app/[[...slug]]/SpaMount";
+import { getEvent, type CatalogEvent } from "./catalog-server";
+import { eventJsonLd, siteJsonLd } from "./jsonld";
+import { localeAlternatesFor, type IndexableLocale } from "./locales";
 
 /**
- * An event page in one locale.
+ * The shared body of every locale-prefixed route.
  *
- * This is where the prefixed URLs earn their keep. `/ar/evenements/<slug>`
- * is not a translated wrapper around a French page — the title, description
- * and Open Graph text are built from the event's own Arabic columns, so the
- * Arabic result in Google reads as Arabic before anyone clicks it.
+ * `/fr/` and `/ar/` are CONCRETE directories rather than one `[locale]`
+ * segment, and that is not a style choice. A dynamic segment sits at the same
+ * level as the optional catch-all at `app/[[...slug]]`, and Next gives the
+ * dynamic segment priority — so `/explorer` matched `[locale]` with
+ * locale="explorer", hit the "unknown locale" branch and 404'd. Every
+ * unprefixed SPA path broke that way: /explorer, /aide, /legal, /billets.
  *
- * That is also why /en/ is not a route (see lib/locales.ts): there are no
- * English event columns, so an English URL would have nothing truer to say
- * than the French text, under an hreflang promising otherwise.
+ * Concrete segments do not compete with the catch-all: `/fr` matches the
+ * folder, `/explorer` falls through to `[[...slug]]` as before. The cost is
+ * two thin directories per route shape, which is why the actual work lives
+ * here and each page is a three-line call.
  */
 
-export function generateStaticParams() {
-  return INDEXABLE_LOCALES.map((locale) => ({ locale }));
-}
-
-/** Per-locale date formatting, in that locale's own calendar conventions. */
+/** Per-locale date formatting, in that locale's own conventions. */
 function localDate(iso: string, locale: IndexableLocale): string {
   try {
     return new Intl.DateTimeFormat(locale === "ar" ? "ar-MA" : "fr-MA", {
@@ -76,14 +69,20 @@ function snippet(event: CatalogEvent, locale: IndexableLocale): string {
   return `${cut.slice(0, lastSpace > 80 ? lastSpace : 152)}…`;
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ locale: string; slug: string }>;
-}): Promise<Metadata> {
-  const { locale, slug } = await params;
-  if (!isIndexableLocale(locale)) return {};
+/** Head for any non-event page served under a prefix. */
+export async function localeMetadata(
+  locale: IndexableLocale,
+  slug?: string[],
+): Promise<Metadata> {
+  const path = slug?.length ? `/${slug.join("/")}` : "/";
+  return { alternates: localeAlternatesFor(locale, path) };
+}
 
+/** Head for a prefixed event page — the locale's own title and description. */
+export async function localeEventMetadata(
+  locale: IndexableLocale,
+  slug: string,
+): Promise<Metadata> {
   const event = await getEvent(slug);
   // Unknown slug, or the backend is unreachable: a generic head beats a
   // failed render on the pages that matter most.
@@ -112,22 +111,27 @@ export async function generateMetadata({
   };
 }
 
-/**
- * The body: the SPA, plus the event's schema.org markup when it is allowed.
- *
- * `EventJsonLd` stays a synchronous sibling for the reason the unprefixed
- * route documents: SpaMount loads ClientApp with `ssr: false`, which bails
- * its Suspense boundary out to client rendering, and an async sibling's
- * output is discarded when that happens.
- */
-export default async function LocalisedEventPage({
-  params,
-}: {
-  params: Promise<{ locale: string; slug: string }>;
-}) {
-  const { locale, slug } = await params;
-  if (!isIndexableLocale(locale)) notFound();
+/** Body for any non-event page served under a prefix. */
+export function LocalePage() {
+  return (
+    <>
+      {/* WebSite + Organization only — factual, and claims nothing about any
+          individual event. */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd()) }} />
+      <SpaMount />
+    </>
+  );
+}
 
+/**
+ * Body for a prefixed event page.
+ *
+ * The JSON-LD stays a synchronous sibling for the reason the unprefixed route
+ * documents: SpaMount loads ClientApp with `ssr: false`, which bails its
+ * Suspense boundary out to client rendering, and an async sibling's output is
+ * discarded when that happens.
+ */
+export async function LocaleEventPage({ slug }: { slug: string }) {
   const event = await getEvent(slug);
   // Null for demo data and for a cancelled event, so nothing is emitted
   // unless the event is genuinely bookable.

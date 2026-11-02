@@ -2205,8 +2205,6 @@ changes. **Actual gaps** are work not done yet.
 
 ### Actual gaps
 
-- **`/explorer` and `/aide` 404 on the dev server.** Only the home page and the concrete routes (`/evenements/*`, `/billets-ville/*`, `/ar/*`) are served; the optional catch-all at `app/[[...slug]]` is not matching the bare SPA paths. Confirmed pre-existing — it reproduces with the locale routes removed entirely and after clearing `.next`. The SPA still reaches those screens by in-app navigation, so it only bites a direct hit or a reload, but a shared `/explorer` link is dead and a crawler sees nothing there.
-
 - **The demo accounts use public passwords.** They are printed in this guide and in the seed. Change them before anything is deployed.
 - **`PUBLIC_APP_URL` and `PUBLIC_API_URL` still point at `localhost`.** Every link in an invitation email — the "Voir mon billet" button and the PDF — is built from them, so an email sent today works for you and for nobody else. Set both before inviting a real guest. *(Check 22.)*
 - **Checks 20–26 have no automated coverage of the screens.** They were added after `test:live:checks`. The logic underneath 23–26 is covered — 24 unit tests on the period windows, and `test:live:money` on the period figures, the plan arithmetic and the owed-versus-paid agreement — but nothing opens the pages. 22 can never be automated: it talks to Bunny and Resend, and a suite that uploads files and sends real email on every run is worse than no suite — it would need stubs, which is a different piece of work.
