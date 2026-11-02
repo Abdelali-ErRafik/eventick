@@ -75,6 +75,8 @@ async function call(method, path, { token, body, key } = {}) {
 
 const SUFFIX = Date.now();
 const events = [];
+/** The account hold() books as by default. Set once main() has logged in. */
+let buyerToken = null;
 
 /** A published event owned by `organiserId`, with one tier. */
 async function makeEvent(label, { priceCents = 100000, capacity = 10, organiserId, allowResale = false }) {
@@ -128,8 +130,15 @@ async function makeEvent(label, { priceCents = 100000, capacity = 10, organiserI
   return { event, tier: event.tiers[0] };
 }
 
-async function hold(event, tier, qty = 1) {
+/*
+ * `token` defaults to the suite's customer because buying requires an
+ * account. It stays a parameter so a check can pass a DIFFERENT account where
+ * that is the point — "a stranger cannot release someone else's hold" is
+ * about one account versus another, not about being signed in at all.
+ */
+async function hold(event, tier, qty = 1, token = buyerToken) {
   const res = await call("POST", "/api/orders/hold", {
+    token,
     body: { eventSlug: event.slug, lines: [{ tierId: tier.id, qty }] },
   });
   return {
@@ -215,6 +224,7 @@ async function main() {
   const admin = await login(ACCOUNTS.admin);
   const orga = await login(ACCOUNTS.organiser);
   const customer = await login(ACCOUNTS.customer);
+  buyerToken = customer;
   const orgaId = (await call("GET", "/api/auth/me", { token: orga })).data.user.id;
 
   // Start from a clean slate, whatever an earlier run left behind.
@@ -415,7 +425,17 @@ async function main() {
     });
     check("the signed-in owner can list it", listed.status === 201, `${listed.status} ${listed.data.error ?? ""}`);
 
+    // Buying a resold seat needs an account too. A throwaway one, so the
+    // buyer is somebody other than the seller -- which is what a resale is.
+    const resaleBuyer = await call("POST", "/api/auth/register", {
+      body: {
+        name: "Resale Buyer",
+        email: `op-resale-${SUFFIX}@eventick.ma`,
+        password: `op-resale-${SUFFIX}`,
+      },
+    });
     const buy = await call("POST", `/api/resale/${listed.data.token}/buy`, {
+      token: resaleBuyer.data.token,
       body: { holderName: "Resale Buyer", email: `op-resale-${SUFFIX}@eventick.ma`, phone: "0612345679" },
     });
     check("the listing can be bought", buy.status === 200 && buy.data.settled === true, `${buy.status}`);
@@ -545,9 +565,24 @@ async function main() {
      */
     const o3 = await buyAndSettle(event, tier, 1);
     await prisma.order.update({ where: { id: o3.id }, data: { createdAt: new Date("2026-06-15T12:00:00Z") } });
+    /*
+     * Ends BEFORE the month 8b uses, not at 2030.
+     *
+     * The point of this check is that a period spanning many months bills
+     * only the ones with sales — ~120 months spanned, a handful billed. A
+     * window reaching 2030 also reaches whatever month the suite is being run
+     * in, and it settles the orders created moments ago, billing that month
+     * too. 8b then backdates its order into the same month, finds the
+     * subscription already charged, and reports a capping bug that is really
+     * this run having got there first.
+     *
+     * It passed for as long as the suite ran before November 2026 and broke
+     * on the 1st. Ending in October keeps the span wide — 58 months — while
+     * leaving 8b its own month to work in.
+     */
     const wide = await call("POST", `/api/platform/organisers/${orgaId}/payouts`, {
       token: admin,
-      body: { periodStart: "2020-01-01", periodEnd: "2030-01-01" },
+      body: { periodStart: "2020-01-01", periodEnd: "2026-10-01" },
     });
     check("a decade-wide period still pays out", wide.status === 201, `${wide.status} ${wide.data.error ?? ""}`);
     // A decade spans ~120 months. Only the ones with unbilled sales count —
@@ -571,12 +606,24 @@ async function main() {
      */
     const { event, tier } = await makeEvent("quiet", { priceCents: 20000, capacity: 5, organiserId: orgaId });
     const o = await buyAndSettle(event, tier, 1);
+    /*
+     * A month of its OWN, in the past and used by nothing else here.
+     *
+     * This check needs a month whose only revenue is the 200.00 below, so
+     * that 194.00 payable really is less than the 499.00 fee. It used to
+     * backdate into November 2026, which was safely empty until the calendar
+     * reached it — then the suite's own fresh orders landed in the same month
+     * and payable jumped to five figures, with nothing to cap.
+     *
+     * November 2025 is before every other date this file uses and before any
+     * seeded data, so it stays quiet whatever month the suite runs in.
+     */
     // 200.00 revenue, 3% fee = 6.00, so 194.00 payable against a 499.00 fee.
-    await prisma.order.update({ where: { id: o.id }, data: { createdAt: new Date("2026-11-10T12:00:00Z") } });
+    await prisma.order.update({ where: { id: o.id }, data: { createdAt: new Date("2025-11-10T12:00:00Z") } });
 
     const run = await call("POST", `/api/platform/organisers/${orgaId}/payouts`, {
       token: admin,
-      body: { periodStart: "2026-11-01", periodEnd: "2026-12-01" },
+      body: { periodStart: "2025-11-01", periodEnd: "2025-12-01" },
     });
     check("the payout is still created", run.status === 201, `${run.status} ${run.data.error ?? ""}`);
 
