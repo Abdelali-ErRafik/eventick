@@ -91,7 +91,31 @@ export async function getEvent(slug: string): Promise<CatalogEvent | null> {
  * worse than it was before. Set NEXT_PUBLIC_SITE_URL per environment.
  */
 export function siteUrl(): string {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3100").replace(/\/+$/, "");
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+
+  /*
+   * Refuse the default on a production build rather than ship it.
+   *
+   * The comment above has said "set this per environment" since the SEO work
+   * landed, and a comment cannot stop a deploy. Shipping the default does
+   * not error anywhere: robots.txt, every canonical and every sitemap entry
+   * are generated happily, all naming a machine Google cannot reach. The
+   * site looks finished and is worse than before — and nothing surfaces it
+   * until someone wonders why indexing never started.
+   *
+   * Build-time only. `next build` evaluates these routes, so a missing value
+   * fails the build with the variable's name in it, which is the moment it
+   * is cheapest to fix.
+   */
+  if (process.env.NODE_ENV === "production" && (!configured || configured.includes("localhost"))) {
+    throw new Error(
+      "NEXT_PUBLIC_SITE_URL must be the real domain for a production build — " +
+        `got ${configured ?? "(unset)"}. It drives every canonical, og:url and sitemap entry; ` +
+        "left at the default, the sitemap advertises localhost to Google.",
+    );
+  }
+
+  return (configured || "http://localhost:3100").replace(/\/+$/, "");
 }
 
 /**

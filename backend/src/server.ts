@@ -3,6 +3,7 @@ import { createApp } from "./app.js";
 import { prisma } from "./lib/prisma.js";
 import { assertPaymentConfig } from "./lib/cmi.js";
 import { assertAuthConfig } from "./lib/jwt.js";
+import { assertPublicUrls } from "./lib/public-urls.js";
 import { closeRealtime, initRealtime } from "./lib/realtime.js";
 import { startSweeper, stopSweeper } from "./lib/sweeper.js";
 
@@ -12,6 +13,9 @@ assertPaymentConfig();
 // Likewise refuse a forgeable JWT secret: with one, anybody can mint a token
 // for any user and any role.
 assertAuthConfig();
+// And refuse localhost or an expired tunnel in the URLs that reach buyers and
+// CMI: those fail silently, days later, in somebody else's inbox.
+assertPublicUrls();
 
 const port = Number(process.env.PORT ?? 4100);
 const app = createApp();
