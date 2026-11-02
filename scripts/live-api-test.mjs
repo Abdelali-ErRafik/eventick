@@ -139,9 +139,14 @@ await expectStatus("waitlist duplicate → 409", "POST", `/api/events/${slug}/wa
 });
 
 // ──────────────────────────────────────────────────── orders / buying ──
-setGroup("ORDERS  /api/orders  (guest purchase flow)");
+// Not "guest purchase" any more: buying requires an account. What this group
+// still covers is the ORDER ACCESS TOKEN -- the credential handed over at
+// hold time, which is what authorises reading, paying and releasing, rather
+// than the session.
+setGroup("ORDERS  /api/orders  (purchase flow, order-token auth)");
 
 const hold = await call("POST", "/api/orders/hold", {
+  token: tokens.customer,
   body: {
     eventSlug: slug,
     lines: [{ tierId, qty: 2 }],
@@ -165,9 +170,11 @@ const holdMins = hold.data?.holdUntil ? Math.round((Date.parse(hold.data.holdUnt
 record("hold lasts 15 minutes", holdMins === 15, `${holdMins} min`);
 
 await expectStatus("hold with bad phone → 400", "POST", "/api/orders/hold", 400, {
+  token: tokens.customer,
   body: { eventSlug: slug, lines: [{ tierId, qty: 1 }], holderName: "Bad Phone", email: "x@example.com", phone: "123" },
 });
 await expectStatus("hold with absurd qty → 409", "POST", "/api/orders/hold", 409, {
+  token: tokens.customer,
   body: { eventSlug: slug, lines: [{ tierId, qty: 99999 }], holderName: "Too Many", email: "x@example.com", phone: "0612345678" },
 });
 
@@ -187,6 +194,7 @@ record("ticket carries a signed QR payload", typeof ticket?.qrPayload === "strin
 
 // Hold release
 const rel = await call("POST", "/api/orders/hold", {
+  token: tokens.customer,
   body: { eventSlug: slug, lines: [{ tierId, qty: 1 }], holderName: "Release Me", email: "release@example.com", phone: "0612345678" },
 });
 if (rel.data?.order?.id) created.orders.push(rel.data.order.id);
@@ -214,8 +222,21 @@ record("GET /tickets/:id/pdf returns a PDF", pdf.status === 200 && pdf.contentTy
 await expectStatus("transfer anonymous → 401", "POST", `/api/tickets/${ticket2?.id}/transfer`, 401, {
   body: { holderName: "New Holder" },
 });
-await expectStatus("transfer of a guest order by a customer → 403", "POST", `/api/tickets/${ticket2?.id}/transfer`, 403, {
-  token: tokens.customer,
+/*
+ * A DIFFERENT account, not tokens.customer -- that one bought the order, so
+ * it is the owner and is correctly allowed to transfer. The check is that
+ * somebody else's session does not open the ticket, and it was green only
+ * while the buyer was a guest and tokens.customer was a stranger to it.
+ */
+const outsider = await call("POST", "/api/auth/register", {
+  body: {
+    name: "Outsider",
+    email: `api-outsider-${Date.now()}@example.com`,
+    password: `api-outsider-pass-2026`,
+  },
+});
+await expectStatus("transfer by someone else's account → 403", "POST", `/api/tickets/${ticket2?.id}/transfer`, 403, {
+  token: outsider.data?.token,
   body: { holderName: "New Holder" },
 });
 
