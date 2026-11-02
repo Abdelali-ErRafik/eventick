@@ -32,6 +32,10 @@
  * Creates its own orders and removes them at the end.
  */
 
+// Guest orders can no longer be made through the API, so this suite writes
+// the ownerless shape directly. See buy() below.
+import { prisma } from "../backend/src/lib/prisma.js";
+
 const API = process.env.API ?? "http://localhost:4100";
 
 const ACCOUNTS = {
@@ -98,10 +102,26 @@ const event = events.data.events.find((e) => (e.tiers?.length ?? 0) >= 2) ?? eve
 const detail = await call("GET", `/api/events/${event.slug}`);
 const tiers = detail.data.event.tiers;
 
-/** Buys `qty` tickets. With no token the order is a guest order. */
+/**
+ * Buys `qty` tickets. With no token the order is made to LOOK like a guest
+ * order — bought by a real account, then detached in the database.
+ *
+ * Guest checkout is closed: /orders/hold requires an account, so a guest
+ * order can no longer be created through the API at all. The rows it used to
+ * create still exist though — 48 of them on this database, 30 already paid —
+ * and they are exactly what this suite protects. Their boundary has to keep
+ * being tested, so the shape is reproduced directly rather than bought.
+ *
+ * Writing `customerId: null` by hand is the honest way to say "an order from
+ * before accounts were required", and it keeps this file testing the
+ * ownerless-order boundary instead of quietly becoming a second test of
+ * ordinary signed-in orders.
+ */
 async function buy(qty, token) {
+  const asGuest = !token;
+  const buyer = token ?? tokens.customer;
   const hold = await call("POST", "/api/orders/hold", {
-    token,
+    token: buyer,
     body: { eventSlug: event.slug, lines: [{ tierId: tiers[0].id, qty }] },
   });
   if (hold.status !== 201 && hold.status !== 200) {
@@ -113,10 +133,15 @@ async function buy(qty, token) {
   // real client carries it into /pay from there — exactly as the SPA does.
   const accessToken = hold.data.accessToken ?? null;
   const pay = await call("POST", `/api/orders/${order.id}/pay${k(accessToken)}`, {
-    token,
+    token: buyer,
     body: { holderName: "Test Acheteur", email: "guest-authz@example.com", phone: "0612345678" },
   });
   if (pay.status !== 200) throw new Error(`pay failed: ${pay.status} ${JSON.stringify(pay.data)}`);
+  // Detach AFTER settlement, so the order went through the real purchase and
+  // ticket-issuing path and only then becomes the ownerless row under test.
+  if (asGuest) {
+    await prisma.order.update({ where: { id: order.id }, data: { customerId: null } });
+  }
   return { id: order.id, accessToken };
 }
 
