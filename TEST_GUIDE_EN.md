@@ -2205,6 +2205,7 @@ changes. **Actual gaps** are work not done yet.
 
 ### Actual gaps
 
+- **`npm run test:live:checks` crashes on its first probe.** The suite holds seats with no session to detect mock payment mode, and guest checkout was closed — `/orders/hold` now requires an account, so the hold returns 401 and the script dereferences an undefined order. The suite has not been touched since before that change. Everything it covers still works; the harness is stale, not the app. It needs a signed-in buyer for every hold it makes.
 - **The demo accounts use public passwords.** They are printed in this guide and in the seed. Change them before anything is deployed.
 - **`PUBLIC_APP_URL` and `PUBLIC_API_URL` still point at `localhost`.** Every link in an invitation email — the "Voir mon billet" button and the PDF — is built from them, so an email sent today works for you and for nobody else. Set both before inviting a real guest. *(Check 22.)*
 - **Checks 20–26 have no automated coverage of the screens.** They were added after `test:live:checks`. The logic underneath 23–26 is covered — 24 unit tests on the period windows, and `test:live:money` on the period figures, the plan arithmetic and the owed-versus-paid agreement — but nothing opens the pages. 22 can never be automated: it talks to Bunny and Resend, and a suite that uploads files and sends real email on every run is worse than no suite — it would need stubs, which is a different piece of work.
