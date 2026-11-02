@@ -30,6 +30,27 @@ const say = (ok, claim, detail) => { if (!ok) bad++; console.log(`  ${ok ? 'OK  
 const login = async (e, pw) => (await (await fetch(`${API}/api/auth/login`, {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: e, password: pw }),
 })).json()).token;
+
+/*
+ * A throwaway buyer account.
+ *
+ * Buying requires an account, and the per-buyer limit now counts per ACCOUNT
+ * rather than per email address — so "a different buyer" has to mean a
+ * different account, not just a different address on the same one. These are
+ * registered per run and cleaned up with the rest of the suite's data.
+ */
+const newBuyer = async (label) => {
+  const email = `four-${SUF}-${label}@eventick.ma`;
+  const password = `four-${SUF}-pw`;
+  const r = await fetch(`${API}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: `Four ${label}`, email, password }),
+  });
+  const d = await r.json();
+  if (!d.token) throw new Error(`register ${email}: ${JSON.stringify(d).slice(0, 120)}`);
+  return { email, token: d.token };
+};
 const call = async (m, path, { token, body, key } = {}) => {
   const url = key ? `${API}${path}${path.includes('?') ? '&' : '?'}k=${encodeURIComponent(key)}` : `${API}${path}`;
   const r = await fetch(url, {
@@ -68,12 +89,13 @@ const hold = (ev, tier, qty, email, token) => call('POST', '/api/orders/hold', {
 console.log('\n1. PER-BUYER LIMIT (the 24-seat hole)');
 {
   const { event, tier } = await mkEvent('limit', { maxPerBuyer: 10 });
-  const buyer = `four-${SUF}-buyer@eventick.ma`;
+  const one = await newBuyer('buyer');
+  const buyer = one.email;
   let got = 0;
   for (let i = 1; i <= 3; i++) {
-    const h = await hold(event, tier, 8, buyer);
+    const h = await hold(event, tier, 8, buyer, one.token);
     if (h.status === 201) {
-      await call('POST', `/api/orders/${h.data.order.id}/pay`, { key: h.data.accessToken, body: { holderName: 'Four Buyer', email: buyer, phone: '0612345678' } });
+      await call('POST', `/api/orders/${h.data.order.id}/pay`, { token: one.token, body: { holderName: 'Four Buyer', email: buyer, phone: '0612345678' } });
       got += 8;
     } else {
       say(true, `order ${i} refused`, h.data.error?.slice(0, 60));
@@ -82,37 +104,48 @@ console.log('\n1. PER-BUYER LIMIT (the 24-seat hole)');
   }
   say(got <= 10, `one buyer got ${got} seats with a limit of 10`, got > 10 ? 'LIMIT NOT ENFORCED' : 'limit held');
 
-  // Case-insensitivity: the same person with different capitalisation.
-  const upper = await hold(event, tier, 4, buyer.toUpperCase());
-  say(upper.status === 409, 'the same email in CAPITALS is still the same buyer', `${upper.status}`);
+  /*
+   * Identity is the ACCOUNT, so changing the address on the request changes
+   * nothing — which is a stronger guarantee than the case-insensitive email
+   * match this replaced. That match still exists in the product for orders
+   * placed before accounts were required; it just can no longer be reached
+   * from a new purchase, so it cannot be exercised from here.
+   */
+  const upper = await hold(event, tier, 4, buyer.toUpperCase(), one.token);
+  say(upper.status === 409, 'a different address on the same ACCOUNT is still the same buyer', `${upper.status}`);
 
-  // A different buyer is unaffected.
-  const other = await hold(event, tier, 4, `four-${SUF}-other@eventick.ma`);
-  say(other.status === 201, 'a different buyer can still buy');
+  // A different account is unaffected.
+  const two = await newBuyer('other');
+  const other = await hold(event, tier, 4, two.email, two.token);
+  say(other.status === 201, 'a different buyer can still buy', `${other.status}`);
 
   // 0 = unlimited.
   const { event: unl, tier: unlTier } = await mkEvent('unlimited', { maxPerBuyer: 0 });
-  const u1 = await hold(unl, unlTier, 8, buyer);
-  await call('POST', `/api/orders/${u1.data.order.id}/pay`, { key: u1.data.accessToken, body: { holderName: 'Four Buyer', email: buyer, phone: '0612345678' } });
-  const u2 = await hold(unl, unlTier, 8, buyer);
+  const u1 = await hold(unl, unlTier, 8, buyer, one.token);
+  await call('POST', `/api/orders/${u1.data.order.id}/pay`, { token: one.token, body: { holderName: 'Four Buyer', email: buyer, phone: '0612345678' } });
+  const u2 = await hold(unl, unlTier, 8, buyer, one.token);
   say(u2.status === 201, 'maxPerBuyer 0 means unlimited', `${u2.status}`);
 }
 
 // ── 2. Sales windows ──
 console.log('\n2. SALES WINDOWS');
 {
+  // Signed in, so a refusal here is the sales WINDOW talking and not the
+  // account requirement -- which would otherwise answer 401 first and make
+  // each of these pass for the wrong reason.
+  const w = await newBuyer('w');
   const future = new Date(Date.now() + 7 * 86400000);
   const { event: soon, tier: soonTier } = await mkEvent('notyet', {}, { salesStartAt: future });
-  const early = await hold(soon, soonTier, 1, `four-${SUF}-w@eventick.ma`);
+  const early = await hold(soon, soonTier, 1, w.email, w.token);
   say(early.status === 409 && /open on/i.test(early.data.error ?? ''), 'a tier not yet on sale refuses a hold', early.data.error?.slice(0, 50));
 
   const past = new Date(Date.now() - 86400000);
   const { event: over, tier: overTier } = await mkEvent('closed', {}, { salesEndAt: past });
-  const late = await hold(over, overTier, 1, `four-${SUF}-w@eventick.ma`);
+  const late = await hold(over, overTier, 1, w.email, w.token);
   say(late.status === 409 && /closed/i.test(late.data.error ?? ''), 'a closed tier refuses a hold', late.data.error?.slice(0, 40));
 
   const { event: open, tier: openTier } = await mkEvent('open', {}, { salesStartAt: past, salesEndAt: future });
-  const now = await hold(open, openTier, 1, `four-${SUF}-w@eventick.ma`);
+  const now = await hold(open, openTier, 1, w.email, w.token);
   say(now.status === 201, 'a tier inside its window sells normally');
 
   // Inverted window refused at save time.
@@ -179,15 +212,17 @@ let compEvent;
 console.log('\n4. EVENT CANCELLATION + MASS REFUND');
 {
   const { event, tier } = await mkEvent('cancel');
-  // Three buyers.
+  // Three buyers — three ACCOUNTS, since that is what a buyer is now.
   for (let i = 1; i <= 3; i++) {
-    const h = await hold(event, tier, 2, `four-${SUF}-c${i}@eventick.ma`);
-    await call('POST', `/api/orders/${h.data.order.id}/pay`, { key: h.data.accessToken, body: { holderName: `Buyer ${i}`, email: `four-${SUF}-c${i}@eventick.ma`, phone: '0612345678' } });
+    const b = await newBuyer(`c${i}`);
+    const h = await hold(event, tier, 2, b.email, b.token);
+    await call('POST', `/api/orders/${h.data.order.id}/pay`, { token: b.token, body: { holderName: `Buyer ${i}`, email: b.email, phone: '0612345678' } });
   }
   // Plus a comp, which was never paid for.
   await call('POST', `/api/organiser/events/${event.slug}/invitations`, { token: orga, body: { tierId: tier.id, guests: [{ guestName: 'Comp Guest' }] } });
   // Plus a live hold mid-checkout.
-  await hold(event, tier, 1, `four-${SUF}-pending@eventick.ma`);
+  const pend = await newBuyer('pending');
+  await hold(event, tier, 1, pend.email, pend.token);
 
   const noReason = await call('POST', `/api/organiser/events/${event.slug}/cancel`, { token: orga, body: { reason: '' } });
   say(noReason.status === 400, 'a reason is required', `${noReason.status}`);
