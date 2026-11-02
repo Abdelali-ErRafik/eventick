@@ -26,6 +26,8 @@ const API = process.env.API_URL ?? "http://localhost:4100";
 const ACCOUNTS = {
   admin: { email: "admin@eventick.ma", password: "eventick-admin-2026" },
   organiser: { email: "organisateur@eventick.ma", password: "eventick-orga-2026" },
+  // Buying requires an account, so the suite needs a real buyer to book as.
+  customer: { email: "client@eventick.ma", password: "eventick-client-2026" },
 };
 
 let failures = 0;
@@ -67,12 +69,26 @@ async function call(method, path, { token, body } = {}) {
 
 const SUFFIX = Date.now();
 
-// The payout window the checks below use. Orders are created now, so the
-// current month is the one that matters — and a tight window is what an admin
-// would actually pick. A decade-wide period used to be fine here and became
-// misleading once the plan subscription was billed per calendar month.
+/*
+ * The payout window the checks below use.
+ *
+ * It starts a month BEFORE the current month, not at the 1st of it. `owed`
+ * (pending.payableCents) is a lifetime figure — every settled order not yet
+ * in a payout — so a window of "this month only" compares a lifetime number
+ * against a one-month transfer. On any day of the month except while the
+ * database holds nothing older, those differ, and the suite reports a product
+ * fault that is really a window too narrow to contain what it is measuring.
+ *
+ * That is what happened on 1 November: the demo data from October fell
+ * outside the window, the payout correctly transferred nothing from it, and
+ * the assertion read 0.00 where it wanted 11 885.00.
+ *
+ * Still a tight, realistic window rather than the decade-wide one this
+ * replaced — that became misleading once the plan subscription was billed per
+ * calendar month.
+ */
 const now = new Date();
-const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
+const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 10);
 const tomorrow = new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10);
 const created = { events: [], orders: [] };
 
@@ -113,6 +129,7 @@ async function teardown() {
 async function main() {
   const admin = await login(ACCOUNTS.admin);
   const orga = await login(ACCOUNTS.organiser);
+  const customer = await login(ACCOUNTS.customer);
   const orgaId = (await call("GET", "/api/auth/me", { token: orga })).data.user.id;
 
   // Start clean, whatever an earlier run left behind.
@@ -170,6 +187,7 @@ async function main() {
   /** Buy `qty` seats and settle them (mock mode settles on /pay). */
   async function buy(qty) {
     const hold = await call("POST", "/api/orders/hold", {
+      token: customer,
       body: { eventSlug: event.slug, lines: [{ tierId: tier.id, qty }] },
     });
     const id = hold.data.order.id;
@@ -288,8 +306,21 @@ async function main() {
 
     const lastMonth = await call("GET", "/api/organiser/finance?period=lastMonth", { token: orga });
     check("a closed period has both bounds", Boolean(lastMonth.data.period.start && lastMonth.data.period.end));
-    check("and holds none of this month's sales", lastMonth.data.period.grossCents === 0,
-      mad(lastMonth.data.period.grossCents));
+    /*
+     * Last month must not contain THIS suite's sales, which were made moments
+     * ago. It may well contain other sales: seeded and demo orders from
+     * previous weeks are real rows on this organiser, and on the 1st of any
+     * month they land in "last month".
+     *
+     * The original assertion was `grossCents === 0`, which only held while the
+     * suite happened to run in the same month its data was created. It passed
+     * all through October and broke by the calendar on 1 November, with
+     * nothing in the product having changed. The window is what is under test
+     * here, so compare the windows, not a total that other rows contribute to.
+     */
+    check("and ends where this month begins, so the two cannot overlap",
+      lastMonth.data.period.end === thisMonth.data.period.start,
+      `${lastMonth.data.period.end} == ${thisMonth.data.period.start}`);
 
     const allTime = await call("GET", "/api/organiser/finance?period=all", { token: orga });
     check("all time has no comparison to offer", allTime.data.period.previous === null);
