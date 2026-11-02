@@ -29,6 +29,19 @@ const call = async (method, path, body, token) => {
   return { status: res.status, data };
 };
 
+/*
+ * Buying requires an account, so each demo buyer gets a throwaway one. They
+ * are registered per run; the demo deletes its event at the end, and these
+ * accounts hold nothing once it is gone.
+ */
+const RUN = Date.now();
+const asBuyer = async (label) => {
+  const email = `wl-${RUN}-${label}@example.ma`;
+  const r = await call("POST", "/auth/register", { name: `Demo ${label}`, email, password: `wl-${RUN}-pw` });
+  if (!r.data?.token) throw new Error(`register ${email}: ${r.status} ${JSON.stringify(r.data).slice(0, 110)}`);
+  return { email, token: r.data.token };
+};
+
 const step = (n, title) => console.log(`\n\x1b[1m${n}. ${title}\x1b[0m`);
 const say = (text) => console.log(`   ${text}`);
 
@@ -92,11 +105,13 @@ try {
   // ────────────────────────────────────────────────────────────────────────
   step(2, "Two buyers take both seats — it is now SOLD OUT");
   const buyers = [];
-  for (const [name, email] of [["Salma Idrissi", "salma.demo@example.ma"], ["Youssef Benali", "youssef.demo@example.ma"]]) {
-    const hold = await call("POST", "/orders/hold", { eventSlug: SLUG, lines: [{ tierId, qty: 1 }], email });
+  for (const [name, label] of [["Salma Idrissi", "salma"], ["Youssef Benali", "youssef"]]) {
+    const who = await asBuyer(label);
+    const email = who.email;
+    const hold = await call("POST", "/orders/hold", { eventSlug: SLUG, lines: [{ tierId, qty: 1 }], email }, who.token);
     if (hold.status !== 201) throw new Error(`hold: ${hold.status} ${JSON.stringify(hold.data)}`);
     const paid = await call("POST", `/orders/${hold.data.order.id}/pay?k=${encodeURIComponent(hold.data.accessToken)}`,
-      { holderName: name, email, phone: "0612345678" });
+      { holderName: name, email, phone: "0612345678" }, who.token);
     if (paid.status >= 300) throw new Error(`pay: ${paid.status} — are payments in MOCK mode?`);
     buyers.push({ name, email, orderId: hold.data.order.id });
     say(`${name} bought 1 seat`);
@@ -143,9 +158,12 @@ try {
   step(5, "The held seat is NOT on sale to anyone else");
   const avail = await call("GET", `/events/${SLUG}`);
   say(`public seats left: ${avail.data.event.tiers[0].remaining} — the freed seat is reserved, not back on the market`);
+  // Signed in, on their own account: anonymous would be turned away for not
+  // having one, which proves nothing about whether the seat is held.
+  const jump = await asBuyer("jumper");
   const jumper = await call("POST", "/orders/hold", {
-    eventSlug: SLUG, lines: [{ tierId, qty: 1 }], email: "queue.jumper@example.ma",
-  });
+    eventSlug: SLUG, lines: [{ tierId, qty: 1 }], email: jump.email,
+  }, jump.token);
   say(`someone else trying to buy it -> ${jumper.status} ${JSON.stringify(jumper.data).slice(0, 70)}`);
 
   // ────────────────────────────────────────────────────────────────────────
