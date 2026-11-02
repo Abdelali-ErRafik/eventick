@@ -43,7 +43,21 @@ const holdSchema = z.object({
  */
 ordersRouter.post(
   "/hold",
-  optionalAuth,
+  /*
+   * An account is required to buy. Guest checkout is closed.
+   *
+   * It used to be `optionalAuth`: anyone could hold seats with a name, an
+   * email and a phone number, and the order carried `customerId: null`.
+   * Requiring a session gives every new order a real owner, which is what
+   * makes "my tickets", refunds and transfers answerable to a person rather
+   * than to whoever is holding a link.
+   *
+   * Orders placed as a guest BEFORE this change still work: they are read and
+   * refunded through their access token exactly as before, and /:id/claim
+   * still attaches them to an account. This closes the door on new guest
+   * orders; it does not orphan the old ones.
+   */
+  authenticate,
   // Refused at the reservation step, not only at payment: holding seats is
   // already the harm -- a staff account could otherwise park the last row of
   // a sold-out tier indefinitely without ever reaching /pay.
@@ -233,7 +247,11 @@ ordersRouter.post(
 
       const created = await tx.order.create({
         data: {
-          customerId: req.user?.id ?? null,
+          // `authenticate` on this route guarantees a user, so this is never
+          // null for a new order. Asserted rather than defaulted to null: a
+          // silent fallback would quietly recreate guest orders if the
+          // middleware above were ever loosened.
+          customerId: req.user!.id,
           eventId: event.id,
           status: "PENDING",
           // Blank until /pay collects them — the reservation is what matters
@@ -318,6 +336,21 @@ const paySchema = z.object({
  */
 ordersRouter.post(
   "/:id/pay",
+  /*
+   * Deliberately still `optionalAuth`, even though buying now requires an
+   * account.
+   *
+   * The account check belongs at /hold, which is the only way an order comes
+   * into existence -- so every order created from now on already has an
+   * owner, and there is nothing a session would add here that `authoriseOrder`
+   * below does not already enforce.
+   *
+   * Requiring a session at this step would instead STRAND the guest orders
+   * taken before the rule changed: they are authorised by their access token,
+   * and some are still PENDING. Those buyers hold seats they have not paid
+   * for yet, and a hard requirement here would leave them unable to finish
+   * and unable to get the seat back.
+   */
   optionalAuth,
   // Also here, not just on /hold: a customer can hold seats, be approved as
   // an organiser, and come back to pay -- the role must be re-checked at the

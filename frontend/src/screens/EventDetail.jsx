@@ -28,7 +28,7 @@ export default function EventDetail() {
   // (refuseStaffPurchase on /orders/hold), so without this they would fill a
   // basket, press Pay and collect a 403 toast -- a wall at the last step
   // instead of an explanation at the first.
-  const { canUsePro } = useAuth();
+  const { canUsePro, user } = useAuth();
   const [waitEmail, setWaitEmail] = useState("");
   const [waitBusy, setWaitBusy] = useState(false);
   const [booking, setBooking] = useState(false);
@@ -129,6 +129,19 @@ export default function EventDetail() {
   const checkout = async () => {
     if (!count) {
       toast.error(t("emptyCart"));
+      return;
+    }
+    /*
+     * Buying needs an account. The server enforces it (authenticate on
+     * /orders/hold); this sends people to sign in FIRST rather than letting
+     * them pick seats, press Book and collect a 401.
+     *
+     * `?next=` brings them back to this event, so signing in costs them the
+     * click and not the basket. Login only honours same-site paths, so this
+     * cannot be turned into an open redirect.
+     */
+    if (!user) {
+      navigate(`/login?next=${encodeURIComponent(`/evenements/${event.slug}`)}`);
       return;
     }
     if (booking) return;
@@ -510,7 +523,10 @@ export default function EventDetail() {
                   loading={booking}
                   onClick={checkout}
                 >
-                  {t("pay")}
+                  {/* Says where the click actually leads. A button reading
+                      "continue to payment" that opens a login page reads as a
+                      fault, even though signing in is the intended step. */}
+                  {user ? t("pay") : t("paySignIn")}
                 </Button>
               )}
 
