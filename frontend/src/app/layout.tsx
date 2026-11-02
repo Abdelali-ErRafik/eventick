@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { siteUrl } from "../lib/catalog-server";
+import { localeAlternates } from "../lib/locales";
 import "./styles.css";
 
 /*
@@ -28,7 +29,10 @@ export const metadata: Metadata = {
   },
   description:
     "Réservez vos billets pour les concerts, festivals, spectacles et rencontres sportives au Maroc. E-billet immédiat avec QR code, paiement sécurisé en dirhams.",
-  alternates: { canonical: "/" },
+  // The home page's own canonical, plus the hreflang pair. Child routes
+  // override `alternates` wholesale, so this applies to the unprefixed SPA
+  // pages that declare none of their own.
+  alternates: localeAlternates("/"),
   openGraph: {
     type: "website",
     siteName: "Eventick",

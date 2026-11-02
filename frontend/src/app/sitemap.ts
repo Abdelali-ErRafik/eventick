@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { getEvents, siteUrl } from "../lib/catalog-server";
 import { categoryLandings, cityLandings } from "../lib/landing";
+import { HREFLANG, INDEXABLE_LOCALES } from "../lib/locales";
 
 /**
  * sitemap.xml — same story as robots.txt: the path returned the SPA's HTML
@@ -18,14 +19,39 @@ import { categoryLandings, cityLandings } from "../lib/landing";
  * the ones that qualify, since lib/landing.ts refuses to build a page for a
  * city or category with too few events to be worth a crawl.
  */
+/**
+ * The hreflang block for one path, in the form a sitemap declares it.
+ *
+ * Declaring alternates HERE as well as in each page's head is not
+ * duplication for its own sake: a sitemap entry is read before the page is
+ * fetched, so the relationship is known on the first crawl rather than the
+ * second. Google accepts either; giving both is what makes a new locale URL
+ * get picked up quickly instead of eventually.
+ */
+function withAlternates(site: string, path: string) {
+  const clean = path === "/" ? "" : path;
+  const languages: Record<string, string> = {};
+  for (const locale of INDEXABLE_LOCALES) {
+    languages[HREFLANG[locale]] = `${site}/${locale}${clean}`;
+  }
+  languages["x-default"] = `${site}${clean || "/"}`;
+  return { languages };
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const site = siteUrl();
   const events = await getEvents();
   const now = new Date();
 
   const staticPages: MetadataRoute.Sitemap = [
-    { url: `${site}/`, lastModified: now, changeFrequency: "daily", priority: 1 },
-    { url: `${site}/explorer`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
+    { url: `${site}/`, lastModified: now, changeFrequency: "daily", priority: 1, alternates: withAlternates(site, "/") },
+    {
+      url: `${site}/explorer`,
+      lastModified: now,
+      changeFrequency: "daily",
+      priority: 0.8,
+      alternates: withAlternates(site, "/explorer"),
+    },
     { url: `${site}/aide`, lastModified: now, changeFrequency: "monthly", priority: 0.3 },
     { url: `${site}/legal`, lastModified: now, changeFrequency: "yearly", priority: 0.1 },
   ];
@@ -44,6 +70,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified: new Date(event.end),
     changeFrequency: "weekly",
     priority: 0.7,
+    alternates: withAlternates(site, `/evenements/${event.slug}`),
   }));
 
   // Landing pages, listed only while they qualify. A city that drops below

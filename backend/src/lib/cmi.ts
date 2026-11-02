@@ -265,9 +265,14 @@ export function cmiUrls(orderId: string, accessToken?: string | null, locale?: s
 /**
  * Locales that have their own URL prefix on the frontend.
  *
- * EMPTY on purpose. The frontend serves every language from one unprefixed
- * set of URLs today, so adding a prefix here before those routes exist
- * would send paying buyers to a 404. Add "fr" and "ar" in the same change
- * that ships `app/[locale]/`, and only then.
+ * Filled in by the change that shipped `app/[locale]/`: /fr/ and /ar/ are
+ * real routes now, so a buyer who paid in Arabic returns to the Arabic
+ * confirmation page instead of the French one.
+ *
+ * "en" is absent deliberately and must stay absent until an /en/ route
+ * exists — this value becomes a redirect target CMI sends the buyer back to,
+ * so a prefix with no route behind it is a 404 at the worst possible moment,
+ * holding a charged card and no ticket. That is also why this is an
+ * allowlist rather than a passthrough of whatever the caller sent.
  */
-const LOCALE_PREFIXES = new Set<string>();
+const LOCALE_PREFIXES = new Set<string>(["fr", "ar"]);

@@ -236,12 +236,28 @@ describe("oid round-trip", () => {
  * third party. Both facts make them worth pinning down.
  */
 describe("cmiUrls", () => {
-  it("adds no locale prefix today, because no locale-prefixed route exists", () => {
-    // LOCALE_PREFIXES is deliberately empty until app/[locale]/ ships.
-    // Prefixing before that would redirect a paying buyer to a 404.
-    const { okUrl, failUrl } = cmiUrls("order1", null, "fr");
+  it("returns the buyer to the locale they paid in", () => {
+    // /fr/ and /ar/ are real routes now, so the prefix is honoured: paying
+    // in Arabic and landing on the French confirmation page is a jarring
+    // switch at the worst possible moment.
+    const fr = cmiUrls("order1", null, "fr");
+    expect(fr.okUrl).toBe("http://localhost:3100/fr/confirmation/order1");
+    expect(fr.failUrl).toContain("/fr/paiement?echec=1&commande=order1");
+
+    const ar = cmiUrls("order1", null, "ar");
+    expect(ar.okUrl).toBe("http://localhost:3100/ar/confirmation/order1");
+  });
+
+  it("adds no prefix for a locale with no route of its own", () => {
+    // English has no /en/ route (no English event copy), so it must fall
+    // back to the unprefixed URL rather than redirect to a 404.
+    const { okUrl } = cmiUrls("order1", null, "en");
     expect(okUrl).toBe("http://localhost:3100/confirmation/order1");
-    expect(failUrl).toContain("/paiement?echec=1&commande=order1");
+  });
+
+  it("adds no prefix when the locale is absent", () => {
+    const { okUrl } = cmiUrls("order1", null);
+    expect(okUrl).toBe("http://localhost:3100/confirmation/order1");
   });
 
   it("ignores a locale it does not recognise", () => {

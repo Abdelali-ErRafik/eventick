@@ -1721,9 +1721,32 @@ export const LOCALE_LABELS = { fr: "langFr", en: "langEn", ar: "langAr" };
 export const LOCALE_SHORT = { fr: "FR", en: "EN", ar: "عربي" };
 const DICTS = { fr, en, ar };
 
+/**
+ * The locale named by the URL, if the URL names one.
+ *
+ * A prefixed path is a PROMISE to a search engine: /ar/… is advertised via
+ * hreflang as the Arabic page, so it has to BE the Arabic page for everyone
+ * who follows that link — a crawler, or someone opening a shared link on a
+ * device that has never set a preference. Reading localStorage first would
+ * have served French under an Arabic URL, which is worse than having no
+ * Arabic URL at all.
+ *
+ * Only the locales with their own routes count here (see lib/locales.ts);
+ * "/en/" is not a route, so an /en/ path is not a locale signal.
+ */
+function localeFromPath() {
+  if (typeof window === "undefined") return null;
+  const first = window.location.pathname.split("/")[1];
+  return first === "fr" || first === "ar" ? first : null;
+}
+
 export function I18nProvider({ children }) {
   const [locale, setLocaleState] = useState(() => {
     if (typeof window === "undefined") return "fr";
+    // URL first, stored preference second. The prefix is explicit and
+    // shareable; the stored value is this browser's private habit.
+    const fromPath = localeFromPath();
+    if (fromPath) return fromPath;
     const saved = localStorage.getItem(LOCALE_KEY);
     return LOCALES.includes(saved) ? saved : "fr";
   });
@@ -1734,12 +1757,32 @@ export function I18nProvider({ children }) {
   }, [locale]);
 
   const setLocale = (next) => {
-    setLocaleState(next);
     try {
       localStorage.setItem(LOCALE_KEY, next);
     } catch {
       // ignore storage failures
     }
+
+    // Moving between locales that own a URL is a NAVIGATION, not a state
+    // change: the whole point of /fr/ and /ar/ is that the address names the
+    // language, so switching has to rewrite the address or the two disagree
+    // and the URL stops being shareable. A full load also rebuilds the
+    // router with the new basename, which `setState` alone cannot do.
+    //
+    // English has no route, so it stays a pure state change — the interface
+    // switches and the URL is left alone.
+    if (typeof window !== "undefined") {
+      const prefixed = (value) => (value === "fr" || value === "ar" ? `/${value}` : "");
+      const current = window.location.pathname.split("/")[1];
+      const base = current === "fr" || current === "ar" ? window.location.pathname.slice(3) : window.location.pathname;
+      const target = `${prefixed(next)}${base || "/"}${window.location.search}${window.location.hash}`;
+      if (target !== window.location.pathname + window.location.search + window.location.hash) {
+        window.location.assign(target);
+        return;
+      }
+    }
+
+    setLocaleState(next);
   };
 
   const t = (key) => (DICTS[locale] ?? fr)[key] ?? fr[key];

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import SpaMount from "../../[[...slug]]/SpaMount";
 import { getEvent, type CatalogEvent } from "../../../lib/catalog-server";
 import { eventJsonLd } from "../../../lib/jsonld";
+import { localeAlternates } from "../../../lib/locales";
 
 /**
  * An event page — the same SPA screen as before, with a real head.
@@ -63,7 +64,11 @@ export async function generateMetadata({
   return {
     title,
     description: snippet(event),
-    alternates: { canonical: `/evenements/${event.slug}` },
+    // The unprefixed URL stays canonical for itself and carries the hreflang
+    // links to /fr/ and /ar/. hreflang has to be reciprocal — a page naming
+    // an alternate that does not name it back is ignored — so the pair is
+    // declared from both ends.
+    alternates: localeAlternates(`/evenements/${event.slug}`),
     // A cancelled event should stop being a search result. The page still
     // works for anyone holding the link — it just stops being advertised.
     robots: event.cancelledAt ? { index: false, follow: true } : undefined,
