@@ -122,6 +122,19 @@ export async function claimShare(
         seatRow: share.ticket.seatRow,
         seatNumber: share.ticket.seatNumber,
         replacesRef: share.ticket.ref,
+        /*
+         * Who actually holds it now.
+         *
+         * `claimantId` was accepted by this function and then dropped on the
+         * floor, so nothing recorded that the ticket had changed hands. The
+         * replacement sits on the sender's order — deliberately, since no
+         * money moved — and "my tickets" lists every ticket on your orders,
+         * so the sender kept seeing a live ticket they had given away.
+         *
+         * Null for a guest claim: there is no account to point at, and they
+         * reach the ticket through its own accessToken instead.
+         */
+        holderId: claimantId,
       },
     });
 

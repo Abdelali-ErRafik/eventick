@@ -70,6 +70,10 @@ model User {
   orders   Order[]
   listings ResaleListing[]
   shares   TicketShare[]
+  /// Tickets held without having bought them — a share claimed from someone
+  /// else's order. Named, because Ticket reaches User twice (buyer via order,
+  /// holder directly).
+  heldTickets Ticket[] @relation("TicketHolder")
 
   plan          Plan?                @relation(fields: [planId], references: [key], onDelete: SetNull)
   bankAccount   BankAccount?
@@ -435,7 +439,23 @@ model Ticket {
   /// reached through their order.
   accessToken String? @unique @map("access_token")
 
+  /// The account this ticket now belongs to, when that is not the buyer.
+  ///
+  /// A claimed share leaves the replacement ticket on the SENDER's order,
+  /// because no money moved and the seat must stay counted exactly once. With
+  /// nothing recording the new owner, "my tickets" — which lists every ticket
+  /// on your orders — kept showing the sender a live ticket they had given
+  /// away, next to the voided one they no longer held.
+  ///
+  /// Set when a signed-in recipient claims a share. Null for an ordinary
+  /// ticket (the buyer owns it) and for a guest claim, which has no account
+  /// to point at and is reached through accessToken instead.
+  holderId String? @map("holder_id")
+
   order      Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// SetNull, not Cascade: deleting an account must not delete a ticket that
+  /// was paid for and may still be admitted. It reverts to the buyer's.
+  holder     User?          @relation("TicketHolder", fields: [holderId], references: [id], onDelete: SetNull)
   tier       TicketTier     @relation(fields: [tierId], references: [id], onDelete: Restrict)
   resale     ResaleListing?
   shares     TicketShare[]

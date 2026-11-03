@@ -467,12 +467,87 @@ ordersRouter.get(
   "/",
   authenticate,
   asyncHandler(async (req, res) => {
+    /*
+     * Your orders, minus the tickets you gave away.
+     *
+     * A claimed share leaves the replacement ticket on the SENDER's order, so
+     * listing every ticket on your orders showed the sender a live ticket
+     * somebody else now holds — alongside the voided original, which at least
+     * reads as "Transferred". Tickets whose holderId names another account
+     * are filtered out here rather than hidden in the UI, so the API does not
+     * hand them out in the first place.
+     *
+     * `holderId: null` is the ordinary case and must stay visible: it means
+     * nobody has claimed this ticket away from the buyer.
+     */
+    const mine = req.user!.id;
     const orders = await prisma.order.findMany({
-      where: { customerId: req.user!.id },
-      include: { tickets: { include: { tier: { include: { event: true } } } } },
+      where: {
+        OR: [
+          // Orders you placed.
+          { customerId: mine },
+          /*
+           * Plus orders that are not yours but carry a ticket somebody gave
+           * you. Without this a recipient who claimed a share while signed in
+           * saw nothing in "my tickets": the replacement lives on the
+           * SENDER's order, so scoping by customerId alone missed it and
+           * their only route back was the claim link in their email.
+           */
+          { tickets: { some: { holderId: mine } } },
+        ],
+      },
+      include: {
+        /*
+         * Everything on the order; narrowed per-order below.
+         *
+         * It cannot be filtered here. The rule depends on whether the order
+         * is yours, and one `where` applies to every row in the result: a
+         * filter of "holderId is null or mine" is right for the BUYER (their
+         * unclaimed tickets, plus any gifted to them) and wrong for a
+         * recipient, for whom `holderId: null` means every ticket on the
+         * sender's order that nobody has claimed yet. That is exactly what it
+         * leaked when tried — a recipient saw all three tickets on an order
+         * they had been given one from.
+         */
+        tickets: { include: { tier: { include: { event: true } } } },
+      },
       orderBy: { createdAt: "desc" },
     });
-    res.json({ orders: orders.map((o) => publicOrderWithContext(o)) });
+    /*
+     * Narrow each order's tickets by who is asking.
+     *
+     *   your own order  -> everything except what you have given away
+     *   someone else's  -> only the tickets gifted to you, nothing else
+     *
+     * Done per order because the rule differs between the two cases, which a
+     * single database filter cannot express.
+     */
+    const narrowed = orders.map((o) => ({
+      ...o,
+      tickets:
+        o.customerId === mine
+          ? o.tickets.filter((t) => t.holderId === null || t.holderId === mine)
+          : o.tickets.filter((t) => t.holderId === mine),
+    }));
+
+    /*
+     * An order pulled in only for a gifted ticket has had every other ticket
+     * removed, so it would otherwise render as an empty order card carrying
+     * the sender's totals.
+     */
+    const visible = narrowed.filter((o) => o.customerId === mine || o.tickets.length > 0);
+    res.json({
+      orders: visible.map((o) =>
+        /*
+         * An order you are only in because somebody gave you a ticket from it
+         * is serialised WITHOUT contact details. `contact` defaults to true,
+         * which on a gifted order would hand the recipient the sender's name,
+         * email and phone — a gift should not disclose the giver's details,
+         * and the recipient never bought anything from this order.
+         */
+        publicOrderWithContext(o, { contact: o.customerId === mine }),
+      ),
+    });
   }),
 );
 
