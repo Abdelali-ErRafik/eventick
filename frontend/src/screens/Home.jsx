@@ -425,14 +425,21 @@ export default function Home() {
         </div>
       </section>
 
-      {/* pt-12 because this wrapper carried pb-4 and no top padding at all,
-          so the dark Pro panel started immediately under the tinted section
-          above it -- two filled surfaces touching, with the colour change
-          landing mid-way through the previous section's last card. The
-          padding is on this wrapper rather than the panel inside it: the
-          panel is the thing being separated, so the gap belongs outside it.
-          Unlike the hero, nothing here caps the height, so padding works. */}
-      <section className="mx-auto max-w-7xl px-4 pb-4 pt-12 md:px-8 md:pt-16">
+      {/* This wrapper carried pb-4 and no top padding at all, so the dark
+          Pro panel began immediately under the tinted section above it --
+          two filled surfaces touching, with the colour change landing
+          part-way through the previous section's last card.
+
+          pt-24 to match what sits BELOW the panel, which is not pb-4 alone:
+          this is the last section on the page, so the gap under it is
+          pb-4 (16px) plus the footer's own mt-20 (80px) = 96px. pt-24 is
+          that same 96px, so the panel now has equal air above and below
+          instead of 48 against 96.
+
+          On the wrapper rather than the panel inside it, since the panel is
+          the thing being separated. Nothing caps the height here, unlike
+          the hero, so padding does what it says. */}
+      <section className="mx-auto max-w-7xl px-4 pb-4 pt-24 md:px-8">
         {/* Deliberately always dark, to set off the light ticket-preview
             card beside it regardless of app theme. A radial glow instead of
             a flat fill gives the band some depth to match the hero and the
