@@ -4,33 +4,65 @@ import { logger } from "./logger.js";
 /**
  * CMI (Centre Monétique Interbancaire) — the payment gateway.
  *
- * CMI is a REDIRECT gateway, not an in-page SDK: we hand the browser a signed
- * form, it POSTs to CMI's hosted 3-D Secure page, the buyer types their card
- * there, and CMI reports the outcome to us server-to-server. So, unlike the
- * Stripe integration this replaces, no card data ever reaches this server AND
- * there is no client secret to hand the browser — only a signed form.
+ * CMI is a REDIRECT gateway: we hand the browser a signed form, it POSTs to
+ * CMI's hosted 3-D Secure page, the buyer types their card there, and CMI
+ * reports the outcome to us server-to-server. No card data ever reaches this
+ * server.
  *
- * Two things make a payment trustworthy here, and both are hash-based:
+ * Trust rests on two hashes:
+ *  1. The REQUEST hash proves the amount and order reference were set by us,
+ *     so a buyer cannot edit the form and pay 1 MAD for an 850 MAD ticket.
+ *  2. The CALLBACK hash proves an "approved" message really came from CMI.
+ *     The callback endpoint is public, so without this check anyone who
+ *     guessed an order id could POST `ProcReturnCode=00` and get free tickets.
  *
- *  1. The REQUEST hash proves to CMI that the amount and order reference were
- *     set by us, so a buyer cannot edit the form and pay 1 MAD for a 850 MAD
- *     ticket.
- *  2. The CALLBACK hash proves to us that the "payment approved" message
- *     really came from CMI. The callback endpoint is necessarily public and
- *     unauthenticated, so without this check anyone who guessed an order id
- *     could POST `ProcReturnCode=00` and be issued free tickets. Several CMI
- *     integrations in the wild skip this; it is the whole security model.
- *
- * With no CMI_CLIENT_ID/CMI_STORE_KEY the app runs in MOCK mode: a hold is
- * confirmed straight to PAID without a gateway, which keeps the funnel
- * demoable offline. Production refuses to boot that way (assertPaymentConfig).
+ * With no CMI_CLIENT_ID/CMI_STORE_KEY the app runs in MOCK mode (a hold is
+ * confirmed straight to PAID). Production refuses to boot that way.
  */
+
+// ─── Constants ──────────────────────────────────────────────────────────────
 
 /** CMI settles in MAD only; 504 is its numeric currency code. */
 export const CMI_CURRENCY = "504";
 
-/** CMI's own name for a direct sale (funds captured now, not just reserved). */
-const TRAN_TYPE = "Auth";
+const TEST_GATEWAY_URL = "https://testpayment.cmi.co.ma/fim/est3Dgate";
+
+/**
+ * Reserve the funds; our callback reply decides whether they are taken.
+ *
+ * With preAuth the card is only authorised, and answering the callback with
+ * ACTION=POSTAUTH is what captures it — so the webhook's FAILURE (sold out,
+ * hold expired while the buyer was at the gateway) genuinely leaves the money
+ * with the buyer. Spelled exactly as the Storeino production gateway
+ * (api-payments) sends it.
+ */
+const TRAN_TYPE = "preAuth";
+
+/** Fixed form fields: hosted 3-D Secure page, ver3 hash, 5s auto-redirect back. */
+const STATIC_FIELDS = {
+  currency: CMI_CURRENCY,
+  TranType: TRAN_TYPE,
+  storetype: "3d_pay_hosting",
+  hashAlgorithm: "ver3",
+  refreshtime: "5",
+} as const;
+
+/** Fields CMI leaves out of its own hash, compared case-insensitively. */
+const UNHASHED_FIELDS = new Set(["hash", "encoding"]);
+
+/** CMI's "approved" response code. Anything else is a decline or an error. */
+const APPROVED_CODE = "00";
+
+/**
+ * Locales that have their own URL prefix on the frontend.
+ *
+ * EMPTY on purpose: every language is served from one unprefixed set of URLs
+ * today, so a prefix here would send paying buyers to a 404. Add "fr" and "ar"
+ * in the same change that ships `app/[locale]/`, and only then.
+ */
+const LOCALE_PREFIXES = new Set<string>();
+
+// ─── Configuration ──────────────────────────────────────────────────────────
 
 export interface CmiConfig {
   clientId: string;
@@ -45,19 +77,19 @@ export function cmiConfig(): CmiConfig | null {
   return {
     clientId,
     storeKey,
-    gatewayUrl: process.env.CMI_GATEWAY_URL ?? "https://testpayment.cmi.co.ma/fim/est3Dgate",
+    gatewayUrl: process.env.CMI_GATEWAY_URL ?? TEST_GATEWAY_URL,
   };
 }
 
-let warned = false;
+let warnedMock = false;
 
 export function isMockPayments(): boolean {
-  const configured = cmiConfig() !== null;
-  if (!configured && !warned) {
-    warned = true;
+  const mock = cmiConfig() === null;
+  if (mock && !warnedMock) {
+    warnedMock = true;
     logger.warn("CMI_CLIENT_ID/CMI_STORE_KEY unset — payments run in MOCK mode (no card is charged)");
   }
-  return !configured;
+  return mock;
 }
 
 /** Called at boot: mock payments must never run on a production host. */
@@ -69,13 +101,14 @@ export function assertPaymentConfig(): void {
   }
 }
 
+// ─── Hashing ────────────────────────────────────────────────────────────────
+
 /**
  * Escape one value for the hash string.
  *
  * Backslash FIRST, then pipe — the other order would re-escape the backslash
- * this step just inserted. Without this, a buyer whose name contained a "|"
- * could shift the field boundaries and make two different payloads hash the
- * same, which is exactly the ambiguity the escaping exists to remove.
+ * just inserted. Without escaping, a "|" inside a value could shift the field
+ * boundaries and make two different payloads hash the same.
  */
 function escapeHashValue(value: unknown): string {
   return String(value ?? "")
@@ -84,10 +117,9 @@ function escapeHashValue(value: unknown): string {
     .replace(/\|/g, "\\|");
 }
 
-/** Fields CMI excludes from its own hash, so we must exclude them too. */
-function excludedFromHash(key: string): boolean {
-  const lower = key.toLowerCase();
-  return lower === "hash" || lower === "encoding";
+/** Case-insensitive, numeric-aware: CMI's reference uses PHP's natcasesort. */
+function compareFieldNames(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 }
 
 /**
@@ -96,44 +128,48 @@ function excludedFromHash(key: string): boolean {
  * RAW digest bytes base64-encoded, not the hex string.
  */
 export function buildHash(params: Record<string, unknown>, storeKey: string): string {
-  const names = Object.keys(params)
-    .filter((key) => !excludedFromHash(key))
-    // Case-insensitive, numeric-aware: CMI's reference uses PHP's natcasesort.
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+  const plain = Object.keys(params)
+    .filter((name) => !UNHASHED_FIELDS.has(name.toLowerCase()))
+    .sort(compareFieldNames)
+    .map((name) => `${escapeHashValue(params[name])}|`)
+    .join("");
 
-  let plain = "";
-  for (const name of names) plain += `${escapeHashValue(params[name])}|`;
-  plain += escapeHashValue(storeKey);
+  return createHash("sha512").update(plain + escapeHashValue(storeKey), "utf8").digest("base64");
+}
 
-  return createHash("sha512").update(plain, "utf8").digest("base64");
+/** CMI posts the signature as HASH, and sometimes as hash. */
+function presentedHash(body: Record<string, unknown>): string | null {
+  for (const value of [body.HASH, body.hash]) {
+    if (typeof value === "string") return value;
+  }
+  return null;
+}
+
+/** Timing-safe: a plain === leaks how much matched, enough to forge byte by byte. */
+function safeEqual(a: string, b: string): boolean {
+  const left = Buffer.from(a, "utf8");
+  const right = Buffer.from(b, "utf8");
+  return left.length === right.length && timingSafeEqual(left, right);
 }
 
 /**
  * Recompute the hash over everything CMI posted back and compare it to the
- * HASH field it sent. Returns false on any mismatch, including a missing hash.
+ * signature it sent. False on any mismatch, including a missing signature.
  *
- * Every posted field participates, not a fixed list: CMI decides what it sends
- * and signs all of it, so hashing only the fields we know about would fail as
- * soon as CMI added one.
+ * Every posted field participates, not a fixed list: CMI signs all of what it
+ * sends, so hashing only known fields would break the day CMI adds one.
  */
 export function verifyCallbackHash(body: Record<string, unknown>, storeKey: string): boolean {
-  const presented = typeof body.HASH === "string" ? body.HASH : typeof body.hash === "string" ? body.hash : null;
-  if (!presented) return false;
-
-  const expected = buildHash(body, storeKey);
-
-  // Timing-safe: a plain === leaks how much of the hash matched, which is
-  // enough to forge one byte at a time given sufficient attempts.
-  const a = Buffer.from(presented, "utf8");
-  const b = Buffer.from(expected, "utf8");
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+  const presented = presentedHash(body);
+  return presented !== null && safeEqual(presented, buildHash(body, storeKey));
 }
+
+// ─── Payment request ────────────────────────────────────────────────────────
 
 export interface CmiPaymentRequest {
   /** Where the browser must POST the fields. */
   action: string;
-  /** Hidden form fields, hash included. */
+  /** Hidden form fields, signature included. */
   fields: Record<string, string>;
   /** The reference CMI will echo back as `oid`. */
   oid: string;
@@ -154,27 +190,42 @@ export interface CmiOrderInput {
   locale?: "fr" | "en" | "ar";
 }
 
+/** MAD units with two decimals: CMI expects "850.00"; 85000 would charge 100x. */
+function formatAmount(totalCents: number): string {
+  return (totalCents / 100).toFixed(2);
+}
+
 /**
- * Build the signed form that sends a buyer to CMI.
- *
- * `amount` goes out in MAD units with two decimals, not cents — CMI expects
- * "850.00", and sending 85000 would charge a hundred times the ticket price.
+ * Per-request nonce. CMI rejects a replayed (oid, rnd) pair, and it is part
+ * of the hash, so two attempts on the same order sign differently.
  */
+function nonce(): string {
+  return `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+}
+
+/** CMI's page speaks fr and en only; Arabic buyers get the French page. */
+function gatewayLang(locale: CmiOrderInput["locale"]): "fr" | "en" {
+  return locale === "en" ? "en" : "fr";
+}
+
+/**
+ * Add the signature and encoding. Both go on AFTER the hash is computed, and
+ * buildHash excludes them anyway. Upper-case HASH, as CMI's samples and the
+ * Storeino production gateway post it.
+ */
+function sign(fields: Record<string, string>, storeKey: string): Record<string, string> {
+  return { ...fields, HASH: buildHash(fields, storeKey), encoding: "UTF-8" };
+}
+
+/** Build the signed form that sends a buyer to CMI. */
 export function buildPaymentRequest(input: CmiOrderInput, config: CmiConfig): CmiPaymentRequest {
   const fields: Record<string, string> = {
+    ...STATIC_FIELDS,
     clientid: config.clientId,
     oid: input.reference,
-    amount: (input.totalCents / 100).toFixed(2),
-    currency: CMI_CURRENCY,
-    // Per-request nonce. CMI rejects a replayed (oid, rnd) pair, and it also
-    // lands in the hash, so two attempts on the same order sign differently.
-    rnd: `${Date.now()}${Math.floor(Math.random() * 1000)}`,
-    TranType: TRAN_TYPE,
-    storetype: "3d_pay_hosting",
-    hashAlgorithm: "ver3",
-    // CMI only speaks these three; Arabic buyers get the French page.
-    lang: input.locale === "en" ? "en" : "fr",
-    refreshtime: "5",
+    amount: formatAmount(input.totalCents),
+    rnd: nonce(),
+    lang: gatewayLang(input.locale),
     callbackUrl: input.callbackUrl,
     okUrl: input.okUrl,
     failUrl: input.failUrl,
@@ -183,27 +234,24 @@ export function buildPaymentRequest(input: CmiOrderInput, config: CmiConfig): Cm
     tel: input.phone?.trim() ?? "",
   };
 
-  // Hash covers every field above; `hash` and `encoding` are added after and
-  // are excluded by buildHash itself.
-  fields.hash = buildHash(fields, config.storeKey);
-  fields.encoding = "UTF-8";
+  return { action: config.gatewayUrl, fields: sign(fields, config.storeKey), oid: input.reference };
+}
 
-  return { action: config.gatewayUrl, fields, oid: input.reference };
+// ─── Callback ───────────────────────────────────────────────────────────────
+
+export function isApproved(body: Record<string, unknown>): boolean {
+  return String(body.ProcReturnCode ?? "") === APPROVED_CODE;
 }
 
 /*
- * The `oid` carries the order AND the attempt.
+ * The `oid` carries the order AND the attempt: `<orderId>-<attempt>`.
  *
- * CMI treats an oid as ONE transaction: send the same value twice and the
- * second is refused with "There is an ongoing transaction related to the
- * order. (99)". With the bare order id as oid, a buyer whose card was
- * declined could never retry — found by paying twice against the real test
- * gateway. The reference project this was learned from carries a paymentId in
- * its oid for exactly this reason; that was the piece originally missed.
+ * CMI treats an oid as ONE transaction and refuses a second attempt on it
+ * ("There is an ongoing transaction related to the order. (99)"), so with the
+ * bare order id a buyer whose card was declined could never retry.
  *
- * Format: `<orderId>-<attempt>`. cuid() ids contain no hyphen, so splitting on
- * the LAST one is unambiguous, and an oid with no suffix still resolves — old
- * in-flight payments keep working.
+ * cuid() ids contain no hyphen, so splitting on the LAST one is unambiguous,
+ * and an oid with no suffix still resolves for payments already in flight.
  */
 export function buildOid(orderId: string, attempt: number): string {
   return `${orderId}-${attempt}`;
@@ -213,14 +261,14 @@ export function buildOid(orderId: string, attempt: number): string {
 export function orderIdFromOid(oid: string): string {
   const cut = oid.lastIndexOf("-");
   if (cut <= 0) return oid;
-  const suffix = oid.slice(cut + 1);
   // Only strip a numeric suffix: anything else is part of the id itself.
-  return /^\d+$/.test(suffix) ? oid.slice(0, cut) : oid;
+  return /^\d+$/.test(oid.slice(cut + 1)) ? oid.slice(0, cut) : oid;
 }
 
-/** CMI's "approved" response code. Anything else is a decline or an error. */
-export function isApproved(body: Record<string, unknown>): boolean {
-  return String(body.ProcReturnCode ?? "") === "00";
+// ─── Return URLs ────────────────────────────────────────────────────────────
+
+function baseUrl(value: string | undefined, fallback: string): string {
+  return (value ?? fallback).replace(/\/+$/, "");
 }
 
 /**
@@ -228,31 +276,16 @@ export function isApproved(body: Record<string, unknown>): boolean {
  *
  * All three must be absolute and reachable from outside: CMI redirects a real
  * browser to okUrl/failUrl and calls callbackUrl from its own servers, so a
- * localhost callback never arrives. Use a tunnel (CMI_CALLBACK_URL) to test
- * the callback locally.
+ * localhost callback never arrives. Use a tunnel (CMI_CALLBACK_URL) locally.
+ *
+ * The access token rides along so a guest buyer lands on a confirmation page
+ * they may read. The locale prefix is allowlisted, never passed through: it
+ * reaches CMI and comes back as a redirect target.
  */
 export function cmiUrls(orderId: string, accessToken?: string | null, locale?: string | null) {
-  const app = (process.env.PUBLIC_APP_URL ?? "http://localhost:3100").replace(/\/+$/, "");
-  const api = (process.env.PUBLIC_API_URL ?? "http://localhost:4100").replace(/\/+$/, "");
-  // The access token rides along so a guest buyer lands on a confirmation
-  // page they are authorised to read, exactly as the emailed link does.
+  const app = baseUrl(process.env.PUBLIC_APP_URL, "http://localhost:3100");
+  const api = baseUrl(process.env.PUBLIC_API_URL, "http://localhost:4100");
   const key = accessToken ? `?k=${encodeURIComponent(accessToken)}` : "";
-
-  /*
-   * The locale prefix the buyer should come BACK to.
-   *
-   * These two URLs are the only ones in the app built entirely server-side,
-   * so nothing on the frontend can prefix them — a react-router `basename`
-   * never sees them. Without this, a buyer who paid in Arabic would return
-   * from the gateway onto the French page, mid-transaction, which is the
-   * worst possible moment to switch someone's language.
-   *
-   * Empty until locale-prefixed routes exist, so today's behaviour is
-   * byte-for-byte unchanged: an unknown or absent locale yields no prefix.
-   * The validation is deliberately a allowlist rather than a passthrough —
-   * this value reaches CMI and comes back as a redirect target, so it must
-   * never carry anything the caller chose freely.
-   */
   const prefix = LOCALE_PREFIXES.has(locale ?? "") ? `/${locale}` : "";
 
   return {
@@ -261,13 +294,3 @@ export function cmiUrls(orderId: string, accessToken?: string | null, locale?: s
     failUrl: `${app}${prefix}/paiement?echec=1&commande=${encodeURIComponent(orderId)}`,
   };
 }
-
-/**
- * Locales that have their own URL prefix on the frontend.
- *
- * EMPTY on purpose. The frontend serves every language from one unprefixed
- * set of URLs today, so adding a prefix here before those routes exist
- * would send paying buyers to a 404. Add "fr" and "ar" in the same change
- * that ships `app/[locale]/`, and only then.
- */
-const LOCALE_PREFIXES = new Set<string>();

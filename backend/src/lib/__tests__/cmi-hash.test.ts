@@ -74,10 +74,9 @@ describe("buildPaymentRequest", () => {
     expect(buildPaymentRequest(input, CONFIG).fields.amount).toBe("850.00");
   });
 
-  it("captures the funds rather than only reserving them", () => {
-    // preAuth would leave every ticket sale awaiting a manual capture, so the
-    // buyer is debited but the organiser never paid.
-    expect(buildPaymentRequest(input, CONFIG).fields.TranType).toBe("Auth");
+  it("only reserves the funds, so the callback reply decides the capture", () => {
+    // ACTION=POSTAUTH captures; FAILURE releases. Matches Storeino production.
+    expect(buildPaymentRequest(input, CONFIG).fields.TranType).toBe("preAuth");
   });
 
   it("declares MAD and the ver3 hash algorithm", () => {
@@ -89,24 +88,24 @@ describe("buildPaymentRequest", () => {
 
   it("signs the fields it posts, so the form cannot be edited in the browser", () => {
     const { fields } = buildPaymentRequest(input, CONFIG);
-    const { hash, encoding, ...signed } = fields;
+    const { HASH, encoding, ...signed } = fields;
     expect(encoding).toBe("UTF-8");
-    expect(hash).toBe(buildHash(signed, STORE_KEY));
+    expect(HASH).toBe(buildHash(signed, STORE_KEY));
   });
 
   it("produces a hash that no longer matches once the amount is tampered with", () => {
     const { fields } = buildPaymentRequest(input, CONFIG);
     // What a buyer editing the form in dev tools would send.
     const tampered: Record<string, string> = { ...fields, amount: "1.00" };
-    const { hash, encoding, ...signed } = tampered;
-    expect(hash).not.toBe(buildHash(signed, STORE_KEY));
+    const { HASH, encoding, ...signed } = tampered;
+    expect(HASH).not.toBe(buildHash(signed, STORE_KEY));
   });
 
   it("uses a fresh nonce per attempt so two tries on one order sign differently", () => {
     const first = buildPaymentRequest(input, CONFIG).fields;
     const second = buildPaymentRequest(input, CONFIG).fields;
     expect(first.rnd).not.toBe(second.rnd);
-    expect(first.hash).not.toBe(second.hash);
+    expect(first.HASH).not.toBe(second.HASH);
   });
 
   it("falls back to the French page for Arabic, which CMI does not serve", () => {
